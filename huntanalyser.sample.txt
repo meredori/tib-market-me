@@ -1,0 +1,37 @@
+Session data: From 2026-06-01, 20:37:17 to 2026-06-01, 21:05:29
+Session: 00:28h
+XP Gain: 21,278
+XP/h: 45,231
+Loot: 18,805
+Supplies: 160
+Balance: 18,645
+Damage: 16,433
+Damage/h: 37,884
+Healing: 179
+Healing/h: 412
+Killed Monsters:
+  3x bonelord
+  29x bug
+  22x cave rat
+  2x crab
+  37x poison spider
+  23x skeleton
+  8x spider
+  214x swamp troll
+Looted Items:
+  647x a gold coin
+  1x a sword
+  1x a hatchet
+  1x a viking helmet
+  1x a fishing rod
+  1x a worm
+  141x a fish
+  5x cheese
+  2x a troll green
+  3x wood
+  5x swamp grass
+  1x crab pincers
+  2x a pelvis bone
+  2x a poison spider shell
+  4x a medicine pouch
+  1x a heavy old tome

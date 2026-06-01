@@ -1,0 +1,1001 @@
+12:43 Loot of a cave rat: a gold coin.
+12:43 A cave rat loses 30 hitpoints due to your attack. 
+12:43 You gained 34 experience points.
+12:43 Loot of a cave rat: cheese.
+12:43 A cave rat loses 30 hitpoints due to your critical attack. 
+12:43 You gained 34 experience points.
+12:43 Loot of a cave rat: 2 gold coins.
+12:43 A cave rat loses 30 hitpoints due to your attack. 
+12:43 You gained 34 experience points.
+12:43 Loot of a cave rat: cheese, a gold coin, a worm.
+12:44 A cave rat loses 30 hitpoints due to your attack. 
+12:44 You gained 34 experience points.
+12:44 Loot of a cave rat: 2 gold coins.
+12:44 A cave rat loses 30 hitpoints due to your attack. 
+12:44 You gained 34 experience points.
+12:44 Loot of a cave rat: cheese, a gold coin.
+12:44 A cave rat loses 30 hitpoints due to your attack. 
+12:44 You gained 34 experience points.
+12:44 Loot of a cave rat: a gold coin.
+12:44 A cave rat loses 30 hitpoints due to your attack. 
+12:44 You gained 34 experience points.
+12:44 Loot of a cave rat: a gold coin.
+12:44 A cave rat loses 30 hitpoints due to your attack. 
+12:44 You gained 34 experience points.
+12:44 Loot of a cave rat: nothing.
+12:44 A cave rat loses 30 hitpoints due to your critical attack. 
+12:44 You gained 34 experience points.
+12:44 Loot of a cave rat: a gold coin.
+12:44 No loot. (1 corpse)
+12:44 You looted 2 gold.
+12:44 You looted 1 gold.
+12:44 You looted 1 gold and 1 item.
+12:44 You looted 1 item.
+12:44 You looted 1 gold.
+12:44 You looted 1 gold.
+12:44 You looted 1 gold and all dropped items.
+12:44 You looted 1 gold.
+12:44 You looted 2 gold.
+12:44 You looted 10 corpses.
+12:44 A cave rat loses 30 hitpoints due to your attack. 
+12:44 You gained 34 experience points.
+12:44 Loot of a cave rat: nothing.
+12:44 A cave rat loses 30 hitpoints due to your attack. 
+12:44 You gained 34 experience points.
+12:44 Loot of a cave rat: nothing.
+12:44 A cave rat loses 30 hitpoints due to your attack. 
+12:44 You gained 34 experience points.
+12:44 Loot of a cave rat: 2 gold coins.
+12:44 No loot. (2 corpses)
+12:44 You looted 2 gold.
+12:44 You looted 3 corpses.
+12:44 A cave rat loses 30 hitpoints due to your attack. 
+12:44 You gained 34 experience points.
+12:44 Loot of a cave rat: 2 gold coins.
+12:44 No loot. (1 corpse)
+12:44 You looted 2 gold.
+12:44 You looted 2 corpses.
+12:44 A spider loses 20 hitpoints due to your attack. 
+12:44 You gained 42 experience points.
+12:44 Loot of a spider: 5 gold coins.
+12:44 You looted 5 gold.
+12:44 A spider loses 20 hitpoints due to your critical attack. 
+12:44 You gained 42 experience points.
+12:44 You unlocked details for the creature "spider".
+12:44 Loot of a spider: 4 gold coins.
+12:44 No loot. (1 corpse)
+12:44 You looted 4 gold.
+12:44 You looted 2 corpses.
+12:44 A spider loses 20 hitpoints due to your attack. 
+12:44 You advanced from Level 11 to Level 12.
+12:44 You gained 42 experience points.
+12:44 Loot of a spider: 3 gold coins.
+12:44 Screenshot for event LevelUp has been saved to location 'C:\Users\durza\AppData\Local\Tibia\packages\Tibia\screenshots'.
+12:44 No loot. (2 corpses)
+12:44 You looted 3 gold.
+12:44 You looted 3 corpses.
+12:44 A bug loses 29 hitpoints due to your attack. 
+12:44 You gained 61 experience points.
+12:44 Loot of a bug: 5 gold coins.
+12:44 No loot. (3 corpses)
+12:44 You looted 5 gold.
+12:44 You looted 4 corpses.
+12:44 A bug loses 29 hitpoints due to your attack. 
+12:44 You gained 61 experience points.
+12:44 Loot of a bug: nothing.
+12:44 No loot. (5 corpses)
+12:44 You looted nothing from 5 corpses.
+12:45 No loot. (5 corpses)
+12:45 You looted nothing from 5 corpses.
+12:45 A spider loses 20 hitpoints due to your attack. 
+12:45 You gained 42 experience points.
+12:45 Loot of a spider: nothing.
+12:45 No loot. (6 corpses)
+12:45 You looted nothing from 6 corpses.
+12:45 A bug loses 29 hitpoints due to your attack. 
+12:45 You gained 61 experience points.
+12:45 Loot of a bug: 4 gold coins.
+12:45 You looted 4 gold.
+12:45 A bug loses 29 hitpoints due to your attack. 
+12:45 You gained 61 experience points.
+12:45 Loot of a bug: nothing.
+12:45 No loot. (1 corpse)
+12:45 A bug loses 29 hitpoints due to your attack. 
+12:45 You gained 61 experience points.
+12:45 Loot of a bug: nothing.
+12:45 No loot. (1 corpse)
+12:45 A bug loses 29 hitpoints due to your attack. 
+12:45 You gained 61 experience points.
+12:45 Loot of a bug: 3 gold coins.
+12:45 No loot. (1 corpse)
+12:45 You looted 3 gold.
+12:45 You looted 2 corpses.
+12:45 A poison spider loses 26 hitpoints due to your attack. 
+12:45 You gained 75 experience points.
+12:45 Loot of a poison spider: 3 gold coins.
+12:45 You looted 3 gold.
+12:45 A poison spider loses 26 hitpoints due to your attack. 
+12:45 You gained 75 experience points.
+12:45 Loot of a poison spider: nothing.
+12:45 No loot. (2 corpses)
+12:45 You looted nothing from 2 corpses.
+12:45 A poison spider loses 26 hitpoints due to your attack. 
+12:45 You gained 75 experience points.
+12:45 Loot of a poison spider: 4 gold coins.
+12:45 You looted 4 gold.
+12:45 A poison spider loses 26 hitpoints due to your attack. 
+12:45 You gained 75 experience points.
+12:45 Loot of a poison spider: 2 gold coins.
+12:45 You looted 2 gold.
+12:45 A swamp troll loses 36 hitpoints due to your attack. 
+12:45 A swamp troll loses 19 hitpoints due to your attack. 
+12:45 You gained 85 experience points.
+12:45 Loot of a swamp troll: nothing.
+12:45 No loot. (1 corpse)
+12:45 A bug loses 29 hitpoints due to your attack. 
+12:45 You gained 61 experience points.
+12:45 Loot of a bug: 5 gold coins.
+12:45 A bug loses 29 hitpoints due to your attack. 
+12:45 You gained 61 experience points.
+12:45 Loot of a bug: nothing.
+12:45 No loot. (2 corpses)
+12:45 You looted 5 gold.
+12:45 You looted 3 corpses.
+12:45 A swamp troll loses 55 hitpoints due to your critical attack. 
+12:45 You gained 85 experience points.
+12:45 Loot of a swamp troll: a fish, 2 gold coins, a torch.
+12:45 No loot. (3 corpses)
+12:45 You looted the complete 2 gold, but you only looted some of the dropped items.
+12:45 You looted 4 corpses.
+12:45 A bug loses 29 hitpoints due to your attack. 
+12:45 You gained 61 experience points.
+12:45 Loot of a bug: nothing.
+12:45 A swamp troll loses 28 hitpoints due to your attack. 
+12:45 A swamp troll loses 27 hitpoints due to your attack. 
+12:45 You gained 85 experience points.
+12:45 Loot of a swamp troll: nothing.
+12:45 A swamp troll loses 55 hitpoints due to your attack. 
+12:45 You gained 85 experience points.
+12:45 Loot of a swamp troll: 4 gold coins, a spear.
+12:45 You looted none of the dropped items. (6 corpses)
+12:45 You looted the complete 4 gold but none of the dropped items.
+12:45 You looted 7 corpses.
+12:45 A bug loses 29 hitpoints due to your attack. 
+12:45 You gained 61 experience points.
+12:45 Loot of a bug: 5 gold coins.
+12:45 You looted 5 gold.
+12:45 A bug loses 29 hitpoints due to your attack. 
+12:45 You gained 61 experience points.
+12:45 Loot of a bug: 4 gold coins.
+12:45 No loot. (1 corpse)
+12:45 You looted 4 gold.
+12:45 You looted 2 corpses.
+12:45 A poison spider loses 26 hitpoints due to your attack. 
+12:45 You gained 75 experience points.
+12:45 Loot of a poison spider: 3 gold coins.
+12:45 No loot. (1 corpse)
+12:45 You looted 3 gold.
+12:45 You looted 2 corpses.
+12:46 A poison spider loses 26 hitpoints due to your attack. 
+12:46 You gained 75 experience points.
+12:46 Loot of a poison spider: 4 gold coins.
+12:46 You looted 4 gold.
+12:46 A poison spider loses 26 hitpoints due to your attack. 
+12:46 You gained 75 experience points.
+12:46 Loot of a poison spider: a gold coin.
+12:46 No loot. (1 corpse)
+12:46 You looted 1 gold.
+12:46 You looted 2 corpses.
+12:46 A swamp troll loses 55 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: a fish.
+12:46 You looted 1 item.
+12:46 A swamp troll loses 55 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: a fish, 2 gold coins.
+12:46 You looted the complete 2 gold and 1 item.
+12:46 A swamp troll loses 55 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: a troll green.
+12:46 No loot. (1 corpse)
+12:46 You looted 1 item.
+12:46 You looted 2 corpses.
+12:46 A swamp troll loses 55 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: 3 gold coins, a spear.
+12:46 You looted the complete 3 gold but none of the dropped items.
+12:46 A swamp troll loses 32 hitpoints due to your attack. 
+12:46 A swamp troll loses 20 hitpoints due to your attack. 
+12:46 A swamp troll loses 3 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: a fish, a troll green.
+12:46 You looted all items.
+12:46 A swamp troll loses 55 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: nothing.
+12:46 No loot. (2 corpses)
+12:46 You looted nothing from 2 corpses.
+12:46 A swamp troll loses 46 hitpoints due to your attack. 
+12:46 A swamp troll loses 9 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: a fish, a spear.
+12:46 You only looted some of the dropped items.
+12:46 A swamp troll loses 38 hitpoints due to your attack. 
+12:46 A swamp troll loses 17 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: a fish, a spear.
+12:46 You looted none of the dropped items. (1 corpse)
+12:46 You only looted some of the dropped items.
+12:46 You looted 2 corpses.
+12:46 A swamp troll loses 39 hitpoints due to your attack. 
+12:46 A swamp troll loses 16 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: a fish, leather boots, a spear.
+12:46 You looted none of the dropped items. (2 corpses)
+12:46 You only looted some of the dropped items.
+12:46 You looted 3 corpses.
+12:46 A swamp troll loses 55 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: a fish, 4 gold coins.
+12:46 You looted none of the dropped items. (3 corpses)
+12:46 You looted the complete 4 gold and 1 item.
+12:46 You looted 4 corpses.
+12:46 A swamp troll loses 55 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: 2 gold coins.
+12:46 You looted 2 gold.
+12:46 A swamp troll loses 55 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: nothing.
+12:46 A swamp troll loses 51 hitpoints due to your attack. 
+12:46 A swamp troll loses 4 hitpoints due to your critical attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: a fish, 4 gold coins.
+12:46 No loot. (1 corpse)
+12:46 You looted the complete 4 gold and 1 item.
+12:46 You looted 2 corpses.
+12:46 A poison spider loses 26 hitpoints due to your attack. 
+12:46 You gained 75 experience points.
+12:46 Loot of a poison spider: nothing.
+12:46 No loot. (3 corpses)
+12:46 You looted nothing from 3 corpses.
+12:46 A swamp troll loses 55 hitpoints due to your attack. 
+12:46 You gained 85 experience points.
+12:46 Loot of a swamp troll: a fish, 5 gold coins.
+12:46 No loot. (3 corpses)
+12:46 You looted the complete 5 gold and 1 item.
+12:46 You looted 4 corpses.
+12:47 A swamp troll loses 55 hitpoints due to your attack. 
+12:47 You gained 85 experience points.
+12:47 Loot of a swamp troll: a fish, a mouldy cheese.
+12:47 You looted all items.
+12:47 A swamp troll loses 29 hitpoints due to your attack. 
+12:47 A swamp troll loses 22 hitpoints due to your attack. 
+12:47 A swamp troll loses 4 hitpoints due to your attack. 
+12:47 You gained 85 experience points.
+12:47 Loot of a swamp troll: a fish, 2 gold coins, leather boots.
+12:47 You looted the complete 2 gold, but you only looted some of the dropped items.
+12:47 You see a big bone.
+It weighs 19.00 oz.
+12:47 A swamp troll loses 55 hitpoints due to your attack. 
+12:47 You gained 85 experience points.
+12:47 Loot of a swamp troll: a fish, 3 gold coins.
+12:47 You looted the complete 3 gold and 1 item.
+12:47 A swamp troll loses 55 hitpoints due to your attack. 
+12:47 You gained 85 experience points.
+12:47 Loot of a swamp troll: a fish, 2 gold coins.
+12:47 You looted the complete 2 gold and 1 item.
+12:47 A swamp troll loses 55 hitpoints due to your attack. 
+12:47 You gained 85 experience points.
+12:47 Loot of a swamp troll: a fish, 3 gold coins.
+12:47 You lose 2 hitpoints due to an attack by a swamp troll. 
+12:47 You are poisoned.
+12:47 A swamp troll loses 34 hitpoints due to your attack. 
+12:47 A swamp troll loses 21 hitpoints due to your attack. 
+12:47 You gained 85 experience points.
+12:47 Loot of a swamp troll: a fish, 2 gold coins.
+12:47 You lose 3 hitpoints due to an attack by a skeleton. 
+12:47 A skeleton loses 38 hitpoints due to your attack. 
+12:47 A skeleton loses 12 hitpoints due to your attack. 
+12:47 You gained 120 experience points.
+12:47 Loot of a skeleton: a bone, a pelvis bone.
+12:47 A swamp troll loses 40 hitpoints due to your attack. 
+12:47 A swamp troll loses 15 hitpoints due to your attack. 
+12:47 You gained 85 experience points.
+12:47 Loot of a swamp troll: a fish, 2 gold coins.
+12:47 You looted the complete 2 gold and 1 item.
+12:47 No loot. (1 corpse)
+12:47 You looted all items.
+12:47 You looted the complete 2 gold and 1 item.
+12:47 You looted the complete 3 gold and 1 item.
+12:47 You looted 4 corpses.
+12:47 A skeleton loses 50 hitpoints due to your attack. 
+12:47 You gained 120 experience points.
+12:47 Loot of a skeleton: a bone.
+12:47 You looted 1 item.
+12:47 A poison spider loses 26 hitpoints due to your attack. 
+12:47 You gained 75 experience points.
+12:47 Loot of a poison spider: 3 gold coins.
+12:47 You looted 3 gold.
+12:47 A swamp troll loses 41 hitpoints due to your attack. 
+12:47 A swamp troll loses 14 hitpoints due to your attack. 
+12:47 You gained 85 experience points.
+12:47 Loot of a swamp troll: nothing.
+12:47 No loot. (2 corpses)
+12:47 You looted nothing from 2 corpses.
+12:47 A swamp troll loses 55 hitpoints due to your attack. 
+12:47 You gained 85 experience points.
+12:47 Loot of a swamp troll: a fish.
+12:47 You looted 1 item.
+12:48 A swamp troll loses 55 hitpoints due to your attack. 
+12:48 You gained 85 experience points.
+12:48 Loot of a swamp troll: a gold coin.
+12:48 You looted 1 gold.
+12:48 A swamp troll loses 55 hitpoints due to your attack. 
+12:48 You gained 85 experience points.
+12:48 Loot of a swamp troll: nothing.
+12:48 A swamp troll loses 31 hitpoints due to your attack. 
+12:48 A swamp troll loses 24 hitpoints due to your attack. 
+12:48 You gained 85 experience points.
+12:48 Loot of a swamp troll: nothing.
+12:48 No loot. (2 corpses)
+12:48 You looted nothing from 2 corpses.
+12:48 A swamp troll loses 35 hitpoints due to your attack. 
+12:48 A swamp troll loses 20 hitpoints due to your attack. 
+12:48 You gained 85 experience points.
+12:48 Loot of a swamp troll: a fish.
+12:48 No loot. (2 corpses)
+12:48 You looted 1 item.
+12:48 You looted 3 corpses.
+12:48 A swamp troll loses 55 hitpoints due to your attack. 
+12:48 You gained 85 experience points.
+12:48 Loot of a swamp troll: a fish, a spear.
+12:48 No loot. (3 corpses)
+12:48 You only looted some of the dropped items.
+12:48 You looted 4 corpses.
+12:48 A swamp troll loses 43 hitpoints due to your attack. 
+12:48 A swamp troll loses 12 hitpoints due to your attack. 
+12:48 You gained 85 experience points.
+12:48 Loot of a swamp troll: a fish.
+12:48 You looted 1 item.
+12:48 A swamp troll loses 55 hitpoints due to your attack. 
+12:48 You gained 85 experience points.
+12:48 Loot of a swamp troll: nothing.
+12:48 No loot. (1 corpse)
+12:48 A swamp troll loses 49 hitpoints due to your attack. 
+12:48 A swamp troll loses 6 hitpoints due to your attack. 
+12:48 You gained 85 experience points.
+12:48 Loot of a swamp troll: a fish, leather boots.
+12:48 No loot. (1 corpse)
+12:48 You only looted some of the dropped items.
+12:48 You looted 2 corpses.
+12:48 A swamp troll loses 55 hitpoints due to your attack. 
+12:48 You gained 85 experience points.
+12:48 Loot of a swamp troll: a fish, 2 gold coins.
+12:48 You looted the complete 2 gold and 1 item.
+12:48 A swamp troll loses 55 hitpoints due to your attack. 
+12:48 You gained 85 experience points.
+12:48 Loot of a swamp troll: leather boots.
+12:48 You looted none of the dropped items. (1 corpse)
+12:48 A swamp troll loses 55 hitpoints due to your attack. 
+12:48 You gained 85 experience points.
+12:48 Loot of a swamp troll: a fish, 2 gold coins, a torch.
+12:48 You looted none of the dropped items. (1 corpse)
+12:48 You looted the complete 2 gold, but you only looted some of the dropped items.
+12:48 You looted 2 corpses.
+12:48 A poison spider loses 26 hitpoints due to your attack. 
+12:48 You gained 75 experience points.
+12:48 Loot of a poison spider: a gold coin.
+12:48 You looted none of the dropped items. (2 corpses)
+12:48 You looted 1 gold.
+12:48 You looted 3 corpses.
+12:48 A skeleton loses 43 hitpoints due to your attack. 
+12:48 A skeleton loses 7 hitpoints due to your attack. 
+12:48 You gained 120 experience points.
+12:48 Loot of a skeleton: 9 gold coins.
+12:48 You looted none of the dropped items. (3 corpses)
+12:48 You looted 9 gold.
+12:48 You looted 4 corpses.
+12:48 A swamp troll loses 55 hitpoints due to your attack. 
+12:48 You gained 85 experience points.
+12:48 Loot of a swamp troll: 2 gold coins.
+12:48 No loot. (2 corpses)
+12:48 You looted 2 gold.
+12:48 You looted 3 corpses.
+12:48 A skeleton loses 50 hitpoints due to your attack. 
+12:48 You gained 120 experience points.
+12:48 Loot of a skeleton: nothing.
+12:48 No loot. (3 corpses)
+12:48 You looted nothing from 3 corpses.
+12:48 A skeleton loses 50 hitpoints due to your attack. 
+12:48 You gained 120 experience points.
+12:48 Loot of a skeleton: a bone.
+12:48 You looted 1 item.
+12:48 A poison spider loses 26 hitpoints due to your attack. 
+12:48 You gained 75 experience points.
+12:48 Loot of a poison spider: 2 gold coins.
+12:49 You looted 2 gold.
+12:49 A poison spider loses 26 hitpoints due to your critical attack. 
+12:49 You gained 75 experience points.
+12:49 Loot of a poison spider: nothing.
+12:49 A poison spider loses 26 hitpoints due to your attack. 
+12:49 You advanced from Level 12 to Level 13.
+12:49 You gained 75 experience points.
+12:49 Loot of a poison spider: 2 gold coins.
+12:49 Screenshot for event LevelUp has been saved to location 'C:\Users\durza\AppData\Local\Tibia\packages\Tibia\screenshots'.
+12:49 You are poisoned.
+12:49 A swamp troll loses 55 hitpoints due to your attack. 
+12:49 You gained 85 experience points.
+12:49 Loot of a swamp troll: a fish, 4 gold coins, leather boots.
+12:49 You lose 3 hitpoints due to an attack by a poison spider. 
+12:49 You are poisoned.
+12:49 A swamp troll loses 46 hitpoints due to your attack. 
+12:49 You lose 4 hitpoints due to an attack by a swamp troll. 
+12:49 You are poisoned.
+12:49 You are poisoned.
+12:49 You lose 3 hitpoints due to an attack by a swamp troll. 
+12:49 You are poisoned.
+12:49 A swamp troll loses 9 hitpoints due to your attack. 
+12:49 You gained 85 experience points.
+12:49 Loot of a swamp troll: a fish, leather boots.
+12:49 You lose 2 hitpoints due to an attack by a swamp troll. 
+12:49 You are poisoned.
+12:49 You lose 1 hitpoint. 
+12:49 A swamp troll loses 55 hitpoints due to your attack. 
+12:49 You gained 85 experience points.
+12:49 Loot of a swamp troll: a fish, 3 gold coins, leather boots.
+12:49 You lose 4 hitpoints due to an attack by a skeleton. 
+12:49 A swamp troll loses 44 hitpoints due to your attack. 
+12:49 A swamp troll loses 11 hitpoints due to your attack. 
+12:49 You gained 85 experience points.
+12:49 Loot of a swamp troll: a fish, 4 gold coins.
+12:49 You lose 2 hitpoints due to an attack by a swamp troll. 
+12:49 You are poisoned.
+12:49 You lose 4 hitpoints due to an attack by a skeleton. 
+12:49 You lose 3 hitpoints due to an attack by a poison spider. 
+12:49 You are poisoned.
+12:49 You lose 3 hitpoints due to an attack by a skeleton. 
+12:49 You lose 1 hitpoint. 
+12:49 A swamp troll loses 32 hitpoints due to your attack. 
+12:49 You lose 10 hitpoints due to an attack by a poison spider. 
+12:49 You are poisoned.
+12:49 A skeleton loses 26 hitpoints due to your attack. 
+12:49 You lose 1 hitpoint due to an attack by a swamp troll. 
+12:49 You are poisoned.
+12:49 You lose 5 hitpoints due to an attack by a skeleton. 
+12:49 You lose 4 hitpoints due to an attack by a skeleton. 
+12:49 You lose 5 hitpoints due to an attack by a poison spider. 
+12:49 You are poisoned.
+12:49 A skeleton loses 24 hitpoints due to your attack. 
+12:49 You gained 118 experience points.
+12:49 Loot of a skeleton: a bone, 2 gold coins, a pelvis bone.
+12:49 You lose 2 hitpoints due to an attack by a swamp troll. 
+12:49 You are poisoned.
+12:49 You lose 3 hitpoints due to an attack by a swamp troll. 
+12:49 You are poisoned.
+12:49 You lose 5 hitpoints due to an attack by a poison spider. 
+12:49 You are poisoned.
+12:49 A skeleton loses 50 hitpoints due to your attack. 
+12:49 You gained 118 experience points.
+12:49 Loot of a skeleton: a bone, 7 gold coins, a torch.
+12:49 You lose 1 hitpoint due to an attack by a poison spider. 
+12:49 You lose 3 hitpoints due to an attack by a poison spider. 
+12:49 You are poisoned.
+12:49 A poison spider loses 26 hitpoints due to your attack. 
+12:49 You gained 75 experience points.
+12:49 Loot of a poison spider: 4 gold coins.
+12:49 You lose 4 hitpoints due to an attack by a swamp troll. 
+12:49 You are poisoned.
+12:49 You healed yourself for 46 hitpoints.
+12:49 You lose 4 hitpoints due to an attack by a swamp troll. 
+12:49 You are poisoned.
+12:49 You are poisoned.
+12:49 A swamp troll loses 55 hitpoints due to your attack. 
+12:49 You gained 85 experience points.
+12:49 Loot of a swamp troll: a mouldy cheese.
+12:49 You lose 1 hitpoint. 
+12:49 You are poisoned.
+12:49 You looted 4 gold.
+12:49 You looted the complete 7 gold but none of the dropped items.
+12:49 You looted the complete 3 gold, but you only looted some of the dropped items.
+12:49 You looted 1 item.
+12:49 You looted the complete 2 gold, but you only looted some of the dropped items.
+12:49 You only looted some of the dropped items.
+12:49 You looted the complete 4 gold and 1 item.
+12:49 You looted 7 corpses.
+12:49 A swamp troll loses 55 hitpoints due to your attack. 
+12:49 You gained 85 experience points.
+12:49 Loot of a swamp troll: a spear.
+12:49 You lose 2 hitpoints due to an attack by a swamp troll. 
+12:49 You are poisoned.
+12:49 You lose 5 hitpoints due to an attack by a poison spider. 
+12:49 You are poisoned.
+12:49 A swamp troll loses 23 hitpoints due to your attack. 
+12:49 You gained 85 experience points.
+12:49 Loot of a swamp troll: a fish, 3 gold coins.
+12:49 You are poisoned.
+12:49 You lose 1 hitpoint. 
+12:49 You lose 6 hitpoints due to an attack by a poison spider. 
+12:49 You are poisoned.
+12:49 A poison spider loses 26 hitpoints due to your attack. 
+12:49 You gained 75 experience points.
+12:49 Loot of a poison spider: 3 gold coins.
+12:49 You lose 3 hitpoints due to an attack by a swamp troll. 
+12:49 You are poisoned.
+12:49 A swamp troll loses 55 hitpoints due to your attack. 
+12:49 You gained 85 experience points.
+12:49 Loot of a swamp troll: a fish, 3 gold coins, a spear.
+12:49 You lose 1 hitpoint. 
+12:49 You healed yourself for 23 hitpoints.
+12:49 A swamp troll loses 55 hitpoints due to your attack. 
+12:49 You gained 85 experience points.
+12:49 Loot of a swamp troll: leather boots.
+12:49 Attack Stopped. Only click once to attack your target.
+12:49 A swamp troll loses 55 hitpoints due to your attack. 
+12:49 You gained 85 experience points.
+12:49 Loot of a swamp troll: 3 gold coins.
+12:49 You lose 1 hitpoint. 
+12:49 A swamp troll loses 55 hitpoints due to your attack. 
+12:49 You gained 85 experience points.
+12:49 Loot of a swamp troll: a fish, a fishing rod.
+12:49 You looted none of the dropped items. (9 corpses)
+12:49 You looted 3 gold.
+12:49 You looted 3 gold.
+12:49 You looted the complete 3 gold, but you only looted some of the dropped items.
+12:49 You looted the complete 3 gold and 1 item.
+12:49 You looted all items.
+12:49 You looted 14 corpses.
+12:49 You looted none of the dropped items. (4 corpses)
+12:49 You looted the complete 4 gold, but you only looted some of the dropped items.
+12:49 You looted 5 corpses.
+12:49 You looted none of the dropped items. (1 corpse)
+12:49 You looted 2 gold.
+12:49 You looted 2 corpses.
+12:50 A bonelord loses 62 hitpoints due to your attack. 
+12:50 You lose 5 hitpoints due to an attack by a bonelord. 
+12:50 A bonelord loses 23 hitpoints due to your critical attack. 
+12:50 You lose 7 hitpoints due to an attack by a skeleton. 
+12:50 You lose 27 hitpoints due to an attack by a bonelord. 
+12:50 A bonelord loses 38 hitpoints due to your attack. 
+12:50 A bonelord loses 34 hitpoints due to your attack. 
+12:50 A bonelord loses 48 hitpoints due to your attack. 
+12:50 A bonelord loses 22 hitpoints due to your attack. 
+12:50 A bonelord loses 33 hitpoints due to your attack. 
+12:50 You gained 579 experience points.
+12:50 You unlocked details for the creature "bonelord".
+12:50 Loot of a bonelord: 31 gold coins.
+12:50 You looted 31 gold.
+12:50 A poison spider loses 26 hitpoints due to your attack. 
+12:50 You gained 75 experience points.
+12:50 Loot of a poison spider: nothing.
+12:50 A swamp troll loses 55 hitpoints due to your attack. 
+12:50 You gained 85 experience points.
+12:50 Loot of a swamp troll: nothing.
+12:50 No loot. (4 corpses)
+12:50 You looted nothing from 4 corpses.
+12:50 A swamp troll loses 55 hitpoints due to your critical attack. 
+12:50 You gained 85 experience points.
+12:50 Loot of a swamp troll: a medicine pouch, a mouldy cheese.
+12:50 No loot. (1 corpse)
+12:50 You looted all items.
+12:50 You looted 2 corpses.
+12:51 A swamp troll loses 55 hitpoints due to your attack. 
+12:51 You gained 85 experience points.
+12:51 Loot of a swamp troll: a spear.
+12:51 You looted none of the dropped items. (1 corpse)
+12:51 A swamp troll loses 48 hitpoints due to your attack. 
+12:51 A swamp troll loses 7 hitpoints due to your attack. 
+12:51 You gained 85 experience points.
+12:51 Loot of a swamp troll: a fish, a gold coin, wood.
+12:51 You looted none of the dropped items. (1 corpse)
+12:51 You looted 1 gold and all dropped items.
+12:51 You looted 2 corpses.
+12:51 A swamp troll loses 55 hitpoints due to your attack. 
+12:51 You gained 85 experience points.
+12:51 Loot of a swamp troll: a fish, 3 gold coins, a medicine pouch.
+12:51 You looted none of the dropped items. (2 corpses)
+12:51 You looted the complete 3 gold and all dropped items.
+12:51 You looted 3 corpses.
+12:51 You are poisoned.
+12:51 A swamp troll loses 55 hitpoints due to your attack. 
+12:51 You gained 85 experience points.
+12:51 Loot of a swamp troll: nothing.
+12:51 A swamp troll loses 55 hitpoints due to your attack. 
+12:51 You gained 85 experience points.
+12:51 Loot of a swamp troll: nothing.
+12:51 A swamp troll loses 39 hitpoints due to your attack. 
+12:51 A swamp troll loses 16 hitpoints due to your attack. 
+12:51 You gained 85 experience points.
+12:51 Loot of a swamp troll: nothing.
+12:51 A swamp troll loses 51 hitpoints due to your attack. 
+12:51 A swamp troll loses 4 hitpoints due to your attack. 
+12:51 You gained 85 experience points.
+12:51 Loot of a swamp troll: a fish, 3 gold coins.
+12:51 A swamp troll loses 55 hitpoints due to your attack. 
+12:51 You gained 85 experience points.
+12:51 Loot of a swamp troll: nothing.
+12:51 You looted none of the dropped items. (7 corpses)
+12:51 You looted the complete 3 gold and 1 item.
+12:51 You looted 8 corpses.
+12:51 A swamp troll loses 55 hitpoints due to your attack. 
+12:51 You gained 85 experience points.
+12:51 Loot of a swamp troll: a fish, 3 gold coins, a torch.
+12:51 You looted the complete 3 gold, but you only looted some of the dropped items.
+12:51 A swamp troll loses 33 hitpoints due to your attack. 
+12:51 A swamp troll loses 22 hitpoints due to your attack. 
+12:51 You gained 85 experience points.
+12:51 Loot of a swamp troll: a fish.
+12:51 You looted 1 item.
+12:52 A swamp troll loses 55 hitpoints due to your attack. 
+12:52 You gained 85 experience points.
+12:52 Loot of a swamp troll: nothing.
+12:52 No loot. (1 corpse)
+12:52 A swamp troll loses 55 hitpoints due to your attack. 
+12:52 You gained 85 experience points.
+12:52 Loot of a swamp troll: a fish, a gold coin.
+12:52 No loot. (1 corpse)
+12:52 You looted 1 gold and 1 item.
+12:52 You looted 2 corpses.
+12:52 A swamp troll loses 55 hitpoints due to your attack. 
+12:52 You gained 85 experience points.
+12:52 Loot of a swamp troll: a fish, 4 gold coins, a spear, swamp grass.
+12:52 A swamp troll loses 55 hitpoints due to your attack. 
+12:52 You gained 85 experience points.
+12:52 Loot of a swamp troll: a fish.
+12:52 No loot. (2 corpses)
+12:52 You looted 1 item.
+12:52 You looted the complete 4 gold, but you only looted some of the dropped items.
+12:52 You looted 4 corpses.
+12:52 You looted none of the dropped items. (4 corpses)
+12:52 You looted nothing from 4 corpses.
+12:52 You see a swamp troll.
+12:52 A swamp troll loses 47 hitpoints due to your attack. 
+12:52 A swamp troll loses 8 hitpoints due to your attack. 
+12:52 You gained 85 experience points.
+12:52 Loot of a swamp troll: a fish, 5 gold coins, leather boots.
+12:52 You looted the complete 5 gold, but you only looted some of the dropped items.
+12:52 A swamp troll loses 54 hitpoints due to your attack. 
+12:52 A swamp troll loses 1 hitpoint due to your attack. 
+12:52 You gained 85 experience points.
+12:52 Loot of a swamp troll: 2 gold coins, a torch.
+12:52 You looted none of the dropped items. (1 corpse)
+12:52 You looted the complete 2 gold but none of the dropped items.
+12:52 You looted 2 corpses.
+12:52 A swamp troll loses 55 hitpoints due to your attack. 
+12:52 You gained 85 experience points.
+12:52 Loot of a swamp troll: a fish, 3 gold coins.
+12:52 You looted none of the dropped items. (2 corpses)
+12:52 You looted the complete 3 gold and 1 item.
+12:52 You looted 3 corpses.
+12:52 You lose 3 hitpoints due to an attack by a swamp troll. 
+12:52 You are poisoned.
+12:52 A swamp troll loses 55 hitpoints due to your critical attack. 
+12:52 You gained 85 experience points.
+12:52 Loot of a swamp troll: a fish, 5 gold coins, leather boots, swamp grass.
+12:52 You looted none of the dropped items. (3 corpses)
+12:52 You looted the complete 5 gold, but you only looted some of the dropped items.
+12:52 You looted 4 corpses.
+12:52 You lose 2 hitpoints due to an attack by a swamp troll. 
+12:52 You are poisoned.
+12:52 A swamp troll loses 47 hitpoints due to your attack. 
+12:52 A swamp troll loses 8 hitpoints due to your attack. 
+12:52 You gained 85 experience points.
+12:52 Loot of a swamp troll: a fish.
+12:52 You looted none of the dropped items. (4 corpses)
+12:52 You looted 1 item.
+12:52 You looted 5 corpses.
+12:52 A swamp troll loses 55 hitpoints due to your attack. 
+12:52 You gained 85 experience points.
+12:52 Loot of a swamp troll: a fish.
+12:52 You looted none of the dropped items. (5 corpses)
+12:52 You looted 1 item.
+12:52 You looted 6 corpses.
+12:53 A swamp troll loses 39 hitpoints due to your attack. 
+12:53 A swamp troll loses 16 hitpoints due to your attack. 
+12:53 You gained 85 experience points.
+12:53 Loot of a swamp troll: a fish, a torch.
+12:53 You only looted some of the dropped items.
+12:53 A swamp troll loses 55 hitpoints due to your attack. 
+12:53 You gained 85 experience points.
+12:53 Loot of a swamp troll: 4 gold coins.
+12:53 You looted 4 gold.
+12:53 A swamp troll loses 55 hitpoints due to your attack. 
+12:53 You gained 85 experience points.
+12:53 Loot of a swamp troll: a gold coin, leather boots.
+12:53 No loot. (1 corpse)
+12:53 You looted the complete 1 gold but none of the dropped items.
+12:53 You looted 2 corpses.
+12:53 A swamp troll loses 51 hitpoints due to your attack. 
+12:53 A swamp troll loses 4 hitpoints due to your critical attack. 
+12:53 You gained 85 experience points.
+12:53 Loot of a swamp troll: 5 gold coins, a mouldy cheese.
+12:53 You looted none of the dropped items. (1 corpse)
+12:53 You looted the complete 5 gold and 1 item.
+12:53 You looted 2 corpses.
+12:53 A swamp troll loses 55 hitpoints due to your attack. 
+12:53 You gained 85 experience points.
+12:53 Loot of a swamp troll: 4 gold coins, a mouldy cheese, a torch.
+12:53 No loot. (1 corpse)
+12:53 You looted the complete 4 gold, but you only looted some of the dropped items.
+12:53 You looted 2 corpses.
+12:53 A poison spider loses 26 hitpoints due to your attack. 
+12:53 You gained 75 experience points.
+12:53 Loot of a poison spider: nothing.
+12:53 No loot. (1 corpse)
+12:53 A swamp troll loses 55 hitpoints due to your attack. 
+12:53 You gained 85 experience points.
+12:53 Loot of a swamp troll: a fish, 4 gold coins.
+12:53 You looted the complete 4 gold and 1 item.
+12:53 A skeleton loses 50 hitpoints due to your attack. 
+12:53 You gained 118 experience points.
+12:53 Loot of a skeleton: nothing.
+12:53 No loot. (2 corpses)
+12:53 You looted nothing from 2 corpses.
+12:53 A skeleton loses 50 hitpoints due to your attack. 
+12:53 You gained 118 experience points.
+12:53 Loot of a skeleton: a bone.
+12:53 You looted none of the dropped items. (1 corpse)
+12:53 You looted none of the dropped items. (1 corpse)
+12:53 A swamp troll loses 50 hitpoints due to your attack. 
+12:53 A swamp troll loses 5 hitpoints due to your attack. 
+12:53 You gained 85 experience points.
+12:53 Loot of a swamp troll: 4 gold coins.
+12:53 You looted 4 gold.
+12:53 A swamp troll loses 55 hitpoints due to your attack. 
+12:53 You gained 85 experience points.
+12:53 Loot of a swamp troll: a gold coin, a mouldy cheese, wood, a torch.
+12:53 You looted the complete 1 gold, but you only looted some of the dropped items.
+12:53 A swamp troll loses 33 hitpoints due to your attack. 
+12:53 A swamp troll loses 20 hitpoints due to your attack. 
+12:53 A swamp troll loses 2 hitpoints due to your attack. 
+12:53 You gained 85 experience points.
+12:53 Loot of a swamp troll: a fish.
+12:53 You looted 1 item.
+12:54 A swamp troll loses 48 hitpoints due to your attack. 
+12:54 A swamp troll loses 7 hitpoints due to your attack. 
+12:54 You gained 85 experience points.
+12:54 Loot of a swamp troll: a fish.
+12:54 You looted 1 item.
+12:54 A swamp troll loses 55 hitpoints due to your attack. 
+12:54 You gained 85 experience points.
+12:54 Loot of a swamp troll: a fish, 5 gold coins.
+12:54 No loot. (1 corpse)
+12:54 You looted the complete 5 gold and 1 item.
+12:54 You looted 2 corpses.
+12:54 A swamp troll loses 40 hitpoints due to your attack. 
+12:54 A swamp troll loses 15 hitpoints due to your attack. 
+12:54 You gained 85 experience points.
+12:54 Loot of a swamp troll: a fish, a spear.
+12:54 A swamp troll loses 55 hitpoints due to your attack. 
+12:54 You gained 85 experience points.
+12:54 Loot of a swamp troll: a fish, a spear.
+12:54 No loot. (2 corpses)
+12:54 You only looted some of the dropped items.
+12:54 You only looted some of the dropped items.
+12:54 You looted 4 corpses.
+12:54 A swamp troll loses 45 hitpoints due to your attack. 
+12:54 A swamp troll loses 10 hitpoints due to your attack. 
+12:54 You gained 85 experience points.
+12:54 Loot of a swamp troll: a fish, a gold coin.
+12:54 You looted 1 gold and 1 item.
+12:54 A swamp troll loses 36 hitpoints due to your attack. 
+12:54 A swamp troll loses 19 hitpoints due to your attack. 
+12:54 You gained 85 experience points.
+12:54 Loot of a swamp troll: 2 gold coins, leather boots, a mouldy cheese.
+12:54 You looted the complete 2 gold, but you only looted some of the dropped items.
+12:54 A swamp troll loses 55 hitpoints due to your attack. 
+12:54 You gained 85 experience points.
+12:54 Loot of a swamp troll: a fish, 5 gold coins.
+12:54 A swamp troll loses 55 hitpoints due to your attack. 
+12:54 You gained 85 experience points.
+12:54 Loot of a swamp troll: a medicine pouch.
+12:54 You looted none of the dropped items. (1 corpse)
+12:54 You looted 1 item.
+12:54 You looted the complete 5 gold and 1 item.
+12:54 You looted 3 corpses.
+12:54 A swamp troll loses 55 hitpoints due to your attack. 
+12:54 You gained 85 experience points.
+12:54 Loot of a swamp troll: a gold coin.
+12:54 A poison spider loses 26 hitpoints due to your critical attack. 
+12:54 You gained 75 experience points.
+12:54 Loot of a poison spider: 2 gold coins.
+12:54 You looted none of the dropped items. (3 corpses)
+12:54 You looted 2 gold.
+12:54 You looted 1 gold.
+12:54 You looted 5 corpses.
+12:54 A swamp troll loses 39 hitpoints due to your attack. 
+12:54 A swamp troll loses 16 hitpoints due to your attack. 
+12:54 You gained 85 experience points.
+12:54 Loot of a swamp troll: 3 gold coins.
+12:54 You looted 3 gold.
+12:54 A swamp troll loses 54 hitpoints due to your attack. 
+12:54 A swamp troll loses 1 hitpoint due to your attack. 
+12:54 You gained 85 experience points.
+12:54 Loot of a swamp troll: nothing.
+12:54 No loot. (2 corpses)
+12:54 You looted nothing from 2 corpses.
+12:54 A swamp troll loses 55 hitpoints due to your attack. 
+12:54 You gained 85 experience points.
+12:54 Loot of a swamp troll: leather boots.
+12:54 You looted none of the dropped items. (1 corpse)
+12:54 A poison spider loses 26 hitpoints due to your attack. 
+12:54 You gained 75 experience points.
+12:54 Loot of a poison spider: a gold coin.
+12:55 A poison spider loses 26 hitpoints due to your attack. 
+12:55 You gained 75 experience points.
+12:55 Loot of a poison spider: nothing.
+12:55 A poison spider loses 26 hitpoints due to your attack. 
+12:55 You gained 75 experience points.
+12:55 Loot of a poison spider: nothing.
+12:55 A swamp troll loses 55 hitpoints due to your attack. 
+12:55 You gained 85 experience points.
+12:55 Loot of a swamp troll: a fish, 5 gold coins, leather boots.
+12:55 No loot. (2 corpses)
+12:55 You looted the complete 5 gold, but you only looted some of the dropped items.
+12:55 You looted 1 gold.
+12:55 You looted 4 corpses.
+12:55 A swamp troll loses 46 hitpoints due to your attack. 
+12:55 A swamp troll loses 9 hitpoints due to your attack. 
+12:55 You gained 85 experience points.
+12:55 Loot of a swamp troll: a fish, a torch.
+12:55 You looted none of the dropped items. (4 corpses)
+12:55 You only looted some of the dropped items.
+12:55 You looted 5 corpses.
+12:55 A swamp troll loses 55 hitpoints due to your attack. 
+12:55 You gained 85 experience points.
+12:55 Loot of a swamp troll: 5 gold coins.
+12:55 You looted 5 gold.
+12:55 A bug loses 29 hitpoints due to your attack. 
+12:55 You gained 61 experience points.
+12:55 Loot of a bug: 3 cherries.
+12:55 You looted 1 item.
+12:55 A swamp troll loses 51 hitpoints due to your attack. 
+12:55 A swamp troll loses 4 hitpoints due to your attack. 
+12:55 You gained 85 experience points.
+12:55 Loot of a swamp troll: a fish, a medicine pouch.
+12:55 No loot. (1 corpse)
+12:55 You looted all items.
+12:55 You looted 2 corpses.
+12:55 A bug loses 29 hitpoints due to your attack. 
+12:55 You advanced from Level 13 to Level 14.
+12:55 You gained 61 experience points.
+12:55 Loot of a bug: nothing.
+12:55 Screenshot for event LevelUp has been saved to location 'C:\Users\durza\AppData\Local\Tibia\packages\Tibia\screenshots'.
+12:55 A bug loses 29 hitpoints due to your attack. 
+12:55 You gained 61 experience points.
+12:55 Loot of a bug: nothing.
+12:55 No loot. (4 corpses)
+12:55 You looted nothing from 4 corpses.
+12:55 A swamp troll loses 55 hitpoints due to your attack. 
+12:55 You gained 84 experience points.
+12:55 Loot of a swamp troll: 5 gold coins.
+12:55 No loot. (3 corpses)
+12:55 You looted 5 gold.
+12:55 You looted 4 corpses.
+12:55 A poison spider loses 26 hitpoints due to your attack. 
+12:55 You gained 75 experience points.
+12:55 Loot of a poison spider: 4 gold coins.
+12:55 You looted 4 gold.
+12:55 A bug loses 29 hitpoints due to your attack. 
+12:55 You gained 61 experience points.
+12:55 Loot of a bug: nothing.
+12:55 No loot. (1 corpse)
+12:55 A poison spider loses 26 hitpoints due to your attack. 
+12:55 You gained 75 experience points.
+12:55 Loot of a poison spider: 4 gold coins.
+12:55 You looted 4 gold.
+12:55 A poison spider loses 26 hitpoints due to your attack. 
+12:55 You gained 75 experience points.
+12:55 Loot of a poison spider: nothing.
+12:55 No loot. (2 corpses)
+12:55 You looted nothing from 2 corpses.
+12:55 A poison spider loses 26 hitpoints due to your attack. 
+12:55 You gained 75 experience points.
+12:55 Loot of a poison spider: 2 gold coins.
+12:55 No loot. (1 corpse)
+12:55 You looted 2 gold.
+12:55 You looted 2 corpses.
+12:55 You lose 2 hitpoints due to an attack by a spider. 
+12:55 A spider loses 20 hitpoints due to your attack. 
+12:55 You gained 40 experience points.
+12:55 Loot of a spider: nothing.
+12:55 A spider loses 20 hitpoints due to your attack. 
+12:55 You gained 40 experience points.
+12:55 Loot of a spider: 2 gold coins.
+12:55 You lose 2 hitpoints due to an attack by a bug. 
+12:55 You lose 1 hitpoint due to an attack by a spider. 
+12:55 A bug loses 29 hitpoints due to your attack. 
+12:55 You gained 61 experience points.
+12:55 Loot of a bug: 2 gold coins.
+12:55 You lose 1 hitpoint due to an attack by a bug. 
+12:55 A bug loses 29 hitpoints due to your attack. 
+12:55 You gained 61 experience points.
+12:55 Loot of a bug: 2 cherries, 2 gold coins.
+12:55 A spider loses 20 hitpoints due to your attack. 
+12:55 You gained 40 experience points.
+12:55 Loot of a spider: 5 gold coins.
+12:55 A bug loses 29 hitpoints due to your critical attack. 
+12:55 You gained 61 experience points.
+12:55 Loot of a bug: a gold coin.
+12:55 You lose 3 hitpoints due to an attack by a bug. 
+12:55 A bug loses 29 hitpoints due to your attack. 
+12:55 You gained 61 experience points.
+12:55 Loot of a bug: nothing.
+12:55 A bug loses 22 hitpoints due to your attack. 
+12:56 A bug loses 7 hitpoints due to your attack. 
+12:56 You gained 61 experience points.
+12:56 Loot of a bug: 5 gold coins.
+12:56 A bug loses 24 hitpoints due to your attack. 
+12:56 You lose 4 hitpoints due to an attack by a bug. 
+12:56 A bug loses 5 hitpoints due to your attack. 
+12:56 You gained 61 experience points.
+12:56 Loot of a bug: 3 gold coins.
+12:56 A spider loses 20 hitpoints due to your attack. 
+12:56 You gained 40 experience points.
+12:56 Loot of a spider: a gold coin.
+12:56 No loot. (2 corpses)
+12:56 You looted 5 gold.
+12:56 You looted 2 gold.
+12:56 You looted 3 gold.
+12:56 You looted the complete 2 gold and 1 item.
+12:56 You looted 2 gold.
+12:56 You looted 1 gold.
+12:56 You looted 1 gold.
+12:56 You looted 5 gold.
+12:56 You looted 10 corpses.
+12:56 A bug loses 29 hitpoints due to your attack. 
+12:56 You gained 61 experience points.
+12:56 Loot of a bug: 3 gold coins.
+12:56 You looted 3 gold.
+12:56 A bug loses 29 hitpoints due to your attack. 
+12:56 You gained 61 experience points.
+12:56 Loot of a bug: 2 gold coins.
+12:56 You looted 2 gold.
+12:56 A bug loses 29 hitpoints due to your attack. 
+12:56 You gained 61 experience points.
+12:56 Loot of a bug: nothing.
+12:56 No loot. (2 corpses)
+12:56 You looted nothing from 2 corpses.
+12:56 A cave rat loses 30 hitpoints due to your attack. 
+12:56 You gained 34 experience points.
+12:56 Loot of a cave rat: a gold coin.
+12:56 A cave rat loses 20 hitpoints due to your attack. 
+12:56 A cave rat loses 10 hitpoints due to your attack. 
+12:56 You gained 34 experience points.
+12:56 Loot of a cave rat: 2 gold coins.
+12:56 You looted 1 gold.
+12:56 You looted 2 gold.
+12:56 You looted 2 corpses.
+12:56 A cave rat loses 30 hitpoints due to your attack. 
+12:56 You gained 34 experience points.
+12:56 Loot of a cave rat: a gold coin.
+12:56 No loot. (1 corpse)
+12:56 You looted 1 gold.
+12:56 You looted 2 corpses.
+12:56 A cave rat loses 30 hitpoints due to your attack. 
+12:56 You gained 34 experience points.
+12:56 Loot of a cave rat: nothing.
+12:56 No loot. (1 corpse)
+12:56 A cave rat loses 30 hitpoints due to your attack. 
+12:56 You gained 34 experience points.
+12:56 Loot of a cave rat: a gold coin.
+12:56 A cave rat loses 30 hitpoints due to your attack. 
+12:56 You gained 34 experience points.
+12:56 Loot of a cave rat: 2 gold coins.
+12:56 A cave rat loses 30 hitpoints due to your attack. 
+12:56 You gained 34 experience points.
+12:56 Loot of a cave rat: a gold coin.
+12:56 No loot. (1 corpse)
+12:56 You looted 1 gold.
+12:56 You looted 1 gold.
+12:56 You looted 2 gold.
+12:56 You looted 4 corpses.
+12:56 A cave rat loses 30 hitpoints due to your attack. 
+12:56 You gained 34 experience points.
+12:56 Loot of a cave rat: 2 gold coins.
+12:56 You looted 2 gold.
+12:56 A cave rat loses 30 hitpoints due to your attack. 
+12:56 You gained 34 experience points.
+12:56 Loot of a cave rat: 2 gold coins.
+12:56 You looted 2 gold.
+12:57 Your depot contains 1140 items using 12 out of 15000 available slots. Your stash contains 83 items.

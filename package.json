@@ -1,0 +1,21 @@
+{
+  "name": "tibia-market-tooling",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently -k -n BE,FE -c green,cyan \"npm run dev:be\" \"npm run dev:fe\"",
+    "dev:be": "\".venv\\Scripts\\python.exe\" web_ui.py --server Victoris --host 127.0.0.1 --port 8787",
+    "dev:fe": "npm --prefix ui-app run dev",
+    "build:fe": "npm --prefix ui-app run build",
+    "preview:fe": "npm --prefix ui-app run preview",
+    "generate:items": "node ./scripts/tibia-assets-generate.cjs -p ./assets/appearances.dat -c ./assets/catalog-content.json -m items -o ./ui-app/public/items",
+    "generate:outfits": "node ./scripts/tibia-assets-generate.cjs -p ./assets/appearances.dat -c ./assets/catalog-content.json -m outfits -or \"513-600\" -o ./ui-app/public/outfits",
+    "prebuild": "npm run generate:items && npm run generate:outfits"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "tibia-assets": "^1.3.3"
+  }
+}

@@ -1,0 +1,646 @@
+{
+  "generated_at": "2026-06-01T00:03:09.133897+00:00",
+  "server": "Victoris",
+  "dxp_next": null,
+  "pickup_thresholds": {
+    "min_unit_value": 20,
+    "min_coin_per_oz": 10.0,
+    "weights_json": "item_weights.json"
+  },
+  "market_thresholds": {
+    "min_market_unit_net": 500,
+    "min_market_liquidity": 0.12,
+    "min_market_confidence": 0.65,
+    "min_market_month_sold": 6
+  },
+  "parser": {
+    "total_lines": 1001,
+    "loot_lines": 188,
+    "ignored_lines": 813,
+    "first_timestamp": "12:43",
+    "last_timestamp": "12:57"
+  },
+  "results": [
+    {
+      "item": "gold coin",
+      "count": 336,
+      "action": "Unknown",
+      "reason": "Item name not matched in item metadata."
+    },
+    {
+      "item": "cheese",
+      "id": 3607,
+      "action": "NPC",
+      "display_recommendation": "Sell NPC",
+      "cap_remove_optional": false,
+      "reason": "Guaranteed NPC return is at or above expected market net value.",
+      "count": 3,
+      "unit": {
+        "npc_buy": 2,
+        "fair_price": -1,
+        "suggested_list_price": -1,
+        "individual_list_price": -1,
+        "expected_market_net": 0
+      },
+      "total": {
+        "npc_buy": 6,
+        "expected_market_net": 0
+      },
+      "market_quality": {
+        "confidence": 0.0,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": false,
+        "remove_from_loot_list": true,
+        "weight_oz": null,
+        "coin_per_oz": null,
+        "unit_value_used": 2,
+        "reason": "Unit value below threshold (2 < 20).",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "unknown",
+      "liquidity": 0.0,
+      "list_target_time": null
+    },
+    {
+      "item": "worm",
+      "id": 3492,
+      "action": "NPC",
+      "display_recommendation": "Sell NPC",
+      "cap_remove_optional": false,
+      "reason": "Fails minimum market thresholds; prefer guaranteed NPC sale.",
+      "count": 1,
+      "unit": {
+        "npc_buy": 1,
+        "fair_price": 925,
+        "suggested_list_price": 925,
+        "individual_list_price": 925,
+        "expected_market_net": 851
+      },
+      "total": {
+        "npc_buy": 1,
+        "expected_market_net": 851
+      },
+      "market_quality": {
+        "confidence": 0.5586,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": true,
+        "remove_from_loot_list": false,
+        "weight_oz": 0.2,
+        "coin_per_oz": 4255.0,
+        "unit_value_used": 851,
+        "reason": "Value density is acceptable at 4255.0 gp/oz.",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "stable",
+      "liquidity": 0.0247,
+      "list_target_time": null
+    },
+    {
+      "item": "fish",
+      "id": 3578,
+      "action": "NPC",
+      "display_recommendation": "Sell NPC",
+      "cap_remove_optional": false,
+      "reason": "Fails minimum market thresholds; prefer guaranteed NPC sale.",
+      "count": 56,
+      "unit": {
+        "npc_buy": 2,
+        "fair_price": 1000,
+        "suggested_list_price": 1000,
+        "individual_list_price": 1000,
+        "expected_market_net": 920
+      },
+      "total": {
+        "npc_buy": 112,
+        "expected_market_net": 51520
+      },
+      "market_quality": {
+        "confidence": 0.4529,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": true,
+        "remove_from_loot_list": false,
+        "weight_oz": 2.0,
+        "coin_per_oz": 460.0,
+        "unit_value_used": 920,
+        "reason": "Value density is acceptable at 460.0 gp/oz.",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "stable",
+      "liquidity": 0.0083,
+      "list_target_time": null
+    },
+    {
+      "item": "torch",
+      "id": 2920,
+      "action": "Skip Market",
+      "display_recommendation": "Remove from Loot Filter",
+      "cap_remove_optional": false,
+      "reason": "Fails market threshold (value/liquidity/confidence/volume). Do not list.",
+      "count": 9,
+      "unit": {
+        "npc_buy": 0,
+        "fair_price": -1,
+        "suggested_list_price": -1,
+        "individual_list_price": -1,
+        "expected_market_net": 0
+      },
+      "total": {
+        "npc_buy": 0,
+        "expected_market_net": 0
+      },
+      "market_quality": {
+        "confidence": 0.0,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": false,
+        "remove_from_loot_list": true,
+        "weight_oz": 2.0,
+        "coin_per_oz": 0.0,
+        "unit_value_used": 0,
+        "reason": "Skip Market: Low value density (0.0 gp/oz < 10.0 gp/oz threshold).",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "unknown",
+      "liquidity": 0.0,
+      "list_target_time": null
+    },
+    {
+      "item": "spear",
+      "id": 3277,
+      "action": "NPC",
+      "display_recommendation": "Sell NPC",
+      "cap_remove_optional": false,
+      "reason": "Guaranteed NPC return is at or above expected market net value.",
+      "count": 12,
+      "unit": {
+        "npc_buy": 3,
+        "fair_price": -1,
+        "suggested_list_price": -1,
+        "individual_list_price": -1,
+        "expected_market_net": 0
+      },
+      "total": {
+        "npc_buy": 36,
+        "expected_market_net": 0
+      },
+      "market_quality": {
+        "confidence": 0.0,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": false,
+        "remove_from_loot_list": true,
+        "weight_oz": 2.0,
+        "coin_per_oz": 1.5,
+        "unit_value_used": 3,
+        "reason": "Low NPC value (3 gp) and low value density (1.5 gp/oz < 10.0 gp/oz threshold).",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "unknown",
+      "liquidity": 0.0,
+      "list_target_time": null
+    },
+    {
+      "item": "troll green",
+      "id": 3741,
+      "action": "NPC",
+      "display_recommendation": "Sell NPC",
+      "cap_remove_optional": false,
+      "reason": "Fails minimum market thresholds; prefer guaranteed NPC sale.",
+      "count": 2,
+      "unit": {
+        "npc_buy": 25,
+        "fair_price": 590,
+        "suggested_list_price": 590,
+        "individual_list_price": 590,
+        "expected_market_net": 543
+      },
+      "total": {
+        "npc_buy": 50,
+        "expected_market_net": 1086
+      },
+      "market_quality": {
+        "confidence": 0.45,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": true,
+        "remove_from_loot_list": false,
+        "weight_oz": 0.8,
+        "coin_per_oz": 678.75,
+        "unit_value_used": 543,
+        "reason": "Value density is acceptable at 678.75 gp/oz.",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "stable",
+      "liquidity": 0.0,
+      "list_target_time": null
+    },
+    {
+      "item": "leather boots",
+      "id": 3552,
+      "action": "NPC",
+      "display_recommendation": "Sell NPC",
+      "cap_remove_optional": false,
+      "reason": "Guaranteed NPC return is at or above expected market net value.",
+      "count": 14,
+      "unit": {
+        "npc_buy": 2,
+        "fair_price": -1,
+        "suggested_list_price": -1,
+        "individual_list_price": -1,
+        "expected_market_net": 0
+      },
+      "total": {
+        "npc_buy": 28,
+        "expected_market_net": 0
+      },
+      "market_quality": {
+        "confidence": 0.0,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": false,
+        "remove_from_loot_list": true,
+        "weight_oz": 9.0,
+        "coin_per_oz": 0.22,
+        "unit_value_used": 2,
+        "reason": "Low NPC value (2 gp) and low value density (0.22 gp/oz < 10.0 gp/oz threshold).",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "unknown",
+      "liquidity": 0.0,
+      "list_target_time": null
+    },
+    {
+      "item": "mouldy cheese",
+      "id": 3120,
+      "action": "Skip Market",
+      "display_recommendation": "Remove from Loot Filter",
+      "cap_remove_optional": false,
+      "reason": "Fails market threshold (value/liquidity/confidence/volume). Do not list.",
+      "count": 7,
+      "unit": {
+        "npc_buy": 0,
+        "fair_price": 4900,
+        "suggested_list_price": 4760,
+        "individual_list_price": 4760,
+        "expected_market_net": 4508
+      },
+      "total": {
+        "npc_buy": 0,
+        "expected_market_net": 31556
+      },
+      "market_quality": {
+        "confidence": 0.5753,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": false,
+        "remove_from_loot_list": true,
+        "weight_oz": 1.5,
+        "coin_per_oz": 0.0,
+        "unit_value_used": 0,
+        "reason": "Skip Market: Low value density (0.0 gp/oz < 10.0 gp/oz threshold).",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "falling",
+      "liquidity": 0.0723,
+      "list_target_time": null
+    },
+    {
+      "item": "bone",
+      "id": 3115,
+      "action": "Skip Market",
+      "display_recommendation": "Remove from Loot Filter",
+      "cap_remove_optional": false,
+      "reason": "Fails market threshold (value/liquidity/confidence/volume). Do not list.",
+      "count": 6,
+      "unit": {
+        "npc_buy": 0,
+        "fair_price": 495,
+        "suggested_list_price": 495,
+        "individual_list_price": 495,
+        "expected_market_net": 455
+      },
+      "total": {
+        "npc_buy": 0,
+        "expected_market_net": 2730
+      },
+      "market_quality": {
+        "confidence": 0.45,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": false,
+        "remove_from_loot_list": true,
+        "weight_oz": 9.5,
+        "coin_per_oz": 0.0,
+        "unit_value_used": 0,
+        "reason": "Skip Market: Low value density (0.0 gp/oz < 10.0 gp/oz threshold).",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "stable",
+      "liquidity": 0.0,
+      "list_target_time": null
+    },
+    {
+      "item": "pelvis bone",
+      "id": 11481,
+      "action": "NPC",
+      "display_recommendation": "Sell NPC",
+      "cap_remove_optional": false,
+      "reason": "Fails minimum market thresholds; prefer guaranteed NPC sale.",
+      "count": 2,
+      "unit": {
+        "npc_buy": 30,
+        "fair_price": 505,
+        "suggested_list_price": 505,
+        "individual_list_price": 505,
+        "expected_market_net": 465
+      },
+      "total": {
+        "npc_buy": 60,
+        "expected_market_net": 930
+      },
+      "market_quality": {
+        "confidence": 0.7158,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": false,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": true,
+        "remove_from_loot_list": false,
+        "weight_oz": 9.5,
+        "coin_per_oz": 48.95,
+        "unit_value_used": 465,
+        "reason": "Value density is acceptable at 48.95 gp/oz.",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "stable",
+      "liquidity": 0.1881,
+      "list_target_time": null
+    },
+    {
+      "item": "fishing rod",
+      "id": 3483,
+      "action": "NPC",
+      "display_recommendation": "Sell NPC",
+      "cap_remove_optional": false,
+      "reason": "Guaranteed NPC return is at or above expected market net value.",
+      "count": 1,
+      "unit": {
+        "npc_buy": 40,
+        "fair_price": -1,
+        "suggested_list_price": -1,
+        "individual_list_price": -1,
+        "expected_market_net": 0
+      },
+      "total": {
+        "npc_buy": 40,
+        "expected_market_net": 0
+      },
+      "market_quality": {
+        "confidence": 0.0,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": true,
+        "remove_from_loot_list": false,
+        "weight_oz": null,
+        "coin_per_oz": null,
+        "unit_value_used": 40,
+        "reason": "No weight configured; kept by unit-value threshold.",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "unknown",
+      "liquidity": 0.0,
+      "list_target_time": null
+    },
+    {
+      "item": "medicine pouch",
+      "id": 12517,
+      "action": "List Now",
+      "display_recommendation": "List Now",
+      "cap_remove_optional": false,
+      "reason": "Market net value is favorable versus guaranteed NPC value.",
+      "count": 4,
+      "unit": {
+        "npc_buy": 0,
+        "fair_price": 5570,
+        "suggested_list_price": 5570,
+        "individual_list_price": 5570,
+        "expected_market_net": 5124
+      },
+      "total": {
+        "npc_buy": 0,
+        "expected_market_net": 20496
+      },
+      "market_quality": {
+        "confidence": 0.7037,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": false,
+        "market_eligible": true
+      },
+      "pickup": {
+        "recommended": true,
+        "remove_from_loot_list": false,
+        "weight_oz": null,
+        "coin_per_oz": null,
+        "unit_value_used": 5124,
+        "reason": "No weight configured; kept by unit-value threshold.",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 4,
+      "trend": "stable",
+      "liquidity": 0.1535,
+      "list_target_time": null
+    },
+    {
+      "item": "wood",
+      "id": 5901,
+      "action": "NPC",
+      "display_recommendation": "Sell NPC",
+      "cap_remove_optional": false,
+      "reason": "Fails minimum market thresholds; prefer guaranteed NPC sale.",
+      "count": 2,
+      "unit": {
+        "npc_buy": 50,
+        "fair_price": 100,
+        "suggested_list_price": 100,
+        "individual_list_price": 100,
+        "expected_market_net": 92
+      },
+      "total": {
+        "npc_buy": 100,
+        "expected_market_net": 184
+      },
+      "market_quality": {
+        "confidence": 0.5586,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": true,
+        "remove_from_loot_list": false,
+        "weight_oz": null,
+        "coin_per_oz": null,
+        "unit_value_used": 92,
+        "reason": "No weight configured; kept by unit-value threshold.",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "stable",
+      "liquidity": 0.0247,
+      "list_target_time": null
+    },
+    {
+      "item": "swamp grass",
+      "id": 9686,
+      "action": "NPC",
+      "display_recommendation": "Sell NPC",
+      "cap_remove_optional": false,
+      "reason": "Guaranteed NPC return is at or above expected market net value.",
+      "count": 2,
+      "unit": {
+        "npc_buy": 20,
+        "fair_price": -1,
+        "suggested_list_price": -1,
+        "individual_list_price": -1,
+        "expected_market_net": 0
+      },
+      "total": {
+        "npc_buy": 40,
+        "expected_market_net": 0
+      },
+      "market_quality": {
+        "confidence": 0.0,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": true,
+        "remove_from_loot_list": false,
+        "weight_oz": null,
+        "coin_per_oz": null,
+        "unit_value_used": 20,
+        "reason": "No weight configured; kept by unit-value threshold.",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "unknown",
+      "liquidity": 0.0,
+      "list_target_time": null
+    },
+    {
+      "item": "cherry",
+      "id": 3590,
+      "action": "NPC",
+      "display_recommendation": "Sell NPC",
+      "cap_remove_optional": false,
+      "reason": "Guaranteed NPC return is at or above expected market net value.",
+      "count": 5,
+      "unit": {
+        "npc_buy": 1,
+        "fair_price": -1,
+        "suggested_list_price": -1,
+        "individual_list_price": -1,
+        "expected_market_net": 0
+      },
+      "total": {
+        "npc_buy": 5,
+        "expected_market_net": 0
+      },
+      "market_quality": {
+        "confidence": 0.0,
+        "month_sold": -1,
+        "day_sold": -1,
+        "sell_offer": null,
+        "weak_market_quality": true,
+        "market_eligible": false
+      },
+      "pickup": {
+        "recommended": false,
+        "remove_from_loot_list": true,
+        "weight_oz": null,
+        "coin_per_oz": null,
+        "unit_value_used": 1,
+        "reason": "Unit value below threshold (1 < 20).",
+        "coin_per_oz_floor": 10.0
+      },
+      "suggested_market_quantity": 0,
+      "trend": "unknown",
+      "liquidity": 0.0,
+      "list_target_time": null
+    }
+  ]
+}

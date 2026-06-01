@@ -1,0 +1,20 @@
+{
+  "server": "Victoris",
+  "local_run": {
+    "started_at": "2026-05-31T00:19:23.002240+00:00",
+    "finished_at": "2026-05-31T00:20:47.625001+00:00"
+  },
+  "world_data": {
+    "queried_at": "2026-05-31T00:20:47.625001+00:00",
+    "server": "Victoris",
+    "last_update": "2026-05-27T18:44:31.964858"
+  },
+  "outputs": {
+    "flat_prices": "c:\\code\\Tibia market\\itemsprices.json",
+    "detailed_prices": "c:\\code\\Tibia market\\itemsprices.detailed.json"
+  },
+  "counts": {
+    "market_rows": 4910,
+    "priced_items": 2329
+  }
+}

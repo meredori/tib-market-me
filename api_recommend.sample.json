@@ -1,0 +1,837 @@
+{
+    "dxp_next":  null,
+    "generated_at":  "2026-05-31T03:40:30.958480+00:00",
+    "results":  [
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u002712:43 loot of a cave rat: a gold coin.\\r\\n12:43 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:43 you gained 34 experience points.\\r\\n12:43 loot of a cave rat: cheese.\\r\\n12:43 a cave rat loses 30 hitpoints due to your critical attack. \\r\\n12:43 you gained 34 experience points.\\r\\n12:43 loot of a cave rat: 2 gold coins.\\r\\n12:43 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:43 you gained 34 experience points.\\r\\n12:43 loot of a cave rat: cheese",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "gold coin",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "worm.\\r\\n12:44 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:44 you gained 34 experience points.\\r\\n12:44 loot of a cave rat: 2 gold coins.\\r\\n12:44 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:44 you gained 34 experience points.\\r\\n12:44 loot of a cave rat: cheese",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "gold coin.\\r\\n12:44 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:44 you gained 34 experience points.\\r\\n12:44 loot of a cave rat: a gold coin.\\r\\n12:44 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:44 you gained 34 experience points.\\r\\n12:44 loot of a cave rat: a gold coin.\\r\\n12:44 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:44 you gained 34 experience points.\\r\\n12:44 loot of a cave rat: nothing.\\r\\n12:44 a cave rat loses 30 hitpoints due to your critical attack. \\r\\n12:44 you gained 34 experience points.\\r\\n12:44 loot of a cave rat: a gold coin.\\r\\n12:44 no loot. (1 corpse)\\r\\n12:44 you looted 2 gold.\\r\\n12:44 you looted 1 gold.\\r\\n12:44 you looted 1 gold and 1 item.\\r\\n12:44 you looted 1 item.\\r\\n12:44 you looted 1 gold.\\r\\n12:44 you looted 1 gold.\\r\\n12:44 you looted 1 gold and all dropped items.\\r\\n12:44 you looted 1 gold.\\r\\n12:44 you looted 2 gold.\\r\\n12:44 you looted 10 corpses.\\r\\n12:44 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:44 you gained 34 experience points.\\r\\n12:44 loot of a cave rat: nothing.\\r\\n12:44 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:44 you gained 34 experience points.\\r\\n12:44 loot of a cave rat: nothing.\\r\\n12:44 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:44 you gained 34 experience points.\\r\\n12:44 loot of a cave rat: 2 gold coins.\\r\\n12:44 no loot. (2 corpses)\\r\\n12:44 you looted 2 gold.\\r\\n12:44 you looted 3 corpses.\\r\\n12:44 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:44 you gained 34 experience points.\\r\\n12:44 loot of a cave rat: 2 gold coins.\\r\\n12:44 no loot. (1 corpse)\\r\\n12:44 you looted 2 gold.\\r\\n12:44 you looted 2 corpses.\\r\\n12:44 a spider loses 20 hitpoints due to your attack. \\r\\n12:44 you gained 42 experience points.\\r\\n12:44 loot of a spider: 5 gold coins.\\r\\n12:44 you looted 5 gold.\\r\\n12:44 a spider loses 20 hitpoints due to your critical attack. \\r\\n12:44 you gained 42 experience points.\\r\\n12:44 you unlocked details for the creature \"spider\".\\r\\n12:44 loot of a spider: 4 gold coins.\\r\\n12:44 no loot. (1 corpse)\\r\\n12:44 you looted 4 gold.\\r\\n12:44 you looted 2 corpses.\\r\\n12:44 a spider loses 20 hitpoints due to your attack. \\r\\n12:44 you advanced from level 11 to level 12.\\r\\n12:44 you gained 42 experience points.\\r\\n12:44 loot of a spider: 3 gold coins.\\r\\n12:44 screenshot for event levelup has been saved to location \\\u0027c:\\\\users\\\\durza\\\\appdata\\\\local\\\\tibia\\\\packages\\\\tibia\\\\screenshots\\\u0027.\\r\\n12:44 no loot. (2 corpses)\\r\\n12:44 you looted 3 gold.\\r\\n12:44 you looted 3 corpses.\\r\\n12:44 a bug loses 29 hitpoints due to your attack. \\r\\n12:44 you gained 61 experience points.\\r\\n12:44 loot of a bug: 5 gold coins.\\r\\n12:44 no loot. (3 corpses)\\r\\n12:44 you looted 5 gold.\\r\\n12:44 you looted 4 corpses.\\r\\n12:44 a bug loses 29 hitpoints due to your attack. \\r\\n12:44 you gained 61 experience points.\\r\\n12:44 loot of a bug: nothing.\\r\\n12:44 no loot. (5 corpses)\\r\\n12:44 you looted nothing from 5 corpses.\\r\\n12:45 no loot. (5 corpses)\\r\\n12:45 you looted nothing from 5 corpses.\\r\\n12:45 a spider loses 20 hitpoints due to your attack. \\r\\n12:45 you gained 42 experience points.\\r\\n12:45 loot of a spider: nothing.\\r\\n12:45 no loot. (6 corpses)\\r\\n12:45 you looted nothing from 6 corpses.\\r\\n12:45 a bug loses 29 hitpoints due to your attack. \\r\\n12:45 you gained 61 experience points.\\r\\n12:45 loot of a bug: 4 gold coins.\\r\\n12:45 you looted 4 gold.\\r\\n12:45 a bug loses 29 hitpoints due to your attack. \\r\\n12:45 you gained 61 experience points.\\r\\n12:45 loot of a bug: nothing.\\r\\n12:45 no loot. (1 corpse)\\r\\n12:45 a bug loses 29 hitpoints due to your attack. \\r\\n12:45 you gained 61 experience points.\\r\\n12:45 loot of a bug: nothing.\\r\\n12:45 no loot. (1 corpse)\\r\\n12:45 a bug loses 29 hitpoints due to your attack. \\r\\n12:45 you gained 61 experience points.\\r\\n12:45 loot of a bug: 3 gold coins.\\r\\n12:45 no loot. (1 corpse)\\r\\n12:45 you looted 3 gold.\\r\\n12:45 you looted 2 corpses.\\r\\n12:45 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:45 you gained 75 experience points.\\r\\n12:45 loot of a poison spider: 3 gold coins.\\r\\n12:45 you looted 3 gold.\\r\\n12:45 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:45 you gained 75 experience points.\\r\\n12:45 loot of a poison spider: nothing.\\r\\n12:45 no loot. (2 corpses)\\r\\n12:45 you looted nothing from 2 corpses.\\r\\n12:45 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:45 you gained 75 experience points.\\r\\n12:45 loot of a poison spider: 4 gold coins.\\r\\n12:45 you looted 4 gold.\\r\\n12:45 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:45 you gained 75 experience points.\\r\\n12:45 loot of a poison spider: 2 gold coins.\\r\\n12:45 you looted 2 gold.\\r\\n12:45 a swamp troll loses 36 hitpoints due to your attack. \\r\\n12:45 a swamp troll loses 19 hitpoints due to your attack. \\r\\n12:45 you gained 85 experience points.\\r\\n12:45 loot of a swamp troll: nothing.\\r\\n12:45 no loot. (1 corpse)\\r\\n12:45 a bug loses 29 hitpoints due to your attack. \\r\\n12:45 you gained 61 experience points.\\r\\n12:45 loot of a bug: 5 gold coins.\\r\\n12:45 a bug loses 29 hitpoints due to your attack. \\r\\n12:45 you gained 61 experience points.\\r\\n12:45 loot of a bug: nothing.\\r\\n12:45 no loot. (2 corpses)\\r\\n12:45 you looted 5 gold.\\r\\n12:45 you looted 3 corpses.\\r\\n12:45 a swamp troll loses 55 hitpoints due to your critical attack. \\r\\n12:45 you gained 85 experience points.\\r\\n12:45 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  2,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "torch.\\r\\n12:45 no loot. (3 corpses)\\r\\n12:45 you looted the complete 2 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:45 you looted 4 corpses.\\r\\n12:45 a bug loses 29 hitpoints due to your attack. \\r\\n12:45 you gained 61 experience points.\\r\\n12:45 loot of a bug: nothing.\\r\\n12:45 a swamp troll loses 28 hitpoints due to your attack. \\r\\n12:45 a swamp troll loses 27 hitpoints due to your attack. \\r\\n12:45 you gained 85 experience points.\\r\\n12:45 loot of a swamp troll: nothing.\\r\\n12:45 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:45 you gained 85 experience points.\\r\\n12:45 loot of a swamp troll: 4 gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "spear.\\r\\n12:45 you looted none of the dropped items. (6 corpses)\\r\\n12:45 you looted the complete 4 gold but none of the dropped items.\\r\\n12:45 you looted 7 corpses.\\r\\n12:45 a bug loses 29 hitpoints due to your attack. \\r\\n12:45 you gained 61 experience points.\\r\\n12:45 loot of a bug: 5 gold coins.\\r\\n12:45 you looted 5 gold.\\r\\n12:45 a bug loses 29 hitpoints due to your attack. \\r\\n12:45 you gained 61 experience points.\\r\\n12:45 loot of a bug: 4 gold coins.\\r\\n12:45 no loot. (1 corpse)\\r\\n12:45 you looted 4 gold.\\r\\n12:45 you looted 2 corpses.\\r\\n12:45 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:45 you gained 75 experience points.\\r\\n12:45 loot of a poison spider: 3 gold coins.\\r\\n12:45 no loot. (1 corpse)\\r\\n12:45 you looted 3 gold.\\r\\n12:45 you looted 2 corpses.\\r\\n12:46 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:46 you gained 75 experience points.\\r\\n12:46 loot of a poison spider: 4 gold coins.\\r\\n12:46 you looted 4 gold.\\r\\n12:46 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:46 you gained 75 experience points.\\r\\n12:46 loot of a poison spider: a gold coin.\\r\\n12:46 no loot. (1 corpse)\\r\\n12:46 you looted 1 gold.\\r\\n12:46 you looted 2 corpses.\\r\\n12:46 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: a fish.\\r\\n12:46 you looted 1 item.\\r\\n12:46 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  2,
+                        "item":  "gold coins.\\r\\n12:46 you looted the complete 2 gold and 1 item.\\r\\n12:46 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: a troll green.\\r\\n12:46 no loot. (1 corpse)\\r\\n12:46 you looted 1 item.\\r\\n12:46 you looted 2 corpses.\\r\\n12:46 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: 3 gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "spear.\\r\\n12:46 you looted the complete 3 gold but none of the dropped items.\\r\\n12:46 a swamp troll loses 32 hitpoints due to your attack. \\r\\n12:46 a swamp troll loses 20 hitpoints due to your attack. \\r\\n12:46 a swamp troll loses 3 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "troll green.\\r\\n12:46 you looted all items.\\r\\n12:46 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: nothing.\\r\\n12:46 no loot. (2 corpses)\\r\\n12:46 you looted nothing from 2 corpses.\\r\\n12:46 a swamp troll loses 46 hitpoints due to your attack. \\r\\n12:46 a swamp troll loses 9 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "spear.\\r\\n12:46 you only looted some of the dropped items.\\r\\n12:46 a swamp troll loses 38 hitpoints due to your attack. \\r\\n12:46 a swamp troll loses 17 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "spear.\\r\\n12:46 you looted none of the dropped items. (1 corpse)\\r\\n12:46 you only looted some of the dropped items.\\r\\n12:46 you looted 2 corpses.\\r\\n12:46 a swamp troll loses 39 hitpoints due to your attack. \\r\\n12:46 a swamp troll loses 16 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "NPC",
+                        "count":  1,
+                        "id":  3552,
+                        "item":  "leather boots",
+                        "liquidity":  0.0,
+                        "list_target_time":  null,
+                        "reason":  "Guaranteed NPC return is at or above expected market net value.",
+                        "total":  {
+                                      "expected_market_net":  0,
+                                      "npc_buy":  2
+                                  },
+                        "trend":  "unknown",
+                        "unit":  {
+                                     "expected_market_net":  0,
+                                     "fair_price":  -1,
+                                     "npc_buy":  2,
+                                     "suggested_list_price":  -1
+                                 }
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "spear.\\r\\n12:46 you looted none of the dropped items. (2 corpses)\\r\\n12:46 you only looted some of the dropped items.\\r\\n12:46 you looted 3 corpses.\\r\\n12:46 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  4,
+                        "item":  "gold coins.\\r\\n12:46 you looted none of the dropped items. (3 corpses)\\r\\n12:46 you looted the complete 4 gold and 1 item.\\r\\n12:46 you looted 4 corpses.\\r\\n12:46 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: 2 gold coins.\\r\\n12:46 you looted 2 gold.\\r\\n12:46 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: nothing.\\r\\n12:46 a swamp troll loses 51 hitpoints due to your attack. \\r\\n12:46 a swamp troll loses 4 hitpoints due to your critical attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  4,
+                        "item":  "gold coins.\\r\\n12:46 no loot. (1 corpse)\\r\\n12:46 you looted the complete 4 gold and 1 item.\\r\\n12:46 you looted 2 corpses.\\r\\n12:46 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:46 you gained 75 experience points.\\r\\n12:46 loot of a poison spider: nothing.\\r\\n12:46 no loot. (3 corpses)\\r\\n12:46 you looted nothing from 3 corpses.\\r\\n12:46 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:46 you gained 85 experience points.\\r\\n12:46 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  5,
+                        "item":  "gold coins.\\r\\n12:46 no loot. (3 corpses)\\r\\n12:46 you looted the complete 5 gold and 1 item.\\r\\n12:46 you looted 4 corpses.\\r\\n12:47 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:47 you gained 85 experience points.\\r\\n12:47 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "mouldy cheese.\\r\\n12:47 you looted all items.\\r\\n12:47 a swamp troll loses 29 hitpoints due to your attack. \\r\\n12:47 a swamp troll loses 22 hitpoints due to your attack. \\r\\n12:47 a swamp troll loses 4 hitpoints due to your attack. \\r\\n12:47 you gained 85 experience points.\\r\\n12:47 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  2,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "leather boots.\\r\\n12:47 you looted the complete 2 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:47 you see a big bone.\\r\\nit weighs 19.00 oz.\\r\\n12:47 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:47 you gained 85 experience points.\\r\\n12:47 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  3,
+                        "item":  "gold coins.\\r\\n12:47 you looted the complete 3 gold and 1 item.\\r\\n12:47 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:47 you gained 85 experience points.\\r\\n12:47 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  2,
+                        "item":  "gold coins.\\r\\n12:47 you looted the complete 2 gold and 1 item.\\r\\n12:47 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:47 you gained 85 experience points.\\r\\n12:47 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  3,
+                        "item":  "gold coins.\\r\\n12:47 you lose 2 hitpoints due to an attack by a swamp troll. \\r\\n12:47 you are poisoned.\\r\\n12:47 a swamp troll loses 34 hitpoints due to your attack. \\r\\n12:47 a swamp troll loses 21 hitpoints due to your attack. \\r\\n12:47 you gained 85 experience points.\\r\\n12:47 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  2,
+                        "item":  "gold coins.\\r\\n12:47 you lose 3 hitpoints due to an attack by a skeleton. \\r\\n12:47 a skeleton loses 38 hitpoints due to your attack. \\r\\n12:47 a skeleton loses 12 hitpoints due to your attack. \\r\\n12:47 you gained 120 experience points.\\r\\n12:47 loot of a skeleton: a bone",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "pelvis bone.\\r\\n12:47 a swamp troll loses 40 hitpoints due to your attack. \\r\\n12:47 a swamp troll loses 15 hitpoints due to your attack. \\r\\n12:47 you gained 85 experience points.\\r\\n12:47 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  2,
+                        "item":  "gold coins.\\r\\n12:47 you looted the complete 2 gold and 1 item.\\r\\n12:47 no loot. (1 corpse)\\r\\n12:47 you looted all items.\\r\\n12:47 you looted the complete 2 gold and 1 item.\\r\\n12:47 you looted the complete 3 gold and 1 item.\\r\\n12:47 you looted 4 corpses.\\r\\n12:47 a skeleton loses 50 hitpoints due to your attack. \\r\\n12:47 you gained 120 experience points.\\r\\n12:47 loot of a skeleton: a bone.\\r\\n12:47 you looted 1 item.\\r\\n12:47 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:47 you gained 75 experience points.\\r\\n12:47 loot of a poison spider: 3 gold coins.\\r\\n12:47 you looted 3 gold.\\r\\n12:47 a swamp troll loses 41 hitpoints due to your attack. \\r\\n12:47 a swamp troll loses 14 hitpoints due to your attack. \\r\\n12:47 you gained 85 experience points.\\r\\n12:47 loot of a swamp troll: nothing.\\r\\n12:47 no loot. (2 corpses)\\r\\n12:47 you looted nothing from 2 corpses.\\r\\n12:47 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:47 you gained 85 experience points.\\r\\n12:47 loot of a swamp troll: a fish.\\r\\n12:47 you looted 1 item.\\r\\n12:48 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:48 you gained 85 experience points.\\r\\n12:48 loot of a swamp troll: a gold coin.\\r\\n12:48 you looted 1 gold.\\r\\n12:48 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:48 you gained 85 experience points.\\r\\n12:48 loot of a swamp troll: nothing.\\r\\n12:48 a swamp troll loses 31 hitpoints due to your attack. \\r\\n12:48 a swamp troll loses 24 hitpoints due to your attack. \\r\\n12:48 you gained 85 experience points.\\r\\n12:48 loot of a swamp troll: nothing.\\r\\n12:48 no loot. (2 corpses)\\r\\n12:48 you looted nothing from 2 corpses.\\r\\n12:48 a swamp troll loses 35 hitpoints due to your attack. \\r\\n12:48 a swamp troll loses 20 hitpoints due to your attack. \\r\\n12:48 you gained 85 experience points.\\r\\n12:48 loot of a swamp troll: a fish.\\r\\n12:48 no loot. (2 corpses)\\r\\n12:48 you looted 1 item.\\r\\n12:48 you looted 3 corpses.\\r\\n12:48 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:48 you gained 85 experience points.\\r\\n12:48 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "spear.\\r\\n12:48 no loot. (3 corpses)\\r\\n12:48 you only looted some of the dropped items.\\r\\n12:48 you looted 4 corpses.\\r\\n12:48 a swamp troll loses 43 hitpoints due to your attack. \\r\\n12:48 a swamp troll loses 12 hitpoints due to your attack. \\r\\n12:48 you gained 85 experience points.\\r\\n12:48 loot of a swamp troll: a fish.\\r\\n12:48 you looted 1 item.\\r\\n12:48 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:48 you gained 85 experience points.\\r\\n12:48 loot of a swamp troll: nothing.\\r\\n12:48 no loot. (1 corpse)\\r\\n12:48 a swamp troll loses 49 hitpoints due to your attack. \\r\\n12:48 a swamp troll loses 6 hitpoints due to your attack. \\r\\n12:48 you gained 85 experience points.\\r\\n12:48 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "leather boots.\\r\\n12:48 no loot. (1 corpse)\\r\\n12:48 you only looted some of the dropped items.\\r\\n12:48 you looted 2 corpses.\\r\\n12:48 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:48 you gained 85 experience points.\\r\\n12:48 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  2,
+                        "item":  "gold coins.\\r\\n12:48 you looted the complete 2 gold and 1 item.\\r\\n12:48 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:48 you gained 85 experience points.\\r\\n12:48 loot of a swamp troll: leather boots.\\r\\n12:48 you looted none of the dropped items. (1 corpse)\\r\\n12:48 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:48 you gained 85 experience points.\\r\\n12:48 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  2,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "torch.\\r\\n12:48 you looted none of the dropped items. (1 corpse)\\r\\n12:48 you looted the complete 2 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:48 you looted 2 corpses.\\r\\n12:48 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:48 you gained 75 experience points.\\r\\n12:48 loot of a poison spider: a gold coin.\\r\\n12:48 you looted none of the dropped items. (2 corpses)\\r\\n12:48 you looted 1 gold.\\r\\n12:48 you looted 3 corpses.\\r\\n12:48 a skeleton loses 43 hitpoints due to your attack. \\r\\n12:48 a skeleton loses 7 hitpoints due to your attack. \\r\\n12:48 you gained 120 experience points.\\r\\n12:48 loot of a skeleton: 9 gold coins.\\r\\n12:48 you looted none of the dropped items. (3 corpses)\\r\\n12:48 you looted 9 gold.\\r\\n12:48 you looted 4 corpses.\\r\\n12:48 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:48 you gained 85 experience points.\\r\\n12:48 loot of a swamp troll: 2 gold coins.\\r\\n12:48 no loot. (2 corpses)\\r\\n12:48 you looted 2 gold.\\r\\n12:48 you looted 3 corpses.\\r\\n12:48 a skeleton loses 50 hitpoints due to your attack. \\r\\n12:48 you gained 120 experience points.\\r\\n12:48 loot of a skeleton: nothing.\\r\\n12:48 no loot. (3 corpses)\\r\\n12:48 you looted nothing from 3 corpses.\\r\\n12:48 a skeleton loses 50 hitpoints due to your attack. \\r\\n12:48 you gained 120 experience points.\\r\\n12:48 loot of a skeleton: a bone.\\r\\n12:48 you looted 1 item.\\r\\n12:48 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:48 you gained 75 experience points.\\r\\n12:48 loot of a poison spider: 2 gold coins.\\r\\n12:49 you looted 2 gold.\\r\\n12:49 a poison spider loses 26 hitpoints due to your critical attack. \\r\\n12:49 you gained 75 experience points.\\r\\n12:49 loot of a poison spider: nothing.\\r\\n12:49 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:49 you advanced from level 12 to level 13.\\r\\n12:49 you gained 75 experience points.\\r\\n12:49 loot of a poison spider: 2 gold coins.\\r\\n12:49 screenshot for event levelup has been saved to location \\\u0027c:\\\\users\\\\durza\\\\appdata\\\\local\\\\tibia\\\\packages\\\\tibia\\\\screenshots\\\u0027.\\r\\n12:49 you are poisoned.\\r\\n12:49 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:49 you gained 85 experience points.\\r\\n12:49 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  4,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "leather boots.\\r\\n12:49 you lose 3 hitpoints due to an attack by a poison spider. \\r\\n12:49 you are poisoned.\\r\\n12:49 a swamp troll loses 46 hitpoints due to your attack. \\r\\n12:49 you lose 4 hitpoints due to an attack by a swamp troll. \\r\\n12:49 you are poisoned.\\r\\n12:49 you are poisoned.\\r\\n12:49 you lose 3 hitpoints due to an attack by a swamp troll. \\r\\n12:49 you are poisoned.\\r\\n12:49 a swamp troll loses 9 hitpoints due to your attack. \\r\\n12:49 you gained 85 experience points.\\r\\n12:49 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "leather boots.\\r\\n12:49 you lose 2 hitpoints due to an attack by a swamp troll. \\r\\n12:49 you are poisoned.\\r\\n12:49 you lose 1 hitpoint. \\r\\n12:49 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:49 you gained 85 experience points.\\r\\n12:49 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  3,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "leather boots.\\r\\n12:49 you lose 4 hitpoints due to an attack by a skeleton. \\r\\n12:49 a swamp troll loses 44 hitpoints due to your attack. \\r\\n12:49 a swamp troll loses 11 hitpoints due to your attack. \\r\\n12:49 you gained 85 experience points.\\r\\n12:49 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  4,
+                        "item":  "gold coins.\\r\\n12:49 you lose 2 hitpoints due to an attack by a swamp troll. \\r\\n12:49 you are poisoned.\\r\\n12:49 you lose 4 hitpoints due to an attack by a skeleton. \\r\\n12:49 you lose 3 hitpoints due to an attack by a poison spider. \\r\\n12:49 you are poisoned.\\r\\n12:49 you lose 3 hitpoints due to an attack by a skeleton. \\r\\n12:49 you lose 1 hitpoint. \\r\\n12:49 a swamp troll loses 32 hitpoints due to your attack. \\r\\n12:49 you lose 10 hitpoints due to an attack by a poison spider. \\r\\n12:49 you are poisoned.\\r\\n12:49 a skeleton loses 26 hitpoints due to your attack. \\r\\n12:49 you lose 1 hitpoint due to an attack by a swamp troll. \\r\\n12:49 you are poisoned.\\r\\n12:49 you lose 5 hitpoints due to an attack by a skeleton. \\r\\n12:49 you lose 4 hitpoints due to an attack by a skeleton. \\r\\n12:49 you lose 5 hitpoints due to an attack by a poison spider. \\r\\n12:49 you are poisoned.\\r\\n12:49 a skeleton loses 24 hitpoints due to your attack. \\r\\n12:49 you gained 118 experience points.\\r\\n12:49 loot of a skeleton: a bone",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  2,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "pelvis bone.\\r\\n12:49 you lose 2 hitpoints due to an attack by a swamp troll. \\r\\n12:49 you are poisoned.\\r\\n12:49 you lose 3 hitpoints due to an attack by a swamp troll. \\r\\n12:49 you are poisoned.\\r\\n12:49 you lose 5 hitpoints due to an attack by a poison spider. \\r\\n12:49 you are poisoned.\\r\\n12:49 a skeleton loses 50 hitpoints due to your attack. \\r\\n12:49 you gained 118 experience points.\\r\\n12:49 loot of a skeleton: a bone",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  7,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "torch.\\r\\n12:49 you lose 1 hitpoint due to an attack by a poison spider. \\r\\n12:49 you lose 3 hitpoints due to an attack by a poison spider. \\r\\n12:49 you are poisoned.\\r\\n12:49 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:49 you gained 75 experience points.\\r\\n12:49 loot of a poison spider: 4 gold coins.\\r\\n12:49 you lose 4 hitpoints due to an attack by a swamp troll. \\r\\n12:49 you are poisoned.\\r\\n12:49 you healed yourself for 46 hitpoints.\\r\\n12:49 you lose 4 hitpoints due to an attack by a swamp troll. \\r\\n12:49 you are poisoned.\\r\\n12:49 you are poisoned.\\r\\n12:49 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:49 you gained 85 experience points.\\r\\n12:49 loot of a swamp troll: a mouldy cheese.\\r\\n12:49 you lose 1 hitpoint. \\r\\n12:49 you are poisoned.\\r\\n12:49 you looted 4 gold.\\r\\n12:49 you looted the complete 7 gold but none of the dropped items.\\r\\n12:49 you looted the complete 3 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:49 you looted 1 item.\\r\\n12:49 you looted the complete 2 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:49 you only looted some of the dropped items.\\r\\n12:49 you looted the complete 4 gold and 1 item.\\r\\n12:49 you looted 7 corpses.\\r\\n12:49 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:49 you gained 85 experience points.\\r\\n12:49 loot of a swamp troll: a spear.\\r\\n12:49 you lose 2 hitpoints due to an attack by a swamp troll. \\r\\n12:49 you are poisoned.\\r\\n12:49 you lose 5 hitpoints due to an attack by a poison spider. \\r\\n12:49 you are poisoned.\\r\\n12:49 a swamp troll loses 23 hitpoints due to your attack. \\r\\n12:49 you gained 85 experience points.\\r\\n12:49 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  3,
+                        "item":  "gold coins.\\r\\n12:49 you are poisoned.\\r\\n12:49 you lose 1 hitpoint. \\r\\n12:49 you lose 6 hitpoints due to an attack by a poison spider. \\r\\n12:49 you are poisoned.\\r\\n12:49 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:49 you gained 75 experience points.\\r\\n12:49 loot of a poison spider: 3 gold coins.\\r\\n12:49 you lose 3 hitpoints due to an attack by a swamp troll. \\r\\n12:49 you are poisoned.\\r\\n12:49 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:49 you gained 85 experience points.\\r\\n12:49 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  3,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "spear.\\r\\n12:49 you lose 1 hitpoint. \\r\\n12:49 you healed yourself for 23 hitpoints.\\r\\n12:49 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:49 you gained 85 experience points.\\r\\n12:49 loot of a swamp troll: leather boots.\\r\\n12:49 attack stopped. only click once to attack your target.\\r\\n12:49 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:49 you gained 85 experience points.\\r\\n12:49 loot of a swamp troll: 3 gold coins.\\r\\n12:49 you lose 1 hitpoint. \\r\\n12:49 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:49 you gained 85 experience points.\\r\\n12:49 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "fishing rod.\\r\\n12:49 you looted none of the dropped items. (9 corpses)\\r\\n12:49 you looted 3 gold.\\r\\n12:49 you looted 3 gold.\\r\\n12:49 you looted the complete 3 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:49 you looted the complete 3 gold and 1 item.\\r\\n12:49 you looted all items.\\r\\n12:49 you looted 14 corpses.\\r\\n12:49 you looted none of the dropped items. (4 corpses)\\r\\n12:49 you looted the complete 4 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:49 you looted 5 corpses.\\r\\n12:49 you looted none of the dropped items. (1 corpse)\\r\\n12:49 you looted 2 gold.\\r\\n12:49 you looted 2 corpses.\\r\\n12:50 a bonelord loses 62 hitpoints due to your attack. \\r\\n12:50 you lose 5 hitpoints due to an attack by a bonelord. \\r\\n12:50 a bonelord loses 23 hitpoints due to your critical attack. \\r\\n12:50 you lose 7 hitpoints due to an attack by a skeleton. \\r\\n12:50 you lose 27 hitpoints due to an attack by a bonelord. \\r\\n12:50 a bonelord loses 38 hitpoints due to your attack. \\r\\n12:50 a bonelord loses 34 hitpoints due to your attack. \\r\\n12:50 a bonelord loses 48 hitpoints due to your attack. \\r\\n12:50 a bonelord loses 22 hitpoints due to your attack. \\r\\n12:50 a bonelord loses 33 hitpoints due to your attack. \\r\\n12:50 you gained 579 experience points.\\r\\n12:50 you unlocked details for the creature \"bonelord\".\\r\\n12:50 loot of a bonelord: 31 gold coins.\\r\\n12:50 you looted 31 gold.\\r\\n12:50 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:50 you gained 75 experience points.\\r\\n12:50 loot of a poison spider: nothing.\\r\\n12:50 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:50 you gained 85 experience points.\\r\\n12:50 loot of a swamp troll: nothing.\\r\\n12:50 no loot. (4 corpses)\\r\\n12:50 you looted nothing from 4 corpses.\\r\\n12:50 a swamp troll loses 55 hitpoints due to your critical attack. \\r\\n12:50 you gained 85 experience points.\\r\\n12:50 loot of a swamp troll: a medicine pouch",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "mouldy cheese.\\r\\n12:50 no loot. (1 corpse)\\r\\n12:50 you looted all items.\\r\\n12:50 you looted 2 corpses.\\r\\n12:51 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:51 you gained 85 experience points.\\r\\n12:51 loot of a swamp troll: a spear.\\r\\n12:51 you looted none of the dropped items. (1 corpse)\\r\\n12:51 a swamp troll loses 48 hitpoints due to your attack. \\r\\n12:51 a swamp troll loses 7 hitpoints due to your attack. \\r\\n12:51 you gained 85 experience points.\\r\\n12:51 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "gold coin",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "wood.\\r\\n12:51 you looted none of the dropped items. (1 corpse)\\r\\n12:51 you looted 1 gold and all dropped items.\\r\\n12:51 you looted 2 corpses.\\r\\n12:51 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:51 you gained 85 experience points.\\r\\n12:51 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  3,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "medicine pouch.\\r\\n12:51 you looted none of the dropped items. (2 corpses)\\r\\n12:51 you looted the complete 3 gold and all dropped items.\\r\\n12:51 you looted 3 corpses.\\r\\n12:51 you are poisoned.\\r\\n12:51 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:51 you gained 85 experience points.\\r\\n12:51 loot of a swamp troll: nothing.\\r\\n12:51 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:51 you gained 85 experience points.\\r\\n12:51 loot of a swamp troll: nothing.\\r\\n12:51 a swamp troll loses 39 hitpoints due to your attack. \\r\\n12:51 a swamp troll loses 16 hitpoints due to your attack. \\r\\n12:51 you gained 85 experience points.\\r\\n12:51 loot of a swamp troll: nothing.\\r\\n12:51 a swamp troll loses 51 hitpoints due to your attack. \\r\\n12:51 a swamp troll loses 4 hitpoints due to your attack. \\r\\n12:51 you gained 85 experience points.\\r\\n12:51 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  3,
+                        "item":  "gold coins.\\r\\n12:51 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:51 you gained 85 experience points.\\r\\n12:51 loot of a swamp troll: nothing.\\r\\n12:51 you looted none of the dropped items. (7 corpses)\\r\\n12:51 you looted the complete 3 gold and 1 item.\\r\\n12:51 you looted 8 corpses.\\r\\n12:51 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:51 you gained 85 experience points.\\r\\n12:51 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  3,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "torch.\\r\\n12:51 you looted the complete 3 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:51 a swamp troll loses 33 hitpoints due to your attack. \\r\\n12:51 a swamp troll loses 22 hitpoints due to your attack. \\r\\n12:51 you gained 85 experience points.\\r\\n12:51 loot of a swamp troll: a fish.\\r\\n12:51 you looted 1 item.\\r\\n12:52 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:52 you gained 85 experience points.\\r\\n12:52 loot of a swamp troll: nothing.\\r\\n12:52 no loot. (1 corpse)\\r\\n12:52 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:52 you gained 85 experience points.\\r\\n12:52 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "gold coin.\\r\\n12:52 no loot. (1 corpse)\\r\\n12:52 you looted 1 gold and 1 item.\\r\\n12:52 you looted 2 corpses.\\r\\n12:52 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:52 you gained 85 experience points.\\r\\n12:52 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  4,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "NPC",
+                        "count":  1,
+                        "id":  3277,
+                        "item":  "spear",
+                        "liquidity":  0.0,
+                        "list_target_time":  null,
+                        "reason":  "Guaranteed NPC return is at or above expected market net value.",
+                        "total":  {
+                                      "expected_market_net":  0,
+                                      "npc_buy":  3
+                                  },
+                        "trend":  "unknown",
+                        "unit":  {
+                                     "expected_market_net":  0,
+                                     "fair_price":  -1,
+                                     "npc_buy":  3,
+                                     "suggested_list_price":  -1
+                                 }
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "swamp grass.\\r\\n12:52 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:52 you gained 85 experience points.\\r\\n12:52 loot of a swamp troll: a fish.\\r\\n12:52 no loot. (2 corpses)\\r\\n12:52 you looted 1 item.\\r\\n12:52 you looted the complete 4 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:52 you looted 4 corpses.\\r\\n12:52 you looted none of the dropped items. (4 corpses)\\r\\n12:52 you looted nothing from 4 corpses.\\r\\n12:52 you see a swamp troll.\\r\\n12:52 a swamp troll loses 47 hitpoints due to your attack. \\r\\n12:52 a swamp troll loses 8 hitpoints due to your attack. \\r\\n12:52 you gained 85 experience points.\\r\\n12:52 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  5,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "leather boots.\\r\\n12:52 you looted the complete 5 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:52 a swamp troll loses 54 hitpoints due to your attack. \\r\\n12:52 a swamp troll loses 1 hitpoint due to your attack. \\r\\n12:52 you gained 85 experience points.\\r\\n12:52 loot of a swamp troll: 2 gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "torch.\\r\\n12:52 you looted none of the dropped items. (1 corpse)\\r\\n12:52 you looted the complete 2 gold but none of the dropped items.\\r\\n12:52 you looted 2 corpses.\\r\\n12:52 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:52 you gained 85 experience points.\\r\\n12:52 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  3,
+                        "item":  "gold coins.\\r\\n12:52 you looted none of the dropped items. (2 corpses)\\r\\n12:52 you looted the complete 3 gold and 1 item.\\r\\n12:52 you looted 3 corpses.\\r\\n12:52 you lose 3 hitpoints due to an attack by a swamp troll. \\r\\n12:52 you are poisoned.\\r\\n12:52 a swamp troll loses 55 hitpoints due to your critical attack. \\r\\n12:52 you gained 85 experience points.\\r\\n12:52 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  5,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "NPC",
+                        "count":  1,
+                        "id":  3552,
+                        "item":  "leather boots",
+                        "liquidity":  0.0,
+                        "list_target_time":  null,
+                        "reason":  "Guaranteed NPC return is at or above expected market net value.",
+                        "total":  {
+                                      "expected_market_net":  0,
+                                      "npc_buy":  2
+                                  },
+                        "trend":  "unknown",
+                        "unit":  {
+                                     "expected_market_net":  0,
+                                     "fair_price":  -1,
+                                     "npc_buy":  2,
+                                     "suggested_list_price":  -1
+                                 }
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "swamp grass.\\r\\n12:52 you looted none of the dropped items. (3 corpses)\\r\\n12:52 you looted the complete 5 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:52 you looted 4 corpses.\\r\\n12:52 you lose 2 hitpoints due to an attack by a swamp troll. \\r\\n12:52 you are poisoned.\\r\\n12:52 a swamp troll loses 47 hitpoints due to your attack. \\r\\n12:52 a swamp troll loses 8 hitpoints due to your attack. \\r\\n12:52 you gained 85 experience points.\\r\\n12:52 loot of a swamp troll: a fish.\\r\\n12:52 you looted none of the dropped items. (4 corpses)\\r\\n12:52 you looted 1 item.\\r\\n12:52 you looted 5 corpses.\\r\\n12:52 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:52 you gained 85 experience points.\\r\\n12:52 loot of a swamp troll: a fish.\\r\\n12:52 you looted none of the dropped items. (5 corpses)\\r\\n12:52 you looted 1 item.\\r\\n12:52 you looted 6 corpses.\\r\\n12:53 a swamp troll loses 39 hitpoints due to your attack. \\r\\n12:53 a swamp troll loses 16 hitpoints due to your attack. \\r\\n12:53 you gained 85 experience points.\\r\\n12:53 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "torch.\\r\\n12:53 you only looted some of the dropped items.\\r\\n12:53 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:53 you gained 85 experience points.\\r\\n12:53 loot of a swamp troll: 4 gold coins.\\r\\n12:53 you looted 4 gold.\\r\\n12:53 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:53 you gained 85 experience points.\\r\\n12:53 loot of a swamp troll: a gold coin",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "leather boots.\\r\\n12:53 no loot. (1 corpse)\\r\\n12:53 you looted the complete 1 gold but none of the dropped items.\\r\\n12:53 you looted 2 corpses.\\r\\n12:53 a swamp troll loses 51 hitpoints due to your attack. \\r\\n12:53 a swamp troll loses 4 hitpoints due to your critical attack. \\r\\n12:53 you gained 85 experience points.\\r\\n12:53 loot of a swamp troll: 5 gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "mouldy cheese.\\r\\n12:53 you looted none of the dropped items. (1 corpse)\\r\\n12:53 you looted the complete 5 gold and 1 item.\\r\\n12:53 you looted 2 corpses.\\r\\n12:53 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:53 you gained 85 experience points.\\r\\n12:53 loot of a swamp troll: 4 gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "List Now",
+                        "count":  1,
+                        "id":  3120,
+                        "item":  "mouldy cheese",
+                        "liquidity":  0.0723,
+                        "list_target_time":  null,
+                        "reason":  "Low liquidity and falling trend increase market risk.",
+                        "total":  {
+                                      "expected_market_net":  4508,
+                                      "npc_buy":  0
+                                  },
+                        "trend":  "falling",
+                        "unit":  {
+                                     "expected_market_net":  4508,
+                                     "fair_price":  4900,
+                                     "npc_buy":  0,
+                                     "suggested_list_price":  4760
+                                 }
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "torch.\\r\\n12:53 no loot. (1 corpse)\\r\\n12:53 you looted the complete 4 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:53 you looted 2 corpses.\\r\\n12:53 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:53 you gained 75 experience points.\\r\\n12:53 loot of a poison spider: nothing.\\r\\n12:53 no loot. (1 corpse)\\r\\n12:53 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:53 you gained 85 experience points.\\r\\n12:53 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  4,
+                        "item":  "gold coins.\\r\\n12:53 you looted the complete 4 gold and 1 item.\\r\\n12:53 a skeleton loses 50 hitpoints due to your attack. \\r\\n12:53 you gained 118 experience points.\\r\\n12:53 loot of a skeleton: nothing.\\r\\n12:53 no loot. (2 corpses)\\r\\n12:53 you looted nothing from 2 corpses.\\r\\n12:53 a skeleton loses 50 hitpoints due to your attack. \\r\\n12:53 you gained 118 experience points.\\r\\n12:53 loot of a skeleton: a bone.\\r\\n12:53 you looted none of the dropped items. (1 corpse)\\r\\n12:53 you looted none of the dropped items. (1 corpse)\\r\\n12:53 a swamp troll loses 50 hitpoints due to your attack. \\r\\n12:53 a swamp troll loses 5 hitpoints due to your attack. \\r\\n12:53 you gained 85 experience points.\\r\\n12:53 loot of a swamp troll: 4 gold coins.\\r\\n12:53 you looted 4 gold.\\r\\n12:53 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:53 you gained 85 experience points.\\r\\n12:53 loot of a swamp troll: a gold coin",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "List Now",
+                        "count":  1,
+                        "id":  3120,
+                        "item":  "mouldy cheese",
+                        "liquidity":  0.0723,
+                        "list_target_time":  null,
+                        "reason":  "Low liquidity and falling trend increase market risk.",
+                        "total":  {
+                                      "expected_market_net":  4508,
+                                      "npc_buy":  0
+                                  },
+                        "trend":  "falling",
+                        "unit":  {
+                                     "expected_market_net":  4508,
+                                     "fair_price":  4900,
+                                     "npc_buy":  0,
+                                     "suggested_list_price":  4760
+                                 }
+                    },
+                    {
+                        "action":  "List Now",
+                        "count":  1,
+                        "id":  5901,
+                        "item":  "wood",
+                        "liquidity":  0.0247,
+                        "list_target_time":  null,
+                        "reason":  "Market net value is favorable versus guaranteed NPC value.",
+                        "total":  {
+                                      "expected_market_net":  92,
+                                      "npc_buy":  50
+                                  },
+                        "trend":  "stable",
+                        "unit":  {
+                                     "expected_market_net":  92,
+                                     "fair_price":  100,
+                                     "npc_buy":  50,
+                                     "suggested_list_price":  100
+                                 }
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "torch.\\r\\n12:53 you looted the complete 1 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:53 a swamp troll loses 33 hitpoints due to your attack. \\r\\n12:53 a swamp troll loses 20 hitpoints due to your attack. \\r\\n12:53 a swamp troll loses 2 hitpoints due to your attack. \\r\\n12:53 you gained 85 experience points.\\r\\n12:53 loot of a swamp troll: a fish.\\r\\n12:53 you looted 1 item.\\r\\n12:54 a swamp troll loses 48 hitpoints due to your attack. \\r\\n12:54 a swamp troll loses 7 hitpoints due to your attack. \\r\\n12:54 you gained 85 experience points.\\r\\n12:54 loot of a swamp troll: a fish.\\r\\n12:54 you looted 1 item.\\r\\n12:54 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:54 you gained 85 experience points.\\r\\n12:54 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  5,
+                        "item":  "gold coins.\\r\\n12:54 no loot. (1 corpse)\\r\\n12:54 you looted the complete 5 gold and 1 item.\\r\\n12:54 you looted 2 corpses.\\r\\n12:54 a swamp troll loses 40 hitpoints due to your attack. \\r\\n12:54 a swamp troll loses 15 hitpoints due to your attack. \\r\\n12:54 you gained 85 experience points.\\r\\n12:54 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "spear.\\r\\n12:54 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:54 you gained 85 experience points.\\r\\n12:54 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "spear.\\r\\n12:54 no loot. (2 corpses)\\r\\n12:54 you only looted some of the dropped items.\\r\\n12:54 you only looted some of the dropped items.\\r\\n12:54 you looted 4 corpses.\\r\\n12:54 a swamp troll loses 45 hitpoints due to your attack. \\r\\n12:54 a swamp troll loses 10 hitpoints due to your attack. \\r\\n12:54 you gained 85 experience points.\\r\\n12:54 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "gold coin.\\r\\n12:54 you looted 1 gold and 1 item.\\r\\n12:54 a swamp troll loses 36 hitpoints due to your attack. \\r\\n12:54 a swamp troll loses 19 hitpoints due to your attack. \\r\\n12:54 you gained 85 experience points.\\r\\n12:54 loot of a swamp troll: 2 gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "NPC",
+                        "count":  1,
+                        "id":  3552,
+                        "item":  "leather boots",
+                        "liquidity":  0.0,
+                        "list_target_time":  null,
+                        "reason":  "Guaranteed NPC return is at or above expected market net value.",
+                        "total":  {
+                                      "expected_market_net":  0,
+                                      "npc_buy":  2
+                                  },
+                        "trend":  "unknown",
+                        "unit":  {
+                                     "expected_market_net":  0,
+                                     "fair_price":  -1,
+                                     "npc_buy":  2,
+                                     "suggested_list_price":  -1
+                                 }
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "mouldy cheese.\\r\\n12:54 you looted the complete 2 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:54 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:54 you gained 85 experience points.\\r\\n12:54 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  5,
+                        "item":  "gold coins.\\r\\n12:54 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:54 you gained 85 experience points.\\r\\n12:54 loot of a swamp troll: a medicine pouch.\\r\\n12:54 you looted none of the dropped items. (1 corpse)\\r\\n12:54 you looted 1 item.\\r\\n12:54 you looted the complete 5 gold and 1 item.\\r\\n12:54 you looted 3 corpses.\\r\\n12:54 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:54 you gained 85 experience points.\\r\\n12:54 loot of a swamp troll: a gold coin.\\r\\n12:54 a poison spider loses 26 hitpoints due to your critical attack. \\r\\n12:54 you gained 75 experience points.\\r\\n12:54 loot of a poison spider: 2 gold coins.\\r\\n12:54 you looted none of the dropped items. (3 corpses)\\r\\n12:54 you looted 2 gold.\\r\\n12:54 you looted 1 gold.\\r\\n12:54 you looted 5 corpses.\\r\\n12:54 a swamp troll loses 39 hitpoints due to your attack. \\r\\n12:54 a swamp troll loses 16 hitpoints due to your attack. \\r\\n12:54 you gained 85 experience points.\\r\\n12:54 loot of a swamp troll: 3 gold coins.\\r\\n12:54 you looted 3 gold.\\r\\n12:54 a swamp troll loses 54 hitpoints due to your attack. \\r\\n12:54 a swamp troll loses 1 hitpoint due to your attack. \\r\\n12:54 you gained 85 experience points.\\r\\n12:54 loot of a swamp troll: nothing.\\r\\n12:54 no loot. (2 corpses)\\r\\n12:54 you looted nothing from 2 corpses.\\r\\n12:54 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:54 you gained 85 experience points.\\r\\n12:54 loot of a swamp troll: leather boots.\\r\\n12:54 you looted none of the dropped items. (1 corpse)\\r\\n12:54 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:54 you gained 75 experience points.\\r\\n12:54 loot of a poison spider: a gold coin.\\r\\n12:55 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:55 you gained 75 experience points.\\r\\n12:55 loot of a poison spider: nothing.\\r\\n12:55 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:55 you gained 75 experience points.\\r\\n12:55 loot of a poison spider: nothing.\\r\\n12:55 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:55 you gained 85 experience points.\\r\\n12:55 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  5,
+                        "item":  "gold coins",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "leather boots.\\r\\n12:55 no loot. (2 corpses)\\r\\n12:55 you looted the complete 5 gold",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "but you only looted some of the dropped items.\\r\\n12:55 you looted 1 gold.\\r\\n12:55 you looted 4 corpses.\\r\\n12:55 a swamp troll loses 46 hitpoints due to your attack. \\r\\n12:55 a swamp troll loses 9 hitpoints due to your attack. \\r\\n12:55 you gained 85 experience points.\\r\\n12:55 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "torch.\\r\\n12:55 you looted none of the dropped items. (4 corpses)\\r\\n12:55 you only looted some of the dropped items.\\r\\n12:55 you looted 5 corpses.\\r\\n12:55 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:55 you gained 85 experience points.\\r\\n12:55 loot of a swamp troll: 5 gold coins.\\r\\n12:55 you looted 5 gold.\\r\\n12:55 a bug loses 29 hitpoints due to your attack. \\r\\n12:55 you gained 61 experience points.\\r\\n12:55 loot of a bug: 3 cherries.\\r\\n12:55 you looted 1 item.\\r\\n12:55 a swamp troll loses 51 hitpoints due to your attack. \\r\\n12:55 a swamp troll loses 4 hitpoints due to your attack. \\r\\n12:55 you gained 85 experience points.\\r\\n12:55 loot of a swamp troll: a fish",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "medicine pouch.\\r\\n12:55 no loot. (1 corpse)\\r\\n12:55 you looted all items.\\r\\n12:55 you looted 2 corpses.\\r\\n12:55 a bug loses 29 hitpoints due to your attack. \\r\\n12:55 you advanced from level 13 to level 14.\\r\\n12:55 you gained 61 experience points.\\r\\n12:55 loot of a bug: nothing.\\r\\n12:55 screenshot for event levelup has been saved to location \\\u0027c:\\\\users\\\\durza\\\\appdata\\\\local\\\\tibia\\\\packages\\\\tibia\\\\screenshots\\\u0027.\\r\\n12:55 a bug loses 29 hitpoints due to your attack. \\r\\n12:55 you gained 61 experience points.\\r\\n12:55 loot of a bug: nothing.\\r\\n12:55 no loot. (4 corpses)\\r\\n12:55 you looted nothing from 4 corpses.\\r\\n12:55 a swamp troll loses 55 hitpoints due to your attack. \\r\\n12:55 you gained 84 experience points.\\r\\n12:55 loot of a swamp troll: 5 gold coins.\\r\\n12:55 no loot. (3 corpses)\\r\\n12:55 you looted 5 gold.\\r\\n12:55 you looted 4 corpses.\\r\\n12:55 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:55 you gained 75 experience points.\\r\\n12:55 loot of a poison spider: 4 gold coins.\\r\\n12:55 you looted 4 gold.\\r\\n12:55 a bug loses 29 hitpoints due to your attack. \\r\\n12:55 you gained 61 experience points.\\r\\n12:55 loot of a bug: nothing.\\r\\n12:55 no loot. (1 corpse)\\r\\n12:55 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:55 you gained 75 experience points.\\r\\n12:55 loot of a poison spider: 4 gold coins.\\r\\n12:55 you looted 4 gold.\\r\\n12:55 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:55 you gained 75 experience points.\\r\\n12:55 loot of a poison spider: nothing.\\r\\n12:55 no loot. (2 corpses)\\r\\n12:55 you looted nothing from 2 corpses.\\r\\n12:55 a poison spider loses 26 hitpoints due to your attack. \\r\\n12:55 you gained 75 experience points.\\r\\n12:55 loot of a poison spider: 2 gold coins.\\r\\n12:55 no loot. (1 corpse)\\r\\n12:55 you looted 2 gold.\\r\\n12:55 you looted 2 corpses.\\r\\n12:55 you lose 2 hitpoints due to an attack by a spider. \\r\\n12:55 a spider loses 20 hitpoints due to your attack. \\r\\n12:55 you gained 40 experience points.\\r\\n12:55 loot of a spider: nothing.\\r\\n12:55 a spider loses 20 hitpoints due to your attack. \\r\\n12:55 you gained 40 experience points.\\r\\n12:55 loot of a spider: 2 gold coins.\\r\\n12:55 you lose 2 hitpoints due to an attack by a bug. \\r\\n12:55 you lose 1 hitpoint due to an attack by a spider. \\r\\n12:55 a bug loses 29 hitpoints due to your attack. \\r\\n12:55 you gained 61 experience points.\\r\\n12:55 loot of a bug: 2 gold coins.\\r\\n12:55 you lose 1 hitpoint due to an attack by a bug. \\r\\n12:55 a bug loses 29 hitpoints due to your attack. \\r\\n12:55 you gained 61 experience points.\\r\\n12:55 loot of a bug: 2 cherries",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  2,
+                        "item":  "gold coins.\\r\\n12:55 a spider loses 20 hitpoints due to your attack. \\r\\n12:55 you gained 40 experience points.\\r\\n12:55 loot of a spider: 5 gold coins.\\r\\n12:55 a bug loses 29 hitpoints due to your critical attack. \\r\\n12:55 you gained 61 experience points.\\r\\n12:55 loot of a bug: a gold coin.\\r\\n12:55 you lose 3 hitpoints due to an attack by a bug. \\r\\n12:55 a bug loses 29 hitpoints due to your attack. \\r\\n12:55 you gained 61 experience points.\\r\\n12:55 loot of a bug: nothing.\\r\\n12:55 a bug loses 22 hitpoints due to your attack. \\r\\n12:56 a bug loses 7 hitpoints due to your attack. \\r\\n12:56 you gained 61 experience points.\\r\\n12:56 loot of a bug: 5 gold coins.\\r\\n12:56 a bug loses 24 hitpoints due to your attack. \\r\\n12:56 you lose 4 hitpoints due to an attack by a bug. \\r\\n12:56 a bug loses 5 hitpoints due to your attack. \\r\\n12:56 you gained 61 experience points.\\r\\n12:56 loot of a bug: 3 gold coins.\\r\\n12:56 a spider loses 20 hitpoints due to your attack. \\r\\n12:56 you gained 40 experience points.\\r\\n12:56 loot of a spider: a gold coin.\\r\\n12:56 no loot. (2 corpses)\\r\\n12:56 you looted 5 gold.\\r\\n12:56 you looted 2 gold.\\r\\n12:56 you looted 3 gold.\\r\\n12:56 you looted the complete 2 gold and 1 item.\\r\\n12:56 you looted 2 gold.\\r\\n12:56 you looted 1 gold.\\r\\n12:56 you looted 1 gold.\\r\\n12:56 you looted 5 gold.\\r\\n12:56 you looted 10 corpses.\\r\\n12:56 a bug loses 29 hitpoints due to your attack. \\r\\n12:56 you gained 61 experience points.\\r\\n12:56 loot of a bug: 3 gold coins.\\r\\n12:56 you looted 3 gold.\\r\\n12:56 a bug loses 29 hitpoints due to your attack. \\r\\n12:56 you gained 61 experience points.\\r\\n12:56 loot of a bug: 2 gold coins.\\r\\n12:56 you looted 2 gold.\\r\\n12:56 a bug loses 29 hitpoints due to your attack. \\r\\n12:56 you gained 61 experience points.\\r\\n12:56 loot of a bug: nothing.\\r\\n12:56 no loot. (2 corpses)\\r\\n12:56 you looted nothing from 2 corpses.\\r\\n12:56 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:56 you gained 34 experience points.\\r\\n12:56 loot of a cave rat: a gold coin.\\r\\n12:56 a cave rat loses 20 hitpoints due to your attack. \\r\\n12:56 a cave rat loses 10 hitpoints due to your attack. \\r\\n12:56 you gained 34 experience points.\\r\\n12:56 loot of a cave rat: 2 gold coins.\\r\\n12:56 you looted 1 gold.\\r\\n12:56 you looted 2 gold.\\r\\n12:56 you looted 2 corpses.\\r\\n12:56 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:56 you gained 34 experience points.\\r\\n12:56 loot of a cave rat: a gold coin.\\r\\n12:56 no loot. (1 corpse)\\r\\n12:56 you looted 1 gold.\\r\\n12:56 you looted 2 corpses.\\r\\n12:56 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:56 you gained 34 experience points.\\r\\n12:56 loot of a cave rat: nothing.\\r\\n12:56 no loot. (1 corpse)\\r\\n12:56 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:56 you gained 34 experience points.\\r\\n12:56 loot of a cave rat: a gold coin.\\r\\n12:56 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:56 you gained 34 experience points.\\r\\n12:56 loot of a cave rat: 2 gold coins.\\r\\n12:56 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:56 you gained 34 experience points.\\r\\n12:56 loot of a cave rat: a gold coin.\\r\\n12:56 no loot. (1 corpse)\\r\\n12:56 you looted 1 gold.\\r\\n12:56 you looted 1 gold.\\r\\n12:56 you looted 2 gold.\\r\\n12:56 you looted 4 corpses.\\r\\n12:56 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:56 you gained 34 experience points.\\r\\n12:56 loot of a cave rat: 2 gold coins.\\r\\n12:56 you looted 2 gold.\\r\\n12:56 a cave rat loses 30 hitpoints due to your attack. \\r\\n12:56 you gained 34 experience points.\\r\\n12:56 loot of a cave rat: 2 gold coins.\\r\\n12:56 you looted 2 gold.\\r\\n12:57 your depot contains 1140 items using 12 out of 15000 available slots. your stash contains 83 items.\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027pspath\u0027: \u0027c:\\\\code\\\\tibia market\\\\samplelog.txt\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027psparentpath\u0027: \u0027c:\\\\code\\\\tibia market\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027pschildname\u0027: \u0027samplelog.txt\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027psdrive\u0027: {\u0027currentlocation\u0027: \u0027code\\\\tibia market\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027name\u0027: \u0027c\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027provider\u0027: \u0027microsoft.powershell.core\\\\filesystem\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027root\u0027: \u0027c:\\\\\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027description\u0027: \u0027\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027maximumsize\u0027: none",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027credential\u0027: \u0027system.management.automation.pscredential\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027displayroot\u0027: none}",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027psprovider\u0027: {\u0027implementingtype\u0027: \u0027microsoft.powershell.commands.filesystemprovider\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027helpfile\u0027: \u0027system.management.automation.dll-help.xml\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027name\u0027: \u0027filesystem\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027pssnapin\u0027: \u0027microsoft.powershell.core\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027modulename\u0027: \u0027microsoft.powershell.core\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027module\u0027: none",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027description\u0027: \u0027\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027capabilities\u0027: 52",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027home\u0027: \u0027c:\\\\users\\\\durza\u0027",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027drives\u0027: \u0027c d e f\u0027}",
+                        "reason":  "Item name not matched in item metadata."
+                    },
+                    {
+                        "action":  "Unknown",
+                        "count":  1,
+                        "item":  "\u0027readcount\u0027: 1}",
+                        "reason":  "Item name not matched in item metadata."
+                    }
+                ],
+    "server":  "Victoris"
+}
