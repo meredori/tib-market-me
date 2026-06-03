@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { Generator, Enums } = require("tibia-assets");
+const { Generator } = require("tibia-assets");
 
 function parseArgs(argv) {
   const options = {
@@ -10,15 +10,7 @@ function parseArgs(argv) {
     catalog: "",
     output: "./generated-assets",
     mode: "items",
-    itemRange: undefined,
-    outfitRange: undefined,
-    direction: "south",
-    animation: "idle",
-    lookHead: 0,
-    lookBody: 0,
-    lookLegs: 0,
-    lookFeet: 0,
-    lookAddons: 0,
+    itemRange: undefined
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -28,14 +20,6 @@ function parseArgs(argv) {
     else if (arg === "-o" || arg === "--output") options.output = argv[++i] || "";
     else if (arg === "-m" || arg === "--mode") options.mode = argv[++i] || "items";
     else if (arg === "-r" || arg === "--item-range") options.itemRange = argv[++i] || "";
-    else if (arg === "-or" || arg === "--outfit-range") options.outfitRange = argv[++i] || "";
-    else if (arg === "-d" || arg === "--direction") options.direction = (argv[++i] || "south").toLowerCase();
-    else if (arg === "-a" || arg === "--animation") options.animation = (argv[++i] || "idle").toLowerCase();
-    else if (arg === "--look-head") options.lookHead = parseInt(argv[++i] || "0", 10) || 0;
-    else if (arg === "--look-body") options.lookBody = parseInt(argv[++i] || "0", 10) || 0;
-    else if (arg === "--look-legs") options.lookLegs = parseInt(argv[++i] || "0", 10) || 0;
-    else if (arg === "--look-feet") options.lookFeet = parseInt(argv[++i] || "0", 10) || 0;
-    else if (arg === "--look-addons") options.lookAddons = parseInt(argv[++i] || "0", 10) || 0;
   }
 
   return options;
@@ -63,18 +47,6 @@ function parseRange(rangeStr) {
   }
 
   return Array.from(out).sort((a, b) => a - b);
-}
-
-function toDirection(direction) {
-  if (direction === "north") return Enums.Direction.North;
-  if (direction === "east") return Enums.Direction.East;
-  if (direction === "west") return Enums.Direction.West;
-  return Enums.Direction.South;
-}
-
-function toAnimation(animation) {
-  if (animation === "moving") return Enums.OutfitAnimation.Moving;
-  return Enums.OutfitAnimation.Idle;
 }
 
 function validateCatalogAssets(catalogPath) {
@@ -120,44 +92,6 @@ async function generateItems(generator, options) {
   console.log(`Items complete: total=${itemIds.length}, generated=${generated}, skipped=${skipped}`);
 }
 
-async function generateOutfits(generator, options) {
-  const outfitIds = options.outfitRange
-    ? parseRange(options.outfitRange)
-    : (generator.assets?.outfit || []).map((obj) => obj.id).filter((id) => id > 0);
-
-  const direction = toDirection(options.direction);
-  const animation = toAnimation(options.animation);
-
-  let generated = 0;
-  let skipped = 0;
-
-  for (const outfitId of outfitIds) {
-    const fileName = `${outfitId}_${options.direction}_${options.animation}_h${options.lookHead}_b${options.lookBody}_l${options.lookLegs}_f${options.lookFeet}_a${options.lookAddons}.png`;
-    const outputPath = path.join(options.output, fileName);
-    if (fs.existsSync(outputPath)) {
-      skipped += 1;
-      continue;
-    }
-
-    await generator.getOutfit(
-      {
-        lookType: outfitId,
-        lookHead: options.lookHead,
-        lookBody: options.lookBody,
-        lookLegs: options.lookLegs,
-        lookFeet: options.lookFeet,
-        lookAddons: options.lookAddons,
-      },
-      direction,
-      animation,
-      outputPath
-    );
-    generated += 1;
-  }
-
-  console.log(`Outfits complete: total=${outfitIds.length}, generated=${generated}, skipped=${skipped}`);
-}
-
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const originalCwd = process.cwd();
@@ -191,17 +125,12 @@ async function main() {
   const generator = new Generator(protobufPath, catalogPath, false);
   await generator.init();
 
-  if (options.mode === "items") {
-    await generateItems(generator, options);
-  } else if (options.mode === "outfits") {
-    await generateOutfits(generator, options);
-  } else if (options.mode === "both") {
-    await generateItems(generator, options);
-    await generateOutfits(generator, options);
-  } else {
+  if (options.mode !== "items") {
     console.error(`Unsupported mode: ${options.mode}`);
     process.exit(1);
   }
+
+  await generateItems(generator, options);
 
   process.chdir(originalCwd);
 }

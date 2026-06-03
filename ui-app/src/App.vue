@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 const status = reactive({
   server: '',
@@ -12,16 +12,16 @@ const status = reactive({
 const searchQuery = ref('')
 const searchRows = ref([])
 const searchInfo = ref('')
+const selectedItem = ref(null)
+const isItemModalOpen = ref(false)
+const isItemDetailsLoading = ref(false)
+const itemDetailsError = ref('')
 const isRefreshing = ref(false)
 const refreshInfo = ref('')
 
-const lootText = ref('')
-const recommendRows = ref([])
-const recommendInfo = ref('')
-const isRecommending = ref(false)
-const recommendParser = ref(null)
-
 let searchDebounce = null
+let latestSearchToken = 0
+let searchAbortController = null
 
 async function api(url, options = {}) {
   const response = await fetch(url, options)
@@ -44,17 +44,51 @@ async function loadStatus() {
 async function runSearch() {
   const q = searchQuery.value.trim()
   if (!q) {
+    if (searchAbortController) {
+      searchAbortController.abort()
+      searchAbortController = null
+    }
     searchRows.value = []
     searchInfo.value = ''
     return
   }
 
+  if (searchAbortController) {
+    searchAbortController.abort()
+  }
+  searchAbortController = new AbortController()
+
+  latestSearchToken += 1
+  const token = latestSearchToken
+  searchInfo.value = 'Searching...'
+  const requestStartedAt = performance.now()
+
   try {
-    const out = await api(`/api/search?q=${encodeURIComponent(q)}`)
+    const out = await api(`/api/search?q=${encodeURIComponent(q)}`, { signal: searchAbortController.signal })
+    if (token !== latestSearchToken) {
+      return
+    }
     searchRows.value = out.results || []
-    searchInfo.value = `${searchRows.value.length} result(s)`
+    const totalMs = Math.round(performance.now() - requestStartedAt)
+    const elapsed = Number(out.elapsed_ms)
+    if (Number.isFinite(elapsed)) {
+      const proxyAndClientMs = Math.max(0, totalMs - elapsed)
+      searchInfo.value = `${searchRows.value.length} result(s) in ${totalMs} ms total (backend ${elapsed} ms, client/proxy ${proxyAndClientMs} ms)`
+    } else {
+      searchInfo.value = `${searchRows.value.length} result(s) in ${totalMs} ms total`
+    }
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return
+    }
+    if (token !== latestSearchToken) {
+      return
+    }
     searchInfo.value = `Search error: ${error.message}`
+  } finally {
+    if (token === latestSearchToken) {
+      searchAbortController = null
+    }
   }
 }
 
@@ -73,7 +107,11 @@ async function refreshData() {
     if (out.status) {
       Object.assign(status, out.status)
     }
-    refreshInfo.value = `Refresh complete at ${out.refreshed_at}`
+    if (out.skipped) {
+      refreshInfo.value = out.message || 'Refresh not run as no new data to fetch'
+    } else {
+      refreshInfo.value = `Refresh complete at ${out.refreshed_at}`
+    }
   } catch (error) {
     refreshInfo.value = `Refresh failed: ${error.message}`
   } finally {
@@ -81,76 +119,63 @@ async function refreshData() {
   }
 }
 
-async function recommendLoot() {
-  const payload = lootText.value.trim()
-  if (!payload) {
-    recommendInfo.value = 'Paste loot text first.'
-    recommendRows.value = []
-    recommendParser.value = null
-    return
-  }
-
-  isRecommending.value = true
-  recommendInfo.value = 'Analysing loot...'
-  try {
-    const out = await api('/api/recommend', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ loot_text: payload }),
-    })
-    recommendRows.value = out.results || []
-    recommendParser.value = out.parser || null
-    recommendInfo.value = `Computed ${recommendRows.value.length} recommendation(s).`
-  } catch (error) {
-    recommendInfo.value = `Recommendation failed: ${error.message}`
-    recommendParser.value = null
-  } finally {
-    isRecommending.value = false
-  }
-}
-
-const hasStatus = computed(() => Boolean(status.server))
-const recommendTotals = computed(() => {
-  let totalValue = 0
-  for (const row of recommendRows.value) {
-    totalValue += recommendationTotalValue(row)
-  }
-  return { totalValue }
-})
-
 function itemImagePath(itemId) {
   return itemId ? `/items/${itemId}.png` : ''
 }
 
-function recommendationValueEach(row) {
-  if (row.action === 'NPC') {
-    return Number(row.unit?.npc_buy || 0)
+async function openItemDetails(itemId) {
+  if (!itemId) {
+    return
   }
-  if (row.action === 'Skip Market' || row.action === 'Unknown') {
-    return 0
+
+  isItemModalOpen.value = true
+  isItemDetailsLoading.value = true
+  itemDetailsError.value = ''
+  selectedItem.value = null
+
+  try {
+    const out = await api(`/api/item/${itemId}`)
+    selectedItem.value = out
+  } catch (error) {
+    itemDetailsError.value = `Failed to load item details: ${error.message}`
+  } finally {
+    isItemDetailsLoading.value = false
   }
-  return Number(row.unit?.expected_market_net || row.unit?.suggested_list_price || row.unit?.npc_buy || 0)
 }
 
-function recommendationTotalValue(row) {
-  return recommendationValueEach(row) * Number(row.count || 0)
-}
-
-function recommendationLabel(row) {
-  return row.display_recommendation || 'Remove from Loot Filter'
+function closeItemDetails() {
+  isItemModalOpen.value = false
+  selectedItem.value = null
+  itemDetailsError.value = ''
 }
 
 function formatValue(value) {
-  return new Intl.NumberFormat('en-US').format(Number(value || 0))
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return 'n/a'
+  }
+  return new Intl.NumberFormat('en-US').format(numeric)
 }
 
+const hasStatus = computed(() => Boolean(status.server))
+
 onMounted(loadStatus)
+
+onBeforeUnmount(() => {
+  if (searchDebounce) {
+    clearTimeout(searchDebounce)
+  }
+  if (searchAbortController) {
+    searchAbortController.abort()
+    searchAbortController = null
+  }
+})
 </script>
 
 <template>
   <div class="layout">
     <h1 class="title">Tibia Market Helper</h1>
-    <div class="subtitle">Vite + Vue frontend with Python middleware API.</div>
+    <div class="subtitle">Vite + Vue frontend with Fastify + SQLite backend.</div>
 
     <div class="grid">
       <section class="card card-half">
@@ -199,21 +224,34 @@ onMounted(loadStatus)
           <table>
             <thead>
               <tr>
+                <th>Image</th>
                 <th>ID</th>
                 <th>Name</th>
-                <th>Client</th>
-                <th>Fair</th>
-                <th>List</th>
+                <th>Mode</th>
+                <th>Price</th>
+                <th>Min</th>
                 <th>Trend</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in searchRows" :key="row.id">
+                <td class="item-image-cell">
+                  <img
+                    class="item-image"
+                    :src="row.image_path || itemImagePath(row.id)"
+                    :alt="row.name || row.wiki_name || `Item ${row.id}`"
+                    loading="lazy"
+                  />
+                </td>
                 <td>{{ row.id }}</td>
-                <td>{{ row.name }}</td>
-                <td>{{ row.client_value }}</td>
-                <td>{{ row.fair_price }}</td>
-                <td>{{ row.suggested_list_price }}</td>
+                <td>
+                  <button class="item-link" @click="openItemDetails(row.id)">
+                    {{ row.name || row.wiki_name || `Item ${row.id}` }}
+                  </button>
+                </td>
+                <td>{{ row.loot_logic?.strategy || 'n/a' }}</td>
+                <td>{{ formatValue(row.loot_logic?.price) }}</td>
+                <td>{{ formatValue(row.loot_logic?.min_price) }}</td>
                 <td>{{ row.trend }}</td>
               </tr>
             </tbody>
@@ -222,53 +260,78 @@ onMounted(loadStatus)
       </section>
 
       <section class="card">
-        <h2>Hunt Loot Recommendation</h2>
-        <textarea
-          v-model="lootText"
-          placeholder="Paste loot text, e.g. Loot of a dragon: 2 green dragon leathers, a steel helmet."
-        />
-        <div class="row" style="margin-top: 10px;">
-          <button :disabled="isRecommending" @click="recommendLoot">Recommend Actions</button>
-          <span class="muted">{{ recommendInfo }}</span>
+        <h2>Hunt Import (Deferred)</h2>
+        <div class="muted">
+          Hunt importer and recommendation UI are intentionally deferred until the redesign phase.
         </div>
-        <div v-if="recommendParser" class="muted" style="margin-top: 8px;">
-          Parsed {{ recommendParser.loot_lines || 0 }} loot line(s), ignored {{ recommendParser.ignored_lines || 0 }} non-loot line(s),
-          time range {{ recommendParser.first_timestamp || 'n/a' }} to {{ recommendParser.last_timestamp || 'n/a' }}.
+      </section>
+    </div>
+
+    <div v-if="isItemModalOpen" class="modal-backdrop" @click="closeItemDetails">
+      <section class="modal-card" @click.stop>
+        <div class="modal-head">
+          <h3>Item Details</h3>
+          <button class="modal-close" @click="closeItemDetails">Close</button>
         </div>
-        <div v-if="recommendRows.length" class="muted" style="margin-top: 4px;">
-          Total recommended value: {{ formatValue(recommendTotals.totalValue) }}
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Image</th>
-                <th>Item</th>
-                <th>Amount</th>
-                <th>Recommendation</th>
-                <th>Value Each</th>
-                <th>Total Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in recommendRows" :key="`${row.id || row.item}-${row.count}`">
-                <td class="item-image-cell">
-                  <img
-                    v-if="row.id"
-                    class="item-image"
-                    :src="itemImagePath(row.id)"
-                    :alt="row.item"
-                    loading="lazy"
-                  />
-                </td>
-                <td>{{ row.item }}</td>
-                <td>{{ row.count }}</td>
-                <td>{{ recommendationLabel(row) }}</td>
-                <td>{{ formatValue(recommendationValueEach(row)) }}</td>
-                <td>{{ formatValue(recommendationTotalValue(row)) }}</td>
-              </tr>
-            </tbody>
-          </table>
+
+        <div v-if="isItemDetailsLoading" class="muted">Loading item details...</div>
+        <div v-else-if="itemDetailsError" class="error">{{ itemDetailsError }}</div>
+        <div v-else-if="selectedItem" class="modal-body">
+          <div class="row">
+            <img
+              class="item-image"
+              :src="selectedItem.image_path || itemImagePath(selectedItem.id)"
+              :alt="selectedItem.name || selectedItem.wiki_name || `Item ${selectedItem.id}`"
+            />
+            <div>
+              <div><strong>{{ selectedItem.name || selectedItem.wiki_name || `Item ${selectedItem.id}` }}</strong></div>
+              <div class="muted">ID {{ selectedItem.id }}</div>
+              <div class="muted">Category {{ selectedItem.category || 'n/a' }} | Tier {{ selectedItem.tier ?? 'n/a' }}</div>
+            </div>
+          </div>
+
+          <h4 style="margin: 14px 0 6px;">Original Fields</h4>
+          <div class="modal-grid">
+            <div><strong>Sell Offer:</strong> {{ formatValue(selectedItem.sell_offer) }}</div>
+            <div><strong>Trend:</strong> {{ selectedItem.trend }}</div>
+            <div><strong>Trend Score:</strong> {{ selectedItem.trend_score }}</div>
+            <div><strong>Liquidity:</strong> {{ selectedItem.liquidity }}</div>
+            <div><strong>Confidence:</strong> {{ selectedItem.confidence }}</div>
+            <div><strong>Month Sold:</strong> {{ selectedItem.month_sold }}</div>
+            <div><strong>Day Sold:</strong> {{ selectedItem.day_sold }}</div>
+            <div><strong>Run Finished:</strong> <span class="mono">{{ selectedItem.run_finished_at || 'n/a' }}</span></div>
+            <div><strong>World Last Update:</strong> <span class="mono">{{ selectedItem.world_last_update || 'n/a' }}</span></div>
+          </div>
+
+          <h4 style="margin: 14px 0 6px;">Calculated Fields</h4>
+          <div class="modal-grid" style="margin-top: 12px;">
+            <div><strong>Mode:</strong> {{ selectedItem.loot_logic?.strategy || 'n/a' }}</div>
+            <div><strong>Price:</strong> {{ formatValue(selectedItem.loot_logic?.price) }}</div>
+            <div><strong>Min:</strong> {{ formatValue(selectedItem.loot_logic?.min_price) }}</div>
+            <div><strong>Strategy Trend:</strong> {{ selectedItem.loot_logic?.trend_display || 'n/a' }}</div>
+            <div><strong>Rule:</strong> {{ selectedItem.loot_logic?.reason || 'n/a' }}</div>
+          </div>
+
+          <div class="modal-grid" style="margin-top: 12px;">
+            <div>
+              <strong>NPC Buy (Top)</strong>
+              <ul class="npc-list">
+                <li v-for="row in (selectedItem.npc_buy_rows || []).slice(0, 8)" :key="`buy-${row.npc_name}-${row.location}-${row.price}`">
+                  {{ row.npc_name }} ({{ row.location }}): {{ formatValue(row.price) }}
+                </li>
+                <li v-if="!(selectedItem.npc_buy_rows || []).length" class="muted">None</li>
+              </ul>
+            </div>
+            <div>
+              <strong>NPC Sell (Top)</strong>
+              <ul class="npc-list">
+                <li v-for="row in (selectedItem.npc_sell_rows || []).slice(0, 8)" :key="`sell-${row.npc_name}-${row.location}-${row.price}`">
+                  {{ row.npc_name }} ({{ row.location }}): {{ formatValue(row.price) }}
+                </li>
+                <li v-if="!(selectedItem.npc_sell_rows || []).length" class="muted">None</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </section>
     </div>

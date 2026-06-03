@@ -4,13 +4,16 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "concurrently -k -n BE,FE -c green,cyan \"npm run dev:be\" \"npm run dev:fe\"",
-    "dev:be": "\".venv\\Scripts\\python.exe\" web_ui.py --server Victoris --host 127.0.0.1 --port 8787",
+    "dev:be": "npm --prefix server run dev",
+    "build:be": "npm --prefix server run build",
+    "sync:be": "npm --prefix server run sync",
+    "migrate:be": "npm --prefix server run migrate",
     "dev:fe": "npm --prefix ui-app run dev",
     "build:fe": "npm --prefix ui-app run build",
     "preview:fe": "npm --prefix ui-app run preview",
-    "generate:items": "node ./scripts/tibia-assets-generate.cjs -p ./assets/appearances.dat -c ./assets/catalog-content.json -m items -o ./ui-app/public/items",
-    "generate:outfits": "node ./scripts/tibia-assets-generate.cjs -p ./assets/appearances.dat -c ./assets/catalog-content.json -m outfits -or \"513-600\" -o ./ui-app/public/outfits",
-    "prebuild": "npm run generate:items && npm run generate:outfits"
+    "generate:items": "node ./scripts/tibia-assets-generate.cjs -p ./assets/appearances.dat -c ./assets/catalog-content.json -m items -o ./assets/generated/items-archive",
+    "stage:items": "npm --prefix server run stage:items",
+    "prebuild": "npm run generate:items && npm run stage:items"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

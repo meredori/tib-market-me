@@ -1,7 +1,3 @@
-__pycache__/
-*.pyc
-.venv/
-venv/
 node_modules/
 ui-app/dist/
 .DS_Store
@@ -11,5 +7,8 @@ ui-app/dist/
 *.db
 *.sqlite
 *.sqlite3
+itemsprices.json
+itemsprices.detailed.json
+itemsprices.meta.json
 assets/
 graphics_resources.rcc

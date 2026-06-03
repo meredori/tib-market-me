@@ -1,0 +1,41 @@
+Session data: From 2026-06-02, 22:19:07 to 2026-06-02, 22:50:18
+Session: 00:31h
+XP Gain: 39,009
+XP/h: 75,057
+Loot: 153,401
+Supplies: 100
+Balance: 153,301
+Damage: 10,772
+Damage/h: 24,956
+Healing: 37
+Healing/h: 85
+Killed Monsters:
+  1x Herald of Fire
+  9x infernoid blob
+  8x infernoid hound
+  6x infernoid soul
+  7x infernoid spiritual
+  1x lizard henchman
+  22x pirate cook
+  27x pirate gunner
+  31x pirate navigator
+  11x pirate quartermaster
+  2x sea captain
+Looted Items:
+  22x a health potion
+  20x a mana potion
+  911x a gold coin
+  1x a platinum coin
+  1x a might ring
+  5x a throwing knife
+  57x an arrow
+  11x a burst arrow
+  2x a fire mushroom
+  1x a rum flask
+  1x a light shovel
+  1x a ratana
+  6x a gold tooth
+  4x infernoid ember
+  1x an adventurer backpack
+  3x a sail pass
+  1x a lesser proficiency catalyst

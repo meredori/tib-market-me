@@ -1,25 +1,32 @@
 # Tibia Market Helper (Victoris)
 
-This tool pulls data from the TibiaMarket API and builds practical sell prices for your client.
+This project now uses a Node + TypeScript backend for market sync and API serving.
 
-It is designed to avoid simply mirroring the current listing price.
-Instead, it computes a guarded fair value and a suggested listing price using:
-- month/day averages
-- current buy/sell offers
-- liquidity (sales + traders)
-- trend direction
-- outlier dampening and bounds
+Current migration slice scope:
+- pull market + metadata + world freshness from TibiaMarket API
+- compute snapshot pricing
+- persist to local SQLite
+- keep JSON exports for parity checks
 
-It then exports:
+Current JSON outputs:
 - `itemsprices.json`: flat map of `item_id -> conservative client value`
-- `itemsprices.detailed.json`: full analytics used for recommendations
-- `itemsprices.meta.json`: run metadata including local run timestamps and world_data freshness
+- `itemsprices.detailed.json`: detailed snapshot pricing rows
+- `itemsprices.meta.json`: local run + world freshness metadata
+
+Current item image workflow:
+- full item sprite generation now goes to `assets/generated/items-archive/`
+- only DB-needed item IDs are copied into `ui-app/public/items/`
+- manual tracked IDs in `assets/manual-item-images.json` are always included
+
+Planning and migration docs:
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/SQLITE_SCHEMA.md`
 
 ## Install
 
 ```bash
-pip install -r requirements.txt
 npm install
+npm --prefix server install
 ```
 
 ## Local Asset Setup
@@ -28,68 +35,20 @@ This repository does not track the copied Tibia client asset dump.
 
 - Copy your local Tibia `assets/` folder into the project root as `assets/`.
 - Copy `graphics_resources.rcc` into the project root if you use tooling that reads it.
-- The curated frontend item images in `ui-app/public/items/` are tracked and should remain in the repository.
+- Run `npm run generate:items` to build the full archive from Tibia assets.
+- Run `npm run stage:items` to copy only market item IDs (plus manual tracked IDs) into `ui-app/public/items/`.
+- Manual tracked item IDs are defined in `assets/manual-item-images.json` (defaults include coins: `3043`, `3048`, `3052`).
 
 ## Generate Prices (Victoris)
 
 ```bash
-python market_helper.py update-prices --server Victoris
+npm run sync:be
 ```
 
-Optional:
-
-```bash
-python market_helper.py update-prices --server Victoris --sales-tax-pct 8 --out itemsprices.json --detail-out itemsprices.detailed.json --meta-out itemsprices.meta.json --page-limit 250 --page-pause-sec 0.35 --verbose
-```
-
-This command stores:
+The sync command stores:
 - local run start/finish timestamps
-- world last update timestamp from the `world_data` endpoint
-- the time world_data was queried locally
-
-## Loot Recommendations
-
-Supports recommendations per loot item:
-- `NPC` (guaranteed value is best / safer)
-- `List Now`
-- `List Later` (for example if DXP is near and trend is rising)
-- `List One` (item is unlisted but demand is thin; only probe with 1)
-- `Skip Market` (fails minimum market quality/value gates)
-
-Recommendation cleanup logic now also includes:
-- per-item unit listing price and expected net
-- market quality checks (liquidity/confidence/volume)
-- NPC fallback for weak-volume items where market listing is risky
-- minimum market suggestion thresholds (`unit net`, `liquidity`, `confidence`, `month sold`)
-- pickup filtering by unit value and value density (`gp/oz`) when weight is known
-
-### Example with inline text
-
-```bash
-python market_helper.py recommend-loot --server Victoris --loot-text "Loot of a dragon: 2 green dragon leathers, a steel helmet, 45 gold coins."
-```
-
-### Example with file
-
-```bash
-python market_helper.py recommend-loot --server Victoris --loot-file loot.txt --out loot-recommendation.json
-```
-
-With weight and pickup thresholds:
-
-```bash
-python market_helper.py recommend-loot --server Victoris --loot-file loot.txt --weights-json item_weights.json --min-unit-value 20 --min-coin-per-oz 12 --out loot-recommendation.json
-```
-
-With additional market suggestion thresholds:
-
-```bash
-python market_helper.py recommend-loot --server Victoris --loot-file loot.txt --min-market-unit-net 500 --min-market-liquidity 0.12 --min-market-confidence 0.65 --min-market-month-sold 6 --out loot-recommendation.json
-```
-
-Weight configuration file:
-- `item_weights.json` maps item name (or item id) to weight in oz.
-- Used to compute `coin_per_oz` and decide `remove_from_loot_list`.
+- world last update timestamp from `world_data`
+- raw market payloads and normalized fields in SQLite
 
 ## Local UI
 
@@ -97,14 +56,14 @@ Run a local web UI to:
 - check local run status and world freshness
 - refresh price data from server
 - search specific items from local detailed data
-- paste loot for recommendation
+
+Hunt importer and recommendation are intentionally deferred to a later redesign slice.
 
 Architecture:
 - Vite + Vue frontend in `ui-app/`
-- Python/Flask middleware serves API endpoints
-- During dev, Vite proxies `/api` to Flask at `127.0.0.1:8787`
-- For deployment, Flask serves built frontend from `ui-app/dist` only
-- Business logic and market access remain in Python
+- Fastify backend in `server/`
+- SQLite via `better-sqlite3`
+- During dev, Vite proxies `/api` to Fastify at `127.0.0.1:8787`
 
 Run frontend + backend together:
 
@@ -115,7 +74,7 @@ npm run dev
 Manual backend only:
 
 ```bash
-python web_ui.py --server Victoris --host 127.0.0.1 --port 8787
+npm --prefix server run dev
 ```
 
 Then open:
@@ -125,15 +84,14 @@ Then open:
 ## Notes
 
 - API source: https://api.tibiamarket.top/docs#/
-- If an item has strong NPC buy value, that floor is respected.
-- Flat client price is conservative expected net value after tax, with NPC floor fallback.
-- You can tune `--sales-tax-pct` and `--dxp-window-days`.
+- Snapshot pricing is the only pricing model in this migration slice.
+- Hunt recommendation endpoint is not implemented in this slice.
 
 ## Suggested Workflow
 
 1. Run `npm run dev` for the full web UI + API workflow.
 2. Refresh prices from the UI/API (`/api/refresh`) when needed.
-3. Paste hunt loot in the UI (`/api/recommend`) to decide NPC/List Now/List One/List Later/Skip Market.
+3. Use `/api/search` for item lookup against the latest synced run.
 
 ## Roadmap
 
