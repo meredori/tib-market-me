@@ -8,8 +8,11 @@ Current migration slice scope:
 - persist to local SQLite
 - keep JSON exports for parity checks
 
-Current JSON outputs:
-- `itemsprices.json`: flat map of `item_id -> conservative client value`
+Current JSON output for Tibia:
+- `itemprices.json`: configurable Tibia client value export (`conservative_min` or `sell_offer`)
+
+Internal generated outputs:
+- `itemsprices.json`: flat parity/debug map of `item_id -> conservative client value`
 - `itemsprices.detailed.json`: detailed snapshot pricing rows
 - `itemsprices.meta.json`: local run + world freshness metadata
 
@@ -53,11 +56,10 @@ The sync command stores:
 ## Local UI
 
 Run a local web UI to:
-- check local run status and world freshness
-- refresh price data from server
 - search specific items from local detailed data
-
-Hunt importer and recommendation are intentionally deferred to a later redesign slice.
+- upload scaffolded hunt summaries
+- compare uploaded hunts by xpm and gpm in a previous-hunts checker
+- manage run status/refresh and generate `itemprices.json` in Settings
 
 Architecture:
 - Vite + Vue frontend in `ui-app/`
@@ -92,6 +94,8 @@ Then open:
 1. Run `npm run dev` for the full web UI + API workflow.
 2. Refresh prices from the UI/API (`/api/refresh`) when needed.
 3. Use `/api/search` for item lookup against the latest synced run.
+4. Save hunt summary scaffolds in the Hunt Analyser tab and compare results in Previous Hunts.
+5. Generate `itemprices.json` from Settings or API (`POST /api/itemprices/generate`) with mode `conservative_min` or `sell_offer`.
 
 ## Roadmap
 

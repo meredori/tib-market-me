@@ -1,0 +1,1 @@
+ALTER TABLE hunt_uploads ADD COLUMN raw_total_xp INTEGER NOT NULL DEFAULT 0;

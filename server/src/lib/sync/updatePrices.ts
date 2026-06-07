@@ -3,8 +3,22 @@ import fs from "node:fs";
 import path from "node:path";
 import type Database from "better-sqlite3";
 import { config } from "../../config";
-import { computeSnapshotPricing } from "../pricing/snapshotPricing";
+import { applyHistoricalPricingAdjustment, computeSnapshotPricing } from "../pricing/snapshotPricing";
+import { getHistoricalPricingContext, storeSyncSnapshotHistory, summarizeItemHistory } from "../pricing/itemHistory";
 import { TibiaMarketClient, type ItemMetadata, type MarketRow, type WorldDataRow } from "../tibiamarket/client";
+import {
+  coerceOverrideMode,
+  getEffectiveLootLogicPreview,
+  type ItemValueOverrideMode,
+  type LootLogicPreview
+} from "./lootLogic";
+
+export {
+  buildLootLogicPreview,
+  getEffectiveLootLogicPreview,
+  type ItemValueOverrideMode,
+  type LootLogicPreview
+} from "./lootLogic";
 
 type SyncResult = {
   ok: boolean;
@@ -18,18 +32,12 @@ type RefreshPreflight = {
   remote_world_last_update: string | null;
 };
 
-type LootLogicPreview = {
-  strategy: "market" | "npc_sell" | "npc_buy" | "ignore";
-  trend_display: string;
-  reason: string;
-  market_allowed: boolean;
-  list_price: number;
-  min_list_price: number;
-  price: number;
-  min_price: number;
-  market_sell_offer: number;
-  undercut_price: number;
+type SyncLogger = {
+  info(message: string): void;
+  error?(dataOrMessage: unknown, message?: string): void;
 };
+
+type ItemPriceExportMode = "conservative_min" | "sell_offer";
 
 type LatestStatus = {
   server: string;
@@ -60,6 +68,7 @@ type SearchStatements = {
 };
 
 const searchStatementsByDb = new WeakMap<Database.Database, SearchStatements>();
+let marketSyncInProgress = false;
 
 function sha256(input: string): string {
   return crypto.createHash("sha256").update(input).digest("hex");
@@ -99,6 +108,10 @@ function bestNpcBuyPrice(metaRow: ItemMetadata | undefined): number {
   return best;
 }
 
+function withNpcSaleFloor(value: number, npcBuy: number): number {
+  return npcBuy > 0 ? Math.max(value, npcBuy) : value;
+}
+
 function selectedWorld(worldRows: WorldDataRow[], serverName: string): WorldDataRow | undefined {
   const exact = worldRows.find((row) => asText(row.name).toLowerCase() === serverName.toLowerCase());
   if (exact) {
@@ -119,91 +132,35 @@ function parseTimestamp(value: string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function buildLootLogicPreview(row: Record<string, unknown>): LootLogicPreview {
-  const listPrice = asInt(row.suggested_list_price, -1);
-  const marketSellOffer = asInt(row.sell_offer, -1);
-  const trend = asText(row.trend) || "unknown";
-  const liquidity = typeof row.liquidity === "number" ? row.liquidity : 0;
-  const confidence = typeof row.confidence === "number" ? row.confidence : 0;
-  const monthSold = asInt(row.month_sold, -1);
-  const daySold = asInt(row.day_sold, -1);
-  const npcBuy = asInt(row.npc_buy, 0);
-  const npcSell = asInt(row.npc_sell, 0);
-
-  const veryLowVolume = monthSold >= 0 && monthSold < 6;
-  const staleAndThin = daySold === 0 && monthSold >= 0 && monthSold < 25 && liquidity < 0.2;
-  const lowMarketQuality = liquidity < 0.1 || confidence < 0.6 || veryLowVolume || staleAndThin;
-  const marketAllowed = listPrice > 0 && !lowMarketQuality;
-
-  if (!marketAllowed) {
-    if (npcSell > 0) {
-      return {
-        strategy: "npc_sell",
-        trend_display: "n/a",
-        reason: "Market ignored due to low volume/quality; using NPC sell reference.",
-        market_allowed: false,
-        list_price: listPrice,
-        min_list_price: listPrice,
-        price: npcSell,
-        min_price: -1,
-        market_sell_offer: marketSellOffer,
-        undercut_price: -1
-      };
-    }
-
-    if (npcBuy > 0) {
-      return {
-        strategy: "npc_buy",
-        trend_display: "n/a",
-        reason: "Market ignored due to low volume/quality; using NPC buy fallback.",
-        market_allowed: false,
-        list_price: listPrice,
-        min_list_price: listPrice,
-        price: npcBuy,
-        min_price: -1,
-        market_sell_offer: marketSellOffer,
-        undercut_price: -1
-      };
-    }
-
-    return {
-      strategy: "ignore",
-      trend_display: "n/a",
-      reason: "Market ignored due to low volume/quality and no NPC fallback price.",
-      market_allowed: false,
-      list_price: listPrice,
-      min_list_price: listPrice,
-      price: -1,
-      min_price: -1,
-      market_sell_offer: marketSellOffer,
-      undercut_price: -1
-    };
+export function setItemValueOverride(
+  db: Database.Database,
+  itemId: number,
+  mode: ItemValueOverrideMode
+): Record<string, unknown> {
+  if (!Number.isFinite(itemId) || itemId <= 0) {
+    throw new Error("Invalid item id");
   }
 
-  const minListPrice = Math.max(1, Math.floor(listPrice * 0.9));
+  const normalizedMode = coerceOverrideMode(mode);
+  const normalizedItemId = Math.trunc(itemId);
 
-  let undercutPrice = listPrice;
-  if (marketSellOffer > 0) {
-    if (marketSellOffer >= listPrice) {
-      undercutPrice = listPrice;
-    } else if (marketSellOffer > minListPrice) {
-      undercutPrice = marketSellOffer - 1;
-    } else {
-      undercutPrice = minListPrice;
-    }
+  if (normalizedMode === "auto") {
+    db.prepare("DELETE FROM item_value_overrides WHERE item_id = ?").run(normalizedItemId);
+  } else {
+    db.prepare(
+      `
+      INSERT INTO item_value_overrides (item_id, override_mode, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(item_id) DO UPDATE SET
+        override_mode = excluded.override_mode,
+        updated_at = excluded.updated_at
+    `
+    ).run(normalizedItemId, normalizedMode, nowIso());
   }
 
   return {
-    strategy: "market",
-    trend_display: trend,
-    reason: "Market has sufficient volume/quality; list at list price, undercut down to min price, then hold at min.",
-    market_allowed: true,
-    list_price: listPrice,
-    min_list_price: minListPrice,
-    price: listPrice,
-    min_price: minListPrice,
-    market_sell_offer: marketSellOffer,
-    undercut_price: undercutPrice
+    item_id: normalizedItemId,
+    override_mode: normalizedMode
   };
 }
 
@@ -257,18 +214,24 @@ function exportJsonFiles(payload: {
   fs.writeFileSync(config.outputMetaPath, `${JSON.stringify(metaPayload, null, 2)}\n`, "utf-8");
 }
 
-export async function runMarketSync(db: Database.Database): Promise<SyncResult> {
+export async function runMarketSync(db: Database.Database, logger: SyncLogger = console): Promise<SyncResult> {
+  if (marketSyncInProgress) {
+    throw new Error("Market sync is already running.");
+  }
+  marketSyncInProgress = true;
+
   const client = new TibiaMarketClient();
   const runStartedAt = nowIso();
+  let runId: number | null = null;
 
-  console.log(`[sync] starting market sync for ${config.serverName}`);
+  logger.info(`[sync] starting market sync for ${config.serverName}`);
 
   const insertRun = db.prepare(`
     INSERT INTO market_runs (
       server, started_at, finished_at, pulled_at, world_last_update, world_queried_at,
       pricing_model_version, sales_tax_pct, page_limit, page_pause_sec,
-      market_row_count, priced_item_count
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      market_row_count, priced_item_count, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const runInsertInfo = insertRun.run(
@@ -283,21 +246,25 @@ export async function runMarketSync(db: Database.Database): Promise<SyncResult> 
     config.pageLimit,
     config.pagePauseMs / 1000,
     0,
-    0
+    0,
+    "running"
   );
 
-  const runId = Number(runInsertInfo.lastInsertRowid);
+  runId = Number(runInsertInfo.lastInsertRowid);
 
-  console.log(`[sync] fetching market values, item metadata, and world data`);
+  try {
+
+  logger.info(`[sync] fetching market values, item metadata, and world data`);
   const [marketRows, metadataRows, worldRows] = await Promise.all([
     client.getAllMarketValues(config.serverName),
     client.getItemMetadata(),
     client.getWorldData(config.serverName)
   ]);
 
-  console.log(
+  logger.info(
     `[sync] fetched ${marketRows.length} market rows, ${metadataRows.length} metadata rows, ${worldRows.length} world rows`
   );
+  storeSyncSnapshotHistory(db, marketRows);
 
   const metadataById = new Map<number, ItemMetadata>();
   for (const row of metadataRows) {
@@ -415,14 +382,14 @@ export async function runMarketSync(db: Database.Database): Promise<SyncResult> 
       metadataCount += 1;
     }
 
-    console.log(`[sync] stored metadata for ${metadataCount} items`);
+    logger.info(`[sync] stored metadata for ${metadataCount} items`);
   });
   storeMetadata();
 
   const worldFetchedAt = nowIso();
   const worldRow = selectedWorld(worldRows, config.serverName);
   if (worldRow) {
-    console.log(`[sync] storing world freshness snapshot for ${asText(worldRow.name) || config.serverName}`);
+    logger.info(`[sync] storing world freshness snapshot for ${asText(worldRow.name) || config.serverName}`);
     db.prepare(
       "INSERT INTO world_data_snapshots(server, last_update, fetched_at) VALUES (?, ?, ?)"
     ).run(asText(worldRow.name) || config.serverName, asText(worldRow.last_update), worldFetchedAt);
@@ -449,8 +416,9 @@ export async function runMarketSync(db: Database.Database): Promise<SyncResult> 
     INSERT INTO market_item_prices (
       run_id, item_id, pricing_model, pricing_model_version,
       fair_price, suggested_list_price, client_value,
-      trend, trend_score, liquidity, confidence
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      trend, trend_score, liquidity, confidence,
+      historical_reference_price, final_adjusted_price, divergence_pct, adjustment_reason, source_run_count
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const flatPrices: Record<string, number> = {};
@@ -465,7 +433,23 @@ export async function runMarketSync(db: Database.Database): Promise<SyncResult> 
       }
       const itemId = row.id;
       const meta = metadataById.get(itemId);
-      const pricing = computeSnapshotPricing(row);
+      const snapshotPricing = computeSnapshotPricing(row);
+      const historicalAdjustment = applyHistoricalPricingAdjustment(
+        snapshotPricing,
+        row,
+        getHistoricalPricingContext(db, itemId)
+      );
+      const adjustedSuggestedListPrice = historicalAdjustment.final_adjusted_price && historicalAdjustment.final_adjusted_price > 0
+        ? historicalAdjustment.final_adjusted_price
+        : snapshotPricing.suggested_list_price;
+      const adjustedFairPrice = historicalAdjustment.final_adjusted_price && historicalAdjustment.final_adjusted_price > 0
+        ? Math.min(snapshotPricing.fair_price > 0 ? snapshotPricing.fair_price : historicalAdjustment.final_adjusted_price, historicalAdjustment.final_adjusted_price)
+        : snapshotPricing.fair_price;
+      const pricing = {
+        ...snapshotPricing,
+        fair_price: adjustedFairPrice,
+        suggested_list_price: adjustedSuggestedListPrice
+      };
       const npcBuy = bestNpcBuyPrice(meta);
       const expectedNet = Math.round(
         Math.max(pricing.suggested_list_price, pricing.fair_price, 0) * (1 - config.salesTaxPct / 100)
@@ -523,7 +507,12 @@ export async function runMarketSync(db: Database.Database): Promise<SyncResult> 
         pricing.trend,
         pricing.trend_score,
         pricing.liquidity,
-        pricing.confidence
+        pricing.confidence,
+        historicalAdjustment.historical_reference_price,
+        historicalAdjustment.final_adjusted_price,
+        historicalAdjustment.divergence_pct,
+        historicalAdjustment.adjustment_reason,
+        historicalAdjustment.source_run_count
       );
 
       detailedRows.push({
@@ -532,6 +521,7 @@ export async function runMarketSync(db: Database.Database): Promise<SyncResult> 
         wiki_name: asText(meta?.wiki_name) || null,
         npc_buy: npcBuy,
         pricing,
+        historical_pricing: historicalAdjustment,
         market_snapshot: {
           month_sold: asInt(row.month_sold, -1),
           day_sold: asInt(row.day_sold, -1),
@@ -545,11 +535,11 @@ export async function runMarketSync(db: Database.Database): Promise<SyncResult> 
 
       processedCount += 1;
       if (processedCount % 250 === 0) {
-        console.log(`[sync] processed ${processedCount}/${marketRows.length} market items (${pricedCount} priced)`);
+        logger.info(`[sync] processed ${processedCount}/${marketRows.length} market items (${pricedCount} priced)`);
       }
     }
 
-    console.log(`[sync] processed ${processedCount} market items total (${pricedCount} priced)`);
+    logger.info(`[sync] processed ${processedCount} market items total (${pricedCount} priced)`);
   });
 
   storeMarketRows();
@@ -564,7 +554,9 @@ export async function runMarketSync(db: Database.Database): Promise<SyncResult> 
       world_last_update = ?,
       world_queried_at = ?,
       market_row_count = ?,
-      priced_item_count = ?
+      priced_item_count = ?,
+      status = ?,
+      error_message = NULL
     WHERE id = ?
   `).run(
     runFinishedAt,
@@ -573,6 +565,7 @@ export async function runMarketSync(db: Database.Database): Promise<SyncResult> 
     worldFetchedAt,
     marketRows.length,
     Object.keys(flatPrices).length,
+    "success",
     runId
   );
 
@@ -585,13 +578,25 @@ export async function runMarketSync(db: Database.Database): Promise<SyncResult> 
     marketRowsCount: marketRows.length
   });
 
-  console.log(`[sync] wrote JSON exports and finished market sync`);
+  logger.info(`[sync] wrote JSON exports and finished market sync`);
 
   return {
     ok: true,
     refreshed_at: runFinishedAt,
     world_last_update: worldLastUpdate
   };
+  } catch (error) {
+    if (runId !== null) {
+      db.prepare(`
+        UPDATE market_runs
+        SET finished_at = ?, status = ?, error_message = ?
+        WHERE id = ?
+      `).run(nowIso(), "failed", String(error), runId);
+    }
+    throw error;
+  } finally {
+    marketSyncInProgress = false;
+  }
 }
 
 export function getStatus(db: Database.Database): LatestStatus {
@@ -600,6 +605,7 @@ export function getStatus(db: Database.Database): LatestStatus {
       `
       SELECT id, server, started_at, finished_at, world_last_update, world_queried_at, priced_item_count
       FROM market_runs
+      WHERE status = 'success'
       ORDER BY id DESC
       LIMIT 1
     `
@@ -646,7 +652,7 @@ export function searchLatestItems(db: Database.Database, query: string, limit = 
   let statements = searchStatementsByDb.get(db);
   if (!statements) {
     statements = {
-      latestRun: db.prepare("SELECT id FROM market_runs ORDER BY id DESC LIMIT 1") as Database.Statement<
+      latestRun: db.prepare("SELECT id FROM market_runs WHERE status = 'success' ORDER BY id DESC LIMIT 1") as Database.Statement<
         [],
         { id: number } | undefined
       >,
@@ -709,10 +715,12 @@ export function searchLatestItems(db: Database.Database, query: string, limit = 
           m.confidence,
           m.month_sold,
           m.day_sold,
-          m.sell_offer
+          m.sell_offer,
+          COALESCE(ivo.override_mode, 'auto') AS override_mode
         FROM matched m
         LEFT JOIN npc_buy nb ON nb.item_id = m.id
         LEFT JOIN npc_sell ns ON ns.item_id = m.id
+        LEFT JOIN item_value_overrides ivo ON ivo.item_id = m.id
         ORDER BY m.client_value DESC
       `
       ) as Database.Statement<[number, string, string, string, string, number], Record<string, unknown>>
@@ -736,7 +744,7 @@ export function searchLatestItems(db: Database.Database, query: string, limit = 
   ) as Array<Record<string, unknown>>;
 
   return rows.map((row) => {
-    const lootLogic = buildLootLogicPreview(row);
+    const lootLogic = getEffectiveLootLogicPreview(row);
     return {
       ...row,
       trend: lootLogic.trend_display,
@@ -745,7 +753,100 @@ export function searchLatestItems(db: Database.Database, query: string, limit = 
   });
 }
 
-export async function preflightRefresh(db: Database.Database): Promise<RefreshPreflight> {
+export function generateItemPricesFile(
+  db: Database.Database,
+  mode: ItemPriceExportMode = "conservative_min"
+): Record<string, unknown> {
+  const latestRun = db.prepare("SELECT id FROM market_runs WHERE status = 'success' ORDER BY id DESC LIMIT 1").get() as
+    | { id: number }
+    | undefined;
+
+  if (!latestRun) {
+    return {
+      ok: false,
+      error: "No market run available. Run a sync first."
+    };
+  }
+
+  const rows = db
+    .prepare(
+      `
+      SELECT
+        mip.item_id AS id,
+        mip.client_value AS client_value,
+        mip.fair_price AS fair_price,
+        mip.suggested_list_price AS suggested_list_price,
+        mip.trend AS trend,
+        mip.liquidity AS liquidity,
+        mip.confidence AS confidence,
+        mif.month_sold AS month_sold,
+        mif.day_sold AS day_sold,
+        mif.sell_offer AS sell_offer,
+        COALESCE((
+          SELECT MAX(nb.price)
+          FROM item_npc_buy nb
+          WHERE nb.item_id = mip.item_id
+        ), 0) AS npc_buy,
+        COALESCE((
+          SELECT MIN(ns.price)
+          FROM item_npc_sell ns
+          WHERE ns.item_id = mip.item_id
+        ), 0) AS npc_sell,
+        COALESCE(ivo.override_mode, 'auto') AS override_mode
+      FROM market_item_prices mip
+      LEFT JOIN market_item_features mif
+        ON mif.run_id = mip.run_id
+       AND mif.item_id = mip.item_id
+      LEFT JOIN item_value_overrides ivo
+        ON ivo.item_id = mip.item_id
+      WHERE mip.run_id = ?
+        AND mip.pricing_model = ?
+      ORDER BY mip.item_id ASC
+    `
+    )
+    .all(latestRun.id, config.pricingModel) as Array<Record<string, unknown>>;
+
+  const itemPrices: Record<string, number> = {};
+  for (const row of rows) {
+    const id = asInt(row.id, -1);
+    if (id <= 0) {
+      continue;
+    }
+
+    const lootLogic = getEffectiveLootLogicPreview(row);
+    const clientValue = asInt(row.client_value, -1);
+
+    const selectedValue = lootLogic.strategy === "ignore"
+      ? Math.max(0, asInt(config.ignoredItemExportValue, 1))
+      : mode === "sell_offer"
+        ? (lootLogic.price > 0 ? lootLogic.price : clientValue)
+        : (lootLogic.min_price > 0 ? lootLogic.min_price : (lootLogic.price > 0 ? lootLogic.price : clientValue));
+    const exportValue = lootLogic.strategy === "ignore"
+      ? selectedValue
+      : withNpcSaleFloor(selectedValue, asInt(row.npc_buy, 0));
+
+    if (exportValue > 0) {
+      itemPrices[String(id)] = exportValue;
+    }
+  }
+
+  const sortedEntries = Object.entries(itemPrices).sort((a, b) => Number(a[0]) - Number(b[0]));
+  const payload = {
+    customSalePrices: Object.fromEntries(sortedEntries),
+    primaryLootValueSources: {}
+  };
+  fs.writeFileSync(config.outputItemPricesPath, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
+
+  return {
+    ok: true,
+    path: config.outputItemPricesPath,
+    mode,
+    item_count: sortedEntries.length,
+    generated_at: nowIso()
+  };
+}
+
+export async function preflightRefresh(db: Database.Database, _logger: SyncLogger = console): Promise<RefreshPreflight> {
   const status = getStatus(db);
   const currentLastUpdate = status.world_data.last_update;
 
@@ -794,7 +895,7 @@ export async function preflightRefresh(db: Database.Database): Promise<RefreshPr
 }
 
 export function getItemDetails(db: Database.Database, itemId: number): Record<string, unknown> | null {
-  const latestRun = db.prepare("SELECT id FROM market_runs ORDER BY id DESC LIMIT 1").get() as
+  const latestRun = db.prepare("SELECT id FROM market_runs WHERE status = 'success' ORDER BY id DESC LIMIT 1").get() as
     | { id: number }
     | undefined;
   if (!latestRun) {
@@ -828,12 +929,18 @@ export function getItemDetails(db: Database.Database, itemId: number): Record<st
         mip.trend_score AS trend_score,
         mip.liquidity AS liquidity,
         mip.confidence AS confidence,
+        mip.historical_reference_price AS historical_reference_price,
+        mip.final_adjusted_price AS final_adjusted_price,
+        mip.divergence_pct AS divergence_pct,
+        mip.adjustment_reason AS adjustment_reason,
+        mip.source_run_count AS source_run_count,
         mif.month_sold AS month_sold,
         mif.day_sold AS day_sold,
         mif.month_average_sell AS month_average_sell,
         mif.day_average_sell AS day_average_sell,
         mif.sell_offer AS sell_offer,
         mif.buy_offer AS buy_offer,
+        COALESCE(ivo.override_mode, 'auto') AS override_mode,
         mr.finished_at AS run_finished_at,
         mr.world_last_update AS world_last_update
       FROM market_item_prices mip
@@ -844,6 +951,8 @@ export function getItemDetails(db: Database.Database, itemId: number): Record<st
        AND mif.item_id = mip.item_id
       LEFT JOIN market_runs mr
         ON mr.id = mip.run_id
+      LEFT JOIN item_value_overrides ivo
+        ON ivo.item_id = mip.item_id
       WHERE mip.run_id = ?
         AND mip.pricing_model = ?
         AND mip.item_id = ?
@@ -878,10 +987,44 @@ export function getItemDetails(db: Database.Database, itemId: number): Record<st
     )
     .all(itemId) as Array<Record<string, unknown>>;
 
+  const lootLogic = getEffectiveLootLogicPreview(detail);
+  const normalizedNames = [
+    asText(detail.name).toLowerCase().trim(),
+    asText(detail.wiki_name).toLowerCase().trim()
+  ].filter(Boolean);
+  const itemDetail = normalizedNames.length
+    ? db
+      .prepare(
+        `
+        SELECT
+          normalized_name,
+          actual_name,
+          plural,
+          category_slug,
+          category_name,
+          stackable,
+          marketable,
+          npc_price,
+          npc_value,
+          value,
+          weight_oz,
+          wiki_url,
+          last_fetched_at
+        FROM item_detail_cache
+        WHERE normalized_name IN (${normalizedNames.map(() => "?").join(", ")})
+        ORDER BY last_fetched_at DESC
+        LIMIT 1
+      `
+      )
+      .get(...normalizedNames) as Record<string, unknown> | undefined
+    : undefined;
+
   return {
     ...detail,
-    trend: buildLootLogicPreview(detail).trend_display,
-    loot_logic: buildLootLogicPreview(detail),
+    trend: lootLogic.trend_display,
+    loot_logic: lootLogic,
+    history: summarizeItemHistory(db, itemId),
+    item_detail: itemDetail ?? null,
     npc_buy_rows: npcBuyRows,
     npc_sell_rows: npcSellRows
   };

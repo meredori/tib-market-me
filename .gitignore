@@ -1,5 +1,6 @@
 node_modules/
 ui-app/dist/
+server/dist/
 .DS_Store
 .env
 .env.*
@@ -7,7 +8,10 @@ ui-app/dist/
 *.db
 *.sqlite
 *.sqlite3
+*.sqlite-shm
+*.sqlite-wal
 itemsprices.json
+itemprices.json
 itemsprices.detailed.json
 itemsprices.meta.json
 assets/

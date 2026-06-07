@@ -48,7 +48,7 @@ function loadDatabaseIds(): number[] {
   const db = openDatabase();
 
   try {
-    const latestRun = db.prepare("SELECT id FROM market_runs ORDER BY id DESC LIMIT 1").get() as
+    const latestRun = db.prepare("SELECT id FROM market_runs WHERE status = 'success' ORDER BY id DESC LIMIT 1").get() as
       | { id: number }
       | undefined;
 

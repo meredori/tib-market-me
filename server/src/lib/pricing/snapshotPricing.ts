@@ -7,6 +7,21 @@ export type PricingResult = {
   confidence: number;
 };
 
+export type HistoricalPricingContext = {
+  source_run_count: number;
+  reference_price: number | null;
+  low_band: number | null;
+  high_band: number | null;
+};
+
+export type HistoricalPricingAdjustment = {
+  historical_reference_price: number | null;
+  final_adjusted_price: number | null;
+  divergence_pct: number | null;
+  adjustment_reason: string | null;
+  source_run_count: number;
+};
+
 function valid(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value) && value > 0) {
     return value;
@@ -148,5 +163,66 @@ export function computeSnapshotPricing(row: Record<string, unknown>): PricingRes
     trend_score: Number(score.toFixed(4)),
     liquidity: Number(liq.toFixed(4)),
     confidence: Number(conf.toFixed(4))
+  };
+}
+
+export function applyHistoricalPricingAdjustment(
+  pricing: PricingResult,
+  row: Record<string, unknown>,
+  history: HistoricalPricingContext
+): HistoricalPricingAdjustment {
+  const currentPrice = pricing.suggested_list_price > 0 ? pricing.suggested_list_price : pricing.fair_price;
+  const reference = history.reference_price;
+  const lowBand = history.low_band;
+  const highBand = history.high_band;
+  const sellOffer = valid(row.sell_offer);
+  const monthSold = valid(row.month_sold) ?? 0;
+  const daySold = valid(row.day_sold) ?? 0;
+
+  if (currentPrice <= 0 || reference === null || lowBand === null || highBand === null) {
+    return {
+      historical_reference_price: reference,
+      final_adjusted_price: null,
+      divergence_pct: null,
+      adjustment_reason: history.source_run_count > 0 ? "insufficient_history" : null,
+      source_run_count: history.source_run_count
+    };
+  }
+
+  const hasCurrentSellEvidence = sellOffer !== null || monthSold > 0 || daySold > 0;
+  if (!hasCurrentSellEvidence) {
+    return {
+      historical_reference_price: reference,
+      final_adjusted_price: null,
+      divergence_pct: Number((((currentPrice - reference) / reference) * 100).toFixed(2)),
+      adjustment_reason: "no_current_sell_evidence",
+      source_run_count: history.source_run_count
+    };
+  }
+
+  const divergencePct = Number((((currentPrice - reference) / reference) * 100).toFixed(2));
+  if (currentPrice >= lowBand && currentPrice <= highBand) {
+    return {
+      historical_reference_price: reference,
+      final_adjusted_price: currentPrice,
+      divergence_pct: divergencePct,
+      adjustment_reason: "within_historical_band",
+      source_run_count: history.source_run_count
+    };
+  }
+
+  const currentConfidence = pricing.confidence;
+  const correctionStrength = currentConfidence >= 0.8 ? 0.25 : currentConfidence >= 0.6 ? 0.45 : 0.65;
+  const target = currentPrice > highBand ? highBand : lowBand;
+  const adjusted = roundNice(currentPrice + (target - currentPrice) * correctionStrength);
+
+  return {
+    historical_reference_price: reference,
+    final_adjusted_price: adjusted,
+    divergence_pct: divergencePct,
+    adjustment_reason: currentPrice > highBand
+      ? "capped_toward_historical_high_band"
+      : "raised_toward_historical_low_band",
+    source_run_count: history.source_run_count
   };
 }

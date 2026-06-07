@@ -128,4 +128,12 @@ export class TibiaMarketClient {
       end_days_ago: -1
     });
   }
+
+  getItemHistory(server: string, itemId: number, startDaysAgo: number): Promise<Record<string, unknown>[]> {
+    return this.getJson<Record<string, unknown>[]>("/item_history", {
+      server,
+      item_id: itemId,
+      start_days_ago: startDaysAgo
+    });
+  }
 }
