@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This schema is designed around the TibiaMarket OpenAPI surface at `https://api.tibiamarket.top/openapi.json` and the current local output shape in `itemsprices.detailed.json`.
+This schema is designed around the TibiaMarket OpenAPI surface at `https://api.tibiamarket.top/openapi.json` and the local snapshot pricing rows stored in SQLite.
 
 The main design goals are:
 

@@ -51,18 +51,18 @@
 
 ## Phase 2: Remove Obsolete Pricing Parity Exports
 
-1. Keep only the generated in-game `itemprices.json` output.
-   - Remove generation of `itemsprices.json`.
-   - Remove generation of `itemsprices.detailed.json`.
-   - Remove generation of `itemsprices.meta.json`.
+1. [x] Keep only the generated in-game `itemprices.json` output.
+   - [x] Remove generation of `itemsprices.json`.
+   - [x] Remove generation of `itemsprices.detailed.json`.
+   - [x] Remove generation of `itemsprices.meta.json`.
 
-2. Update status/docs around generated files.
-   - Remove obsolete files from `getStatus.files`.
-   - Update README references so `itemprices.json` is clearly the only supported generated pricing export.
-   - Keep database-backed status/history as the source for internal inspection.
+2. [x] Update status/docs around generated files.
+   - [x] Remove obsolete files from `getStatus.files`.
+   - [x] Update README references so `itemprices.json` is clearly the only supported generated pricing export.
+   - [x] Keep database-backed status/history as the source for internal inspection.
 
-3. Verification gate for this phase.
-   - `npm --prefix server run build`
+3. [x] Verification gate for this phase.
+   - [x] `npm --prefix server run build`
 
 ## Phase 3: Frontend Stack and UI Overhaul Before Automation
 

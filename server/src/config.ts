@@ -29,10 +29,7 @@ export const config = {
   ignoredItemExportValue: envNumber("IGNORED_ITEM_EXPORT_VALUE", 1),
   dbPath: path.resolve(PROJECT_ROOT, "data", "tibia-market.sqlite"),
   migrationsDir: path.resolve(PROJECT_ROOT, "db", "migrations"),
-  outputFlatPath: path.resolve(WORKSPACE_ROOT, "itemsprices.json"),
   outputItemPricesPath: path.resolve(WORKSPACE_ROOT, "itemprices.json"),
-  outputDetailPath: path.resolve(WORKSPACE_ROOT, "itemsprices.detailed.json"),
-  outputMetaPath: path.resolve(WORKSPACE_ROOT, "itemsprices.meta.json"),
   itemImagesDir: path.resolve(WORKSPACE_ROOT, "ui-app", "public", "items"),
   tibiaLogDir: process.env.TIBIA_LOG_DIR
     ?? path.resolve(LOCAL_APP_DATA, "Tibia", "packages", "Tibia", "log"),

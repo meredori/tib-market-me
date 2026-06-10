@@ -53,9 +53,7 @@ type LatestStatus = {
   item_count: number;
   generated_at: string | null;
   files: {
-    prices: string;
-    detail: string;
-    meta: string;
+    itemprices: string;
   };
 };
 
@@ -162,56 +160,6 @@ export function setItemValueOverride(
     item_id: normalizedItemId,
     override_mode: normalizedMode
   };
-}
-
-function exportJsonFiles(payload: {
-  flatPrices: Record<string, number>;
-  detailedRows: Array<Record<string, unknown>>;
-  runStartedAt: string;
-  runFinishedAt: string;
-  worldRow: WorldDataRow | undefined;
-  marketRowsCount: number;
-}): void {
-  ensureParentDir(config.outputFlatPath);
-  ensureParentDir(config.outputDetailPath);
-  ensureParentDir(config.outputMetaPath);
-
-  const sortedFlatEntries = Object.entries(payload.flatPrices).sort((a, b) => Number(a[0]) - Number(b[0]));
-  const sortedFlat = Object.fromEntries(sortedFlatEntries);
-
-  fs.writeFileSync(config.outputFlatPath, `${JSON.stringify(sortedFlat, null, 2)}\n`, "utf-8");
-
-  const detailPayload = {
-    generated_at: payload.runFinishedAt,
-    server: config.serverName,
-    pricing_model: config.pricingModelVersion,
-    sales_tax_pct: config.salesTaxPct,
-    item_count: payload.detailedRows.length,
-    items: payload.detailedRows
-  };
-  fs.writeFileSync(config.outputDetailPath, `${JSON.stringify(detailPayload, null, 2)}\n`, "utf-8");
-
-  const metaPayload = {
-    server: config.serverName,
-    local_run: {
-      started_at: payload.runStartedAt,
-      finished_at: payload.runFinishedAt
-    },
-    world_data: {
-      queried_at: payload.runFinishedAt,
-      server: asText(payload.worldRow?.name) || config.serverName,
-      last_update: asText(payload.worldRow?.last_update) || null
-    },
-    outputs: {
-      flat_prices: config.outputFlatPath,
-      detailed_prices: config.outputDetailPath
-    },
-    counts: {
-      market_rows: payload.marketRowsCount,
-      priced_items: Object.keys(sortedFlat).length
-    }
-  };
-  fs.writeFileSync(config.outputMetaPath, `${JSON.stringify(metaPayload, null, 2)}\n`, "utf-8");
 }
 
 export async function runMarketSync(db: Database.Database, logger: SyncLogger = console): Promise<SyncResult> {
@@ -421,8 +369,7 @@ export async function runMarketSync(db: Database.Database, logger: SyncLogger = 
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  const flatPrices: Record<string, number> = {};
-  const detailedRows: Array<Record<string, unknown>> = [];
+  const pricedItemIds = new Set<number>();
 
   const storeMarketRows = db.transaction(() => {
     let processedCount = 0;
@@ -457,7 +404,7 @@ export async function runMarketSync(db: Database.Database, logger: SyncLogger = 
       const clientValue = Math.max(expectedNet, npcBuy);
 
       if (clientValue > 0) {
-        flatPrices[String(itemId)] = clientValue;
+        pricedItemIds.add(itemId);
         pricedCount += 1;
       }
 
@@ -515,24 +462,6 @@ export async function runMarketSync(db: Database.Database, logger: SyncLogger = 
         historicalAdjustment.source_run_count
       );
 
-      detailedRows.push({
-        id: itemId,
-        name: asText(meta?.name) || null,
-        wiki_name: asText(meta?.wiki_name) || null,
-        npc_buy: npcBuy,
-        pricing,
-        historical_pricing: historicalAdjustment,
-        market_snapshot: {
-          month_sold: asInt(row.month_sold, -1),
-          day_sold: asInt(row.day_sold, -1),
-          month_average_sell: asInt(row.month_average_sell, -1),
-          day_average_sell: asInt(row.day_average_sell, -1),
-          sell_offer: asInt(row.sell_offer, -1),
-          buy_offer: asInt(row.buy_offer, -1)
-        },
-        client_value: clientValue
-      });
-
       processedCount += 1;
       if (processedCount % 250 === 0) {
         logger.info(`[sync] processed ${processedCount}/${marketRows.length} market items (${pricedCount} priced)`);
@@ -564,21 +493,12 @@ export async function runMarketSync(db: Database.Database, logger: SyncLogger = 
     worldLastUpdate,
     worldFetchedAt,
     marketRows.length,
-    Object.keys(flatPrices).length,
+    pricedItemIds.size,
     "success",
     runId
   );
 
-  exportJsonFiles({
-    flatPrices,
-    detailedRows,
-    runStartedAt,
-    runFinishedAt,
-    worldRow,
-    marketRowsCount: marketRows.length
-  });
-
-  logger.info(`[sync] wrote JSON exports and finished market sync`);
+  logger.info(`[sync] stored market sync results`);
 
   return {
     ok: true,
@@ -636,9 +556,7 @@ export function getStatus(db: Database.Database): LatestStatus {
     item_count: run?.priced_item_count ?? 0,
     generated_at: run?.finished_at ?? null,
     files: {
-      prices: config.outputFlatPath,
-      detail: config.outputDetailPath,
-      meta: config.outputMetaPath
+      itemprices: config.outputItemPricesPath
     }
   };
 }

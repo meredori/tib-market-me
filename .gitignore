@@ -10,9 +10,6 @@ server/dist/
 *.sqlite3
 *.sqlite-shm
 *.sqlite-wal
-itemsprices.json
 itemprices.json
-itemsprices.detailed.json
-itemsprices.meta.json
 assets/
 graphics_resources.rcc

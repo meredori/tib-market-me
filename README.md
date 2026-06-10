@@ -6,15 +6,13 @@ Current migration slice scope:
 - pull market + metadata + world freshness from TibiaMarket API
 - compute snapshot pricing
 - persist to local SQLite
-- keep JSON exports for parity checks
+- generate the Tibia client `itemprices.json` export on demand
 
-Current JSON output for Tibia:
+Supported generated pricing output:
 - `itemprices.json`: configurable Tibia client value export (`conservative_min` or `sell_offer`)
 
-Internal generated outputs:
-- `itemsprices.json`: flat parity/debug map of `item_id -> conservative client value`
-- `itemsprices.detailed.json`: detailed snapshot pricing rows
-- `itemsprices.meta.json`: local run + world freshness metadata
+Internal inspection:
+- pricing status, item search, and history come from the local SQLite database
 
 Current item image workflow:
 - full item sprite generation now goes to `assets/generated/items-archive/`

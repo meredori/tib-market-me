@@ -376,7 +376,7 @@ The first practical slice should be:
 1. Create the Node backend structure.
 2. Port the TibiaMarket client and pagination logic.
 3. Port snapshot pricing and the price digestion pipeline.
-4. Keep writing JSON temporarily for parity checks.
+4. Keep parity checks in SQLite-backed status/history instead of legacy JSON exports.
 5. Add SQLite persistence for market runs once parity is verified.
 6. Delay historical pricing until enough snapshot history exists to support it.
 
