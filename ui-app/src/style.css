@@ -211,6 +211,19 @@ td {
   image-rendering: pixelated;
 }
 
+.drop-image-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.drop-image-btn {
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
 th {
   font-size: 0.8rem;
   letter-spacing: 0.04em;

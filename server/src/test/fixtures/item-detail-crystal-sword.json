@@ -1,0 +1,14 @@
+{
+  "item": {
+    "name": "Crystal Sword",
+    "plural": "crystal swords",
+    "categorySlug": "weapons",
+    "categoryName": "Weapons",
+    "stackable": false,
+    "marketable": true,
+    "npcValue": 600,
+    "value": 600,
+    "weightOz": 48,
+    "wikiUrl": "https://tibia.fandom.com/wiki/Crystal_Sword"
+  }
+}

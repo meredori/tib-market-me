@@ -2,6 +2,8 @@ import path from "node:path";
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const WORKSPACE_ROOT = path.resolve(PROJECT_ROOT, "..");
+const LOCAL_APP_DATA = process.env.LOCALAPPDATA
+  ?? (process.env.USERPROFILE ? path.join(process.env.USERPROFILE, "AppData", "Local") : "");
 
 function envNumber(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -32,6 +34,8 @@ export const config = {
   outputDetailPath: path.resolve(WORKSPACE_ROOT, "itemsprices.detailed.json"),
   outputMetaPath: path.resolve(WORKSPACE_ROOT, "itemsprices.meta.json"),
   itemImagesDir: path.resolve(WORKSPACE_ROOT, "ui-app", "public", "items"),
+  tibiaLogDir: process.env.TIBIA_LOG_DIR
+    ?? path.resolve(LOCAL_APP_DATA, "Tibia", "packages", "Tibia", "log"),
   pricingModel: "snapshot pricing",
   pricingModelVersion: "robust-v1"
 };

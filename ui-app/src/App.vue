@@ -16,6 +16,7 @@ const tabs = [
   { id: 'lookup', label: 'Item Lookup' },
   { id: 'hunt-analyser', label: 'Hunt Analyser' },
   { id: 'previous-hunts', label: 'Previous Hunts' },
+  { id: 'hunting-areas', label: 'Hunting Areas' },
   { id: 'settings', label: 'Settings' },
 ]
 
@@ -43,6 +44,18 @@ const previousHuntPreview = ref(null)
 const previousHuntDraftLabel = ref('')
 const previousHuntDraftTags = ref('')
 const previousHuntDraftLocation = ref('')
+const huntImportBusy = ref(false)
+const huntImportInfo = ref('')
+const huntImportCandidates = ref([])
+const huntImportDeleteBusy = ref(false)
+const importHuntPreview = ref(null)
+const importHuntCandidate = ref(null)
+const importHuntDraftLabel = ref('')
+const importHuntDraftTags = ref('')
+const importHuntDraftLocation = ref('')
+const huntingAreas = ref([])
+const huntingAreaInfo = ref('')
+const huntingAreaBusy = ref(false)
 const itemPriceMode = ref('conservative_min')
 const itemPriceInfo = ref('')
 const itemPriceBusy = ref(false)
@@ -191,6 +204,21 @@ async function loadHunts() {
   }
 }
 
+async function loadHuntingAreas() {
+  huntingAreaBusy.value = true
+  try {
+    const out = await api('/api/hunts/areas')
+    huntingAreas.value = out.items || []
+    huntingAreaInfo.value = huntingAreas.value.length
+      ? `${huntingAreas.value.length} hunting area(s)`
+      : 'No hunting areas yet.'
+  } catch (error) {
+    huntingAreaInfo.value = `Hunting area load error: ${error.message}`
+  } finally {
+    huntingAreaBusy.value = false
+  }
+}
+
 async function submitHuntScaffold() {
   if (!huntPreview.value) {
     huntInfo.value = 'Parse a hunt first before saving.'
@@ -235,7 +263,7 @@ async function submitHuntScaffold() {
     huntDraftLocation.value = ''
     excludedHuntItems.value = []
     showHiddenLoot.value = false
-    await loadHunts()
+    await Promise.all([loadHunts(), loadHuntingAreas()])
   } catch (error) {
     huntInfo.value = `Failed to save hunt: ${error.message}`
   } finally {
@@ -346,6 +374,7 @@ async function hydratePreviewItemDetails(preview) {
     for (const item of out.items || []) {
       applyItemDetailToPreview(huntPreview.value, item.normalized_name, item.item_detail)
       applyItemDetailToPreview(previousHuntPreview.value, item.normalized_name, item.item_detail)
+      applyItemDetailToPreview(importHuntPreview.value, item.normalized_name, item.item_detail)
     }
   } catch (error) {
     huntInfo.value = `Loaded preview, but item detail hydration failed: ${error.message}`
@@ -362,6 +391,7 @@ async function loadItemHistory(itemId) {
     historyByItemId[itemId] = out.history || null
     applyHistoryToPreview(huntPreview.value, itemId, historyByItemId[itemId])
     applyHistoryToPreview(previousHuntPreview.value, itemId, historyByItemId[itemId])
+    applyHistoryToPreview(importHuntPreview.value, itemId, historyByItemId[itemId])
     if (selectedItem.value?.id === itemId) {
       selectedItem.value.history = historyByItemId[itemId]
     }
@@ -407,6 +437,14 @@ async function setHuntItemExcluded(item, checked) {
     }
     return
   }
+  if (importHuntPreview.value) {
+    for (const lootItem of importHuntPreview.value.loot_items || []) {
+      if ((lootItem.normalized_name || lootItem.name) === normalizedName) {
+        lootItem.excluded = checked
+      }
+    }
+    return
+  }
   await parseHuntText(excludedHuntItems.value)
 }
 
@@ -418,10 +456,160 @@ function restoreLootItem(item) {
   return setHuntItemExcluded(item, false)
 }
 
+async function scanHuntLogImports() {
+  huntImportBusy.value = true
+  huntImportInfo.value = 'Scanning Tibia log folder...'
+  try {
+    const out = await api('/api/hunts/import/logs')
+    huntImportCandidates.value = out.candidates || []
+    const summary = out.summary || {}
+    huntImportInfo.value = `Found ${summary.pending_candidates || 0} pending, ${summary.already_imported || 0} imported, ${summary.ignored || 0} ignored from ${summary.files_scanned || 0} file(s).`
+  } catch (error) {
+    huntImportInfo.value = `Log import scan failed: ${error.message}`
+  } finally {
+    huntImportBusy.value = false
+  }
+}
+
+function reviewHuntLogImport(candidate) {
+  if (!candidate?.preview || candidate.imported || candidate.error) {
+    return
+  }
+  previousHuntPreview.value = null
+  editingHuntId.value = null
+  importHuntCandidate.value = candidate
+  importHuntPreview.value = candidate.preview
+  importHuntDraftLabel.value = candidate.preview.suggested_label || ''
+  importHuntDraftTags.value = ''
+  importHuntDraftLocation.value = candidate.preview.location?.suggested_name || ''
+  excludedHuntItems.value = candidate.preview.loot_summary?.excluded_item_names || []
+  showHiddenLoot.value = false
+  huntImportInfo.value = `Reviewing ${candidate.file_name}`
+  loadHistoryForPreview(candidate.preview)
+  hydratePreviewItemDetails(candidate.preview)
+}
+
+function clearHuntLogImportReview() {
+  importHuntPreview.value = null
+  importHuntCandidate.value = null
+  importHuntDraftLabel.value = ''
+  importHuntDraftTags.value = ''
+  importHuntDraftLocation.value = ''
+  excludedHuntItems.value = []
+  showHiddenLoot.value = false
+}
+
+async function saveHuntLogImport() {
+  if (!importHuntPreview.value || !importHuntCandidate.value) {
+    return
+  }
+
+  huntSubmitBusy.value = true
+  huntImportInfo.value = ''
+  try {
+    const tags = importHuntDraftTags.value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+    const payload = {
+      source: 'log_import',
+      label: importHuntDraftLabel.value.trim() || importHuntPreview.value.suggested_label || 'Untitled Hunt',
+      tags,
+      duration_minutes: Number(importHuntPreview.value.parsed?.duration_minutes || 1),
+      raw_total_xp: Number(importHuntPreview.value.parsed?.raw_total_xp ?? importHuntPreview.value.parsed?.total_xp ?? 0),
+      total_xp: Number(importHuntPreview.value.parsed?.total_xp || 0),
+      total_loot_gold: Number(importHuntPreview.value.parsed?.adjusted_loot_gold ?? importHuntPreview.value.parsed?.total_loot_gold ?? 0),
+      total_supply_cost: Number(importHuntPreview.value.parsed?.total_supply_cost || 0),
+      started_at: importHuntPreview.value.parsed?.started_at || null,
+      ended_at: importHuntPreview.value.parsed?.ended_at || null,
+      excluded_item_names: excludedHuntItems.value,
+      location_name: importHuntDraftLocation.value.trim() || importHuntPreview.value.location?.suggested_name || null,
+      raw_text: importHuntPreview.value.raw_text || importHuntCandidate.value.raw_text,
+    }
+    const out = await api('/api/hunts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    huntImportInfo.value = out.item?.duplicate
+      ? `Already exists: ${out.item?.label || 'hunt entry'}`
+      : `Imported: ${out.item?.label || 'hunt entry'}`
+    const importedKey = importHuntCandidate.value.import_key
+    huntImportCandidates.value = huntImportCandidates.value.map((candidate) => (
+      candidate.import_key === importedKey
+        ? { ...candidate, imported: true, imported_hunt: out.item }
+        : candidate
+    ))
+    clearHuntLogImportReview()
+    await Promise.all([loadHunts(), loadHuntingAreas()])
+  } catch (error) {
+    huntImportInfo.value = `Import save failed: ${error.message}`
+  } finally {
+    huntSubmitBusy.value = false
+  }
+}
+
+async function ignoreHuntLogImport(candidate) {
+  if (!candidate?.import_key) {
+    return
+  }
+
+  huntImportBusy.value = true
+  huntImportInfo.value = ''
+  try {
+    await api('/api/hunts/import/logs/ignore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ import_key: candidate.import_key }),
+    })
+    huntImportCandidates.value = huntImportCandidates.value.map((entry) => (
+      entry.import_key === candidate.import_key ? { ...entry, ignored: true } : entry
+    ))
+    if (importHuntCandidate.value?.import_key === candidate.import_key) {
+      clearHuntLogImportReview()
+    }
+    huntImportInfo.value = `Ignored: ${candidate.preview?.suggested_label || candidate.file_name}`
+  } catch (error) {
+    huntImportInfo.value = `Ignore failed: ${error.message}`
+  } finally {
+    huntImportBusy.value = false
+  }
+}
+
+async function deleteHuntLogFile(candidate) {
+  if (!candidate?.import_key) {
+    return
+  }
+  const label = candidate.file_name || 'this log file'
+  if (!window.confirm(`Delete ${label}?`)) {
+    return
+  }
+
+  huntImportDeleteBusy.value = true
+  huntImportInfo.value = ''
+  try {
+    await api('/api/hunts/import/logs/delete-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ import_key: candidate.import_key }),
+    })
+    huntImportCandidates.value = huntImportCandidates.value.filter((entry) => entry.file_path !== candidate.file_path)
+    if (importHuntCandidate.value?.file_path === candidate.file_path) {
+      clearHuntLogImportReview()
+    }
+    huntImportInfo.value = `Deleted file: ${label}`
+  } catch (error) {
+    huntImportInfo.value = `Delete file failed: ${error.message}`
+  } finally {
+    huntImportDeleteBusy.value = false
+  }
+}
+
 async function openPreviousHunt(row) {
   previousHuntBusy.value = true
   huntInfo.value = ''
   try {
+    clearHuntLogImportReview()
     const out = await api(`/api/hunts/${row.id}`)
     previousHuntPreview.value = out
     editingHuntId.value = row.id
@@ -473,7 +661,7 @@ async function savePreviousHuntEdit() {
       body: JSON.stringify(payload),
     })
     huntInfo.value = `Updated: ${out.item?.label || 'hunt entry'}`
-    await loadHunts()
+    await Promise.all([loadHunts(), loadHuntingAreas()])
   } catch (error) {
     huntInfo.value = `Failed to update hunt: ${error.message}`
   } finally {
@@ -499,7 +687,7 @@ async function deleteHunt(row = null) {
     if (editingHuntId.value === huntId) {
       clearHuntPreview()
     }
-    await loadHunts()
+    await Promise.all([loadHunts(), loadHuntingAreas()])
     huntInfo.value = `Deleted: ${label}`
   } catch (error) {
     huntInfo.value = `Delete failed: ${error.message}`
@@ -556,23 +744,20 @@ async function generateItemPrices() {
 
 const hasStatus = computed(() => Boolean(status.server))
 
-const huntRowsWithDeltas = computed(() => {
-  const rows = hunts.value || []
-  if (!rows.length) {
-    return []
-  }
-  const bestXpm = Math.max(...rows.map((row) => Number(row.xp_per_hour || 0)))
-  const bestRawXpm = Math.max(...rows.map((row) => Number(row.raw_xp_per_hour || 0)))
-  const bestGpm = Math.max(...rows.map((row) => Number(row.gold_per_hour || 0)))
-  return rows.map((row) => ({
-    ...row,
-    xpm_delta: Number(row.xp_per_hour || 0) - bestXpm,
-    raw_xpm_delta: Number(row.raw_xp_per_hour || 0) - bestRawXpm,
-    gpm_delta: Number(row.gold_per_hour || 0) - bestGpm,
-  }))
+const huntRows = computed(() => hunts.value || [])
+
+const locationOptions = computed(() => {
+  const names = [
+    ...huntRows.value.map((row) => row.location_name),
+    ...huntingAreas.value.map((area) => area.location_name),
+  ]
+  return Array.from(new Set(names
+    .map((name) => String(name || '').trim())
+    .filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b))
 })
 
-const activeHuntPreview = computed(() => previousHuntPreview.value || huntPreview.value)
+const activeHuntPreview = computed(() => previousHuntPreview.value || importHuntPreview.value || huntPreview.value)
 
 const hiddenLootCount = computed(() => {
   return (activeHuntPreview.value?.loot_items || []).filter((item) => item.excluded).length
@@ -584,7 +769,7 @@ const visibleLootItems = computed(() => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadStatus(), loadHunts()])
+  await Promise.all([loadStatus(), loadHunts(), loadHuntingAreas()])
 })
 
 onBeforeUnmount(() => {
@@ -600,6 +785,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="layout">
+    <datalist id="hunt-location-options">
+      <option v-for="location in locationOptions" :key="location" :value="location"></option>
+    </datalist>
+
     <header class="masthead">
       <p class="eyebrow">Victoris Toolkit</p>
       <h1 class="title">Tibia Market + Hunt Analyzer Workspace</h1>
@@ -695,7 +884,7 @@ onBeforeUnmount(() => {
           </label>
           <label>
             Location
-            <input v-model="huntDraftLocation" :placeholder="huntPreview.location?.suggested_name || 'Optional location'" />
+            <input v-model="huntDraftLocation" list="hunt-location-options" :placeholder="huntPreview.location?.suggested_name || 'Optional location'" />
           </label>
         </div>
 
@@ -719,41 +908,110 @@ onBeforeUnmount(() => {
 
     <section v-if="activeTab === 'previous-hunts'" class="card">
       <h2>Previous Hunt Checker</h2>
-      <p class="muted">All uploaded hunts with direct xpm and gpm comparison against the current best run.</p>
+      <p class="muted">All uploaded hunts with saved values and direct edit/delete controls.</p>
       <p v-if="huntInfo" class="muted">{{ huntInfo }}</p>
+
+      <div class="panel">
+        <div class="section-head">
+          <h3>Log Imports</h3>
+          <button :disabled="huntImportBusy" @click="scanHuntLogImports">Import From Logs</button>
+        </div>
+        <p v-if="huntImportInfo" class="muted">{{ huntImportInfo }}</p>
+        <div v-if="huntImportCandidates.length" class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Hunt</th>
+                <th>Status</th>
+                <th>Modified</th>
+                <th class="action-col"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="candidate in huntImportCandidates" :key="candidate.import_key">
+                <td class="mono">{{ candidate.file_name }}</td>
+                <td>
+                  {{ candidate.preview?.suggested_label || candidate.imported_hunt?.label || 'Unparsed log' }}
+                  <span v-if="candidate.file_hunt_index > 0" class="muted mono">#{{ candidate.file_hunt_index + 1 }}</span>
+                </td>
+                <td>
+                  <span v-if="candidate.error" class="error">Error</span>
+                  <span v-else-if="candidate.imported" class="success">
+                    Imported{{ candidate.imported_hunt?.id ? ` as #${candidate.imported_hunt.id}` : '' }}
+                  </span>
+                  <span v-else-if="candidate.ignored" class="muted">Ignored</span>
+                  <span v-else>Pending</span>
+                </td>
+                <td class="mono">{{ candidate.file_modified_at }}</td>
+                <td class="action-col">
+                  <button
+                    v-if="candidate.imported || candidate.ignored"
+                    class="mini-action danger-action"
+                    :disabled="huntImportDeleteBusy"
+                    @click="deleteHuntLogFile(candidate)"
+                  >
+                    Delete File
+                  </button>
+                  <template v-else-if="!candidate.error">
+                    <button
+                      class="mini-action"
+                      :disabled="huntImportBusy"
+                      @click="reviewHuntLogImport(candidate)"
+                    >
+                      Review
+                    </button>
+                    <button
+                      class="mini-action danger-action"
+                      :disabled="huntImportBusy"
+                      @click="ignoreHuntLogImport(candidate)"
+                    >
+                      Ignore
+                    </button>
+                  </template>
+                  <button
+                    v-else
+                    class="mini-action"
+                    disabled
+                  >
+                    Error
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
               <th>Hunt</th>
+              <th>Location</th>
               <th>Duration</th>
               <th>Raw XP/H</th>
-              <th>Delta Raw XP/H</th>
-              <th>XP/H</th>
-              <th>Delta XP/H</th>
-              <th>GP/H</th>
-              <th>Delta GP/H</th>
               <th>Net Profit</th>
               <th>Uploaded</th>
+              <th>XP/H</th>
+              <th>GP/H</th>
               <th class="action-col"></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in huntRowsWithDeltas" :key="row.id">
+            <tr v-for="row in huntRows" :key="row.id">
               <td>
                 <button class="item-link" :disabled="previousHuntBusy" @click="openPreviousHunt(row)">
                   {{ row.label || `Hunt ${row.id}` }}
                 </button>
               </td>
+              <td>{{ row.location_name || 'n/a' }}</td>
               <td>{{ row.duration_minutes }}m</td>
               <td>{{ formatValue(row.raw_xp_per_hour) }}</td>
-              <td :class="{ 'delta-best': row.raw_xpm_delta === 0 }">{{ formatSigned(row.raw_xpm_delta) }}</td>
-              <td>{{ formatValue(row.xp_per_hour) }}</td>
-              <td :class="{ 'delta-best': row.xpm_delta === 0 }">{{ formatSigned(row.xpm_delta) }}</td>
-              <td>{{ formatValue(row.gold_per_hour) }}</td>
-              <td :class="{ 'delta-best': row.gpm_delta === 0 }">{{ formatSigned(row.gpm_delta) }}</td>
               <td>{{ formatValue(row.net_profit) }}</td>
               <td class="mono">{{ row.uploaded_at }}</td>
+              <td>{{ formatValue(row.xp_per_hour) }}</td>
+              <td>{{ formatValue(row.gold_per_hour) }}</td>
               <td class="action-col">
                 <button
                   class="mini-action danger-action"
@@ -765,11 +1023,49 @@ onBeforeUnmount(() => {
                 </button>
               </td>
             </tr>
-            <tr v-if="!huntRowsWithDeltas.length">
-              <td colspan="11" class="muted">No hunts uploaded yet. Add one in Hunt Analyser.</td>
+            <tr v-if="!huntRows.length">
+              <td colspan="9" class="muted">No hunts uploaded yet. Add one in Hunt Analyser.</td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div v-if="importHuntPreview" class="panel panel-spaced">
+        <h3 class="flush-title">Review Log Import</h3>
+        <div class="muted mono">{{ importHuntCandidate?.file_name }}</div>
+        <div class="form-grid mt-10">
+          <label>
+            Label
+            <input v-model="importHuntDraftLabel" />
+          </label>
+          <label>
+            Tags
+            <input v-model="importHuntDraftTags" placeholder="comma,separated,tags" />
+          </label>
+          <label>
+            Location
+            <input v-model="importHuntDraftLocation" list="hunt-location-options" :placeholder="importHuntPreview.location?.suggested_name || 'Optional location'" />
+          </label>
+        </div>
+        <div class="row mt-10">
+          <button :disabled="huntSubmitBusy" @click="saveHuntLogImport">Save Import</button>
+          <button @click="clearHuntLogImportReview">Close</button>
+        </div>
+        <HuntSummary
+          :preview="importHuntPreview"
+          :show-hidden-loot="showHiddenLoot"
+          :hidden-loot-count="hiddenLootCount"
+          :visible-loot-items="visibleLootItems"
+          :history-by-item-id="historyByItemId"
+          :history-loading-by-item-id="historyLoadingByItemId"
+          :format-value="formatValue"
+          :format-signed="formatSigned"
+          :format-percent="formatPercent"
+          @toggle-hidden="showHiddenLoot = $event"
+          @open-item="openItemDetails"
+          @hide-loot="hideLootItem"
+          @restore-loot="restoreLootItem"
+        />
       </div>
 
       <div v-if="previousHuntPreview" class="panel panel-spaced">
@@ -785,7 +1081,7 @@ onBeforeUnmount(() => {
           </label>
           <label>
             Location
-            <input v-model="previousHuntDraftLocation" :placeholder="previousHuntPreview.location?.suggested_name || 'Optional location'" />
+            <input v-model="previousHuntDraftLocation" list="hunt-location-options" :placeholder="previousHuntPreview.location?.suggested_name || 'Optional location'" />
           </label>
         </div>
         <div class="row mt-10">
@@ -808,6 +1104,64 @@ onBeforeUnmount(() => {
           @hide-loot="hideLootItem"
           @restore-loot="restoreLootItem"
         />
+      </div>
+    </section>
+
+    <section v-if="activeTab === 'hunting-areas'" class="card">
+      <h2>Hunting Areas</h2>
+      <div class="row">
+        <button :disabled="huntingAreaBusy" @click="loadHuntingAreas">Refresh Areas</button>
+        <span class="muted">{{ huntingAreaInfo }}</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Location</th>
+              <th>Hunts</th>
+              <th>Total Time</th>
+              <th>Best XP/H</th>
+              <th>Best GP/H</th>
+              <th>Valuable Drops</th>
+              <th>Average XP/H</th>
+              <th>Average GP/H</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="area in huntingAreas" :key="area.location_name">
+              <td>{{ area.location_name }}</td>
+              <td>{{ area.hunt_count }}</td>
+              <td>{{ area.total_duration_minutes }}m</td>
+              <td>{{ formatValue(area.best_xp_per_hour) }}</td>
+              <td>{{ formatValue(area.best_gp_per_hour) }}</td>
+              <td>
+                <div class="drop-image-row">
+                  <button
+                    v-for="drop in area.valuable_drops"
+                    :key="`${area.location_name}-${drop.name}`"
+                    class="drop-image-btn"
+                    :disabled="!drop.item_id"
+                    :title="`${drop.name}: ${formatValue(drop.unit_value)} each`"
+                    @click="openItemDetails(drop.item_id)"
+                  >
+                    <img
+                      class="item-image"
+                      :src="itemImagePath(drop.item_id)"
+                      :alt="drop.name"
+                      loading="lazy"
+                    />
+                  </button>
+                </div>
+                <span v-if="!area.valuable_drops?.length" class="muted">n/a</span>
+              </td>
+              <td>{{ formatValue(area.average_xp_per_hour) }}</td>
+              <td>{{ formatValue(area.average_gp_per_hour) }}</td>
+            </tr>
+            <tr v-if="!huntingAreas.length">
+              <td colspan="8" class="muted">No saved hunts with locations yet.</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 

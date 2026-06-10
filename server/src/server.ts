@@ -5,8 +5,12 @@ import { config } from "./config";
 import {
   createHuntUpload,
   deleteHuntUpload,
+  deleteHuntLogImportFile,
   getHuntUploadPreview,
   hydrateHuntItemDetails,
+  ignoreHuntLogImport,
+  listHuntingAreaSummaries,
+  listHuntLogImportCandidates,
   listHuntUploads,
   parseHuntPreview,
   updateHuntUpload
@@ -134,6 +138,42 @@ export function buildServer(db: Database.Database) {
   });
 
   app.get("/api/hunts", async () => listHuntUploads(db));
+
+  app.get("/api/hunts/areas", async (request, reply) => {
+    try {
+      return await listHuntingAreaSummaries(db);
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.get("/api/hunts/import/logs", async (request, reply) => {
+    try {
+      return await listHuntLogImportCandidates(db);
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.post("/api/hunts/import/logs/ignore", async (request, reply) => {
+    try {
+      return ignoreHuntLogImport(db, objectBody(request.body));
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.post("/api/hunts/import/logs/delete-file", async (request, reply) => {
+    try {
+      return deleteHuntLogImportFile(db, objectBody(request.body));
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
 
   app.get("/api/hunts/:id", async (request, reply) => {
     let huntId: number;
