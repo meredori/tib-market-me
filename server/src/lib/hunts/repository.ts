@@ -712,6 +712,103 @@ export async function listHuntingAreaSummaries(
   return { ok: true, items };
 }
 
+export async function listGlobalLootSummary(
+  db: Database.Database,
+  buildPreview: BuildPreview
+): Promise<Record<string, unknown>> {
+  const rows = db
+    .prepare(
+      `
+      SELECT
+        id,
+        raw_text,
+        excluded_items_json,
+        location_name
+      FROM hunt_uploads
+      ORDER BY uploaded_at DESC, id DESC
+    `
+    )
+    .all() as Array<Record<string, unknown>>;
+
+  const drops = new Map<string, {
+    name: string;
+    quantity: number;
+    total_value: number;
+    unit_value: number;
+    item_id: number | null;
+    value_source: string | null;
+    hunt_count: number;
+  }>();
+
+  let parsedHunts = 0;
+  for (const row of rows) {
+    try {
+      const excludedItemNames = typeof row.excluded_items_json === "string"
+        ? coerceExcludedItemNames(JSON.parse(row.excluded_items_json))
+        : [];
+      const preview = await buildPreview({
+        raw_text: row.raw_text,
+        excluded_item_names: excludedItemNames,
+        location_name: row.location_name
+      });
+      parsedHunts += 1;
+      const seenInHunt = new Set<string>();
+      for (const item of (preview.loot_items as Array<Record<string, unknown>> | undefined) ?? []) {
+        if (item.excluded) {
+          continue;
+        }
+        const name = asText(item.name).trim();
+        if (!name) {
+          continue;
+        }
+        const key = normalizeLootItemName(name);
+        const existing = drops.get(key) ?? {
+          name,
+          quantity: 0,
+          total_value: 0,
+          unit_value: 0,
+          item_id: asNumberOrNull(item.item_id),
+          value_source: firstText(item.value_source),
+          hunt_count: 0
+        };
+        const quantity = Math.max(0, asNumber(item.quantity, 0));
+        const totalValue = Math.max(0, asNumber(item.total_value, 0));
+        const unitValue = Math.max(0, asNumber(item.unit_value, quantity > 0 ? totalValue / quantity : 0));
+        existing.quantity += quantity;
+        existing.total_value += totalValue;
+        existing.unit_value = Math.max(existing.unit_value, unitValue);
+        if (!existing.item_id) {
+          existing.item_id = asNumberOrNull(item.item_id);
+        }
+        if (!existing.value_source) {
+          existing.value_source = firstText(item.value_source);
+        }
+        if (!seenInHunt.has(key)) {
+          existing.hunt_count += 1;
+          seenInHunt.add(key);
+        }
+        drops.set(key, existing);
+      }
+    } catch {
+      // A malformed historical raw_text should not block the global loot overview.
+    }
+  }
+
+  const items = Array.from(drops.values())
+    .sort((a, b) => b.total_value - a.total_value || b.quantity - a.quantity || a.name.localeCompare(b.name))
+    .slice(0, 20);
+
+  return {
+    ok: true,
+    items,
+    summary: {
+      total_hunts: rows.length,
+      parsed_hunts: parsedHunts,
+      total_items: drops.size
+    }
+  };
+}
+
 export async function getHuntUploadPreview(
   db: Database.Database,
   huntId: number,

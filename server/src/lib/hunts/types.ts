@@ -63,6 +63,7 @@ export type ItemDetailCacheRow = {
   npc_value: number | null;
   value: number | null;
   weight_oz: number | null;
+  item_ids: number[];
   wiki_url: string | null;
   payload_json: string;
   last_fetched_at: string;

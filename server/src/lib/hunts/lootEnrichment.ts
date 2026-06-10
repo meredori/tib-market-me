@@ -11,14 +11,50 @@ import {
   normalizeLootItemName
 } from "./utils";
 
-const HARD_CODED_ITEM_VALUES: Record<string, { unit_value: number; weight_oz: number | null; resolved_name: string }> = {
-  "gold coin": { unit_value: 1, weight_oz: 0.1, resolved_name: "gold coin" },
-  "gold coins": { unit_value: 1, weight_oz: 0.1, resolved_name: "gold coin" },
-  "platinum coin": { unit_value: 100, weight_oz: 0.1, resolved_name: "platinum coin" },
-  "platinum coins": { unit_value: 100, weight_oz: 0.1, resolved_name: "platinum coin" },
-  "crystal coin": { unit_value: 10000, weight_oz: 0.1, resolved_name: "crystal coin" },
-  "crystal coins": { unit_value: 10000, weight_oz: 0.1, resolved_name: "crystal coin" }
+const HARD_CODED_ITEM_VALUES: Record<string, { item_id: number; unit_value: number; weight_oz: number | null; resolved_name: string }> = {
+  "gold coin": { item_id: 3031, unit_value: 1, weight_oz: 0.1, resolved_name: "gold coin" },
+  "gold coins": { item_id: 3031, unit_value: 1, weight_oz: 0.1, resolved_name: "gold coin" },
+  "platinum coin": { item_id: 3035, unit_value: 100, weight_oz: 0.1, resolved_name: "platinum coin" },
+  "platinum coins": { item_id: 3035, unit_value: 100, weight_oz: 0.1, resolved_name: "platinum coin" },
+  "crystal coin": { item_id: 3043, unit_value: 10000, weight_oz: 0.1, resolved_name: "crystal coin" },
+  "crystal coins": { item_id: 3043, unit_value: 10000, weight_oz: 0.1, resolved_name: "crystal coin" }
 };
+
+const LOOKUP_SELECT = `
+  SELECT
+    mip.item_id AS item_id,
+    im.name AS name,
+    im.wiki_name AS wiki_name,
+    mip.client_value AS client_value,
+    mip.suggested_list_price AS suggested_list_price,
+    mip.fair_price AS fair_price,
+    mip.trend AS trend,
+    mip.liquidity AS liquidity,
+    mip.confidence AS confidence,
+    mif.month_sold AS month_sold,
+    mif.day_sold AS day_sold,
+    mif.sell_offer AS sell_offer,
+    COALESCE((
+      SELECT MAX(nb.price)
+      FROM item_npc_buy nb
+      WHERE nb.item_id = mip.item_id
+    ), 0) AS npc_buy,
+    COALESCE((
+      SELECT MIN(ns.price)
+      FROM item_npc_sell ns
+      WHERE ns.item_id = mip.item_id
+    ), 0) AS npc_sell,
+    COALESCE(ivo.override_mode, 'auto') AS override_mode
+  FROM market_item_prices mip
+  LEFT JOIN item_metadata im ON im.item_id = mip.item_id
+  LEFT JOIN market_item_features mif
+    ON mif.run_id = mip.run_id
+   AND mif.item_id = mip.item_id
+  LEFT JOIN item_value_overrides ivo
+    ON ivo.item_id = mip.item_id
+  WHERE mip.run_id = ?
+    AND mip.pricing_model = ?
+`;
 
 function singularizeSimple(name: string): string {
   if (name.endsWith("ies") && name.length > 3) {
@@ -51,6 +87,30 @@ function readItemWeightsByName(): Record<string, number> {
   }
 }
 
+function fallbackWeightOz(weights: Record<string, number>, normalizedName: string): number | null {
+  return weights[normalizedName] ?? weights[singularizeSimple(normalizedName)] ?? null;
+}
+
+function fallbackLookupRow(itemId: number, name: string | null): LootLookupRow {
+  return {
+    item_id: itemId,
+    name,
+    wiki_name: name,
+    client_value: 0,
+    suggested_list_price: 0,
+    fair_price: 0,
+    trend: "",
+    liquidity: 0,
+    confidence: 0,
+    month_sold: 0,
+    day_sold: 0,
+    sell_offer: 0,
+    npc_buy: 0,
+    npc_sell: 0,
+    override_mode: "auto"
+  };
+}
+
 export function lookupLootItem(db: Database.Database, name: string): LootLookupRow | null {
   const latestRun = db.prepare("SELECT id FROM market_runs WHERE status = 'success' ORDER BY id DESC LIMIT 1").get() as { id: number } | undefined;
   if (!latestRun) {
@@ -62,42 +122,45 @@ export function lookupLootItem(db: Database.Database, name: string): LootLookupR
   const candidates = Array.from(new Set([normalized, singular].filter(Boolean)));
 
   for (const candidate of candidates) {
+    const aliasRow = db
+      .prepare(
+        `
+        ${LOOKUP_SELECT}
+          AND mip.item_id = (
+            SELECT ia.item_id
+            FROM item_aliases ia
+            WHERE ia.normalized_name = ?
+            LIMIT 1
+          )
+        LIMIT 1
+      `
+      )
+      .get(latestRun.id, config.pricingModel, candidate) as LootLookupRow | undefined;
+
+    if (aliasRow) {
+      return aliasRow;
+    }
+
+    const aliasFallback = db
+      .prepare(
+        `
+        SELECT ia.item_id AS item_id, COALESCE(im.name, ia.raw_name) AS name
+        FROM item_aliases ia
+        LEFT JOIN item_metadata im ON im.item_id = ia.item_id
+        WHERE ia.normalized_name = ?
+        LIMIT 1
+      `
+      )
+      .get(candidate) as { item_id: number; name: string | null } | undefined;
+
+    if (aliasFallback?.item_id) {
+      return fallbackLookupRow(aliasFallback.item_id, aliasFallback.name);
+    }
+
     const row = db
       .prepare(
         `
-        SELECT
-          mip.item_id AS item_id,
-          im.name AS name,
-          im.wiki_name AS wiki_name,
-          mip.client_value AS client_value,
-          mip.suggested_list_price AS suggested_list_price,
-          mip.fair_price AS fair_price,
-          mip.trend AS trend,
-          mip.liquidity AS liquidity,
-          mip.confidence AS confidence,
-          mif.month_sold AS month_sold,
-          mif.day_sold AS day_sold,
-          mif.sell_offer AS sell_offer,
-          COALESCE((
-            SELECT MAX(nb.price)
-            FROM item_npc_buy nb
-            WHERE nb.item_id = mip.item_id
-          ), 0) AS npc_buy,
-          COALESCE((
-            SELECT MIN(ns.price)
-            FROM item_npc_sell ns
-            WHERE ns.item_id = mip.item_id
-          ), 0) AS npc_sell,
-          COALESCE(ivo.override_mode, 'auto') AS override_mode
-        FROM market_item_prices mip
-        LEFT JOIN item_metadata im ON im.item_id = mip.item_id
-        LEFT JOIN market_item_features mif
-          ON mif.run_id = mip.run_id
-         AND mif.item_id = mip.item_id
-        LEFT JOIN item_value_overrides ivo
-          ON ivo.item_id = mip.item_id
-        WHERE mip.run_id = ?
-          AND mip.pricing_model = ?
+        ${LOOKUP_SELECT}
           AND (
             LOWER(COALESCE(im.name, '')) = ?
             OR LOWER(COALESCE(im.wiki_name, '')) = ?
@@ -147,17 +210,18 @@ export async function enrichLootItems(
       : hardCoded
         ? "unavailable"
         : "missing";
-    const weightOz = hardCoded?.weight_oz ?? weights[item.normalized_name] ?? itemDetail?.weight_oz ?? null;
+    const weightOz = hardCoded?.weight_oz ?? fallbackWeightOz(weights, item.normalized_name) ?? itemDetail?.weight_oz ?? null;
     const gpPerOz = unitValue !== null && weightOz !== null && weightOz > 0
       ? Number((unitValue / weightOz).toFixed(2))
       : null;
-    const history = lookup?.item_id ? summarizeItemHistory(db, lookup.item_id) : null;
+    const itemId = hardCoded?.item_id ?? lookup?.item_id ?? itemDetail?.item_ids[0] ?? null;
+    const history = itemId && lookup ? summarizeItemHistory(db, itemId) : null;
 
     enriched.push({
       name: item.name,
       normalized_name: item.normalized_name,
       quantity: item.quantity,
-      item_id: lookup?.item_id ?? null,
+      item_id: itemId,
       resolved_name: hardCoded?.resolved_name ?? lookup?.name ?? lookup?.wiki_name ?? itemDetail?.actual_name ?? null,
       unit_value: unitValue,
       excluded,

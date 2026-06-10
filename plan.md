@@ -19,9 +19,17 @@
 - Assess whether the expanded frontend scope justifies moving from Vue to a fuller app stack such as SvelteKit or Next.js.
 - Refactor each app area into reusable components as that area is redesigned.
 - Filtering/sorting is a good early analytics feature because it is mostly client-side.
+- Phase 3 visual direction should combine the two favored concepts:
+  - HuntLens (`samples/concepts/ChatGPT Image Jun 10, 2026, 09_00_19 PM.png`): focused hunt detail workspace with left navigation, dense metric strips, loot/monster analysis, and a right-side saved-hunt edit drawer.
+  - HuntOps (`samples/concepts/ChatGPT Image Jun 10, 2026, 09_00_10 PM.png`): broader market and hunt operations console with compact top filters, weekly summary metrics, tabbed analytics, market tables, and alert/status panels.
 - Character lookup and event detection need new backend endpoints.
 - Normalization and safety rating need more product rules before implementation.
 - Delete obsolete `itemsprices.*` files if they are no longer used after generation is removed.
+- `public-api.json` is the TibiaData OpenAPI contract, not a direct data dump; use it to build typed import clients, migrations, and staging scripts for TibiaWiki-backed reference data.
+- Creature, hunting-place, quest, spell, bestiary, bosstiary, NPC, location, and Wheel of Destiny data can turn the app from hunt logging into a richer planning/recommendation tool.
+- Playwright should first cover the add-new-hunt workflow.
+- Public reference data should be stored in normalized tables, retaining endpoint `last_updated`/source timestamp style fields where available.
+- Automatic hunting-place matching should auto-assign high-confidence matches and support fuzzy matching for travel kills, partial/sub-area hunts, surface-only hunts, and floor-specific hunts.
 
 ## Phase 1: Stabilize Hunt Backend Structure - Completed
 
@@ -64,49 +72,63 @@
 3. [x] Verification gate for this phase.
    - [x] `npm --prefix server run build`
 
-## Phase 3: Frontend Stack and UI Overhaul Before Automation
+## Phase 3: Frontend Stack and UI Overhaul Before Automation - Completed
 
-1. Assess frontend stack viability before committing to the overhaul.
-   - Compare staying on the current Vue/Vite app against moving to SvelteKit or Next.js.
-   - Evaluate routing, layouts, server/API integration, component ergonomics, state management, test tooling, local deployment complexity, and migration cost.
-   - Consider whether the app should remain a separate UI talking to the existing Fastify server, or whether a new full-stack framework should own more of the app surface.
-   - Decide whether the UI overhaul should happen in-place or as a new app shell that gradually replaces the current Vue UI.
-   - Keep the assessment open-ended until the tradeoffs are clear.
+### Phase 3A: Stack Decision Memo - Completed
 
-2. Establish the app theme before redesigning individual workflows.
-   - Define the general visual direction for the whole app first: density, spacing, color, typography, controls, icon style, table treatment, and panel hierarchy.
-   - Gather 3-5 layout concepts before implementation.
-   - Use generated mockups, reference sites, or both to compare directions.
-   - Pick one direction and turn it into reusable UI primitives before deep feature work.
+1. [x] Compare current Vue/Vite against SvelteKit and Next.js using current and final-state needs.
+   - Current repo facts: small Vite app, no router, one large `App.vue`, existing Fastify JSON API boundary.
+   - Final-state needs considered: dense hunt workspace, operations dashboard, client-side discovery filters, future endpoint-backed analytics, and Playwright smoke tests.
+   - Decision: keep Vue/Vite for the overhaul because the final-state app still fits a local API-driven SPA and does not currently need full-stack routing/server rendering.
 
-3. Generate or gather UI concepts.
-   - Option A: create image-generation prompts for potential dashboard layouts.
-   - Option B: collect reference websites/apps with strong dense dashboard, analytics, or game-tool layouts.
-   - Option C: do both, then combine the best pieces into a practical local design direction.
-   - Prefer layouts that feel like a focused tool, not a marketing page.
+### Phase 3B: Shared App Shell and Theme - Completed
 
-4. Rework the information architecture before adding Playwright tests.
-   - Make Hunt Analyser clearly create/import/preview oriented.
-   - Keep Previous Hunts as the edit/delete surface for existing hunts.
-   - Improve table density and scanning for Previous Hunts and Hunting Areas.
-   - Review which details should become drill-down views or modals.
-   - Keep all current information available.
+1. [x] Establish the HuntLens/HuntOps dark professional foundation.
+   - Added left navigation, compact toolbar, dense metric strips, segmented tabs, tables, drawer/detail panel, status badges, and icon buttons.
+   - Added `@lucide/vue` for UI icons after confirming `lucide-vue-next` is deprecated.
 
-5. Refactor each area into reusable components as it is redesigned.
-   - Extract shared layout primitives such as app shell, toolbar, tab navigation, data table, metric strip, filter bar, status icon, and detail panel.
-   - Extract item lookup state into `useItemLookup` when the item lookup UI is redesigned.
-   - Extract hunt state into `useHunts` when Hunt Analyser, import, and Previous Hunts flows are redesigned.
-   - Split tab bodies into dedicated components as each tab is touched.
-   - Avoid a large component split that preserves the old UI shape without improving it.
+### Phase 3C: HuntLens Full Hunt Workspace - Completed
 
-6. Add hydration-state icons to loot rows.
-   - Tick icon for cached/resolved detail.
-   - Question mark icon for missing detail/background lookup pending.
-   - Exclamation/error icon for unavailable detail or hydration failure.
-   - Background hydration failures should not overwrite the main hunt status message.
+1. [x] Redesign the hunt workflow as the first complete slice.
+   - Hunt Analyser remains create/import/preview oriented.
+   - Previous Hunts remains the edit/delete surface for existing hunts.
+   - Added HuntLens-style central hunt workspace, dense metrics, loot/monster analysis, hydration-state icons, and saved-hunt edit drawer.
+   - Extracted hunt workflow state into `ui-app/src/composables/useHunts.js`.
 
-7. Verification gate for this phase.
+### Phase 3D: HuntOps Dashboard and Analytics Shell - Completed
+
+1. [x] Add the HuntOps-style operations dashboard using existing data.
+   - Added high-level metrics, recent previous hunts, profit sparkline, hunting area summary, and active-hunt loot summary.
+   - Used existing endpoints only; no backend API changes were needed.
+   - Used lightweight SVG for the trend visual; no chart library was added.
+
+### Phase 3E: Cleanup, Verification, and Plan Handoff - Completed
+
+1. [x] Replace old layout paths after preserving workflow behavior.
+   - Removed the old parchment/tab layout in favor of the shared shell.
+   - Kept item lookup, settings, item override, itemprices generation, hunt import, save, edit, delete, and area views available.
+   - Left Playwright smoke tests for Phase 4.
+
+2. [x] Verification gate for this phase.
    - `npm --prefix ui-app run build`
+
+## Selected Phase 3 UI Direction
+
+1. HuntLens-inspired hunt workspace:
+   - Reference asset: `samples/concepts/ChatGPT Image Jun 10, 2026, 09_00_19 PM.png`.
+   - Left app navigation, central hunt detail surface, compact metric strips, tabbed detail sections, dense loot and monster tables, clear parser/data-quality status, and a right-side saved-hunt edit drawer.
+   - Use this direction for Hunt Analyser, saved hunt detail, Previous Hunts edit/delete workflows, and loot analysis.
+
+2. HuntOps-inspired operations console:
+   - Reference asset: `samples/concepts/ChatGPT Image Jun 10, 2026, 09_00_10 PM.png`.
+   - Compact shell with server/character/date filters, high-level weekly metrics, tabbed analytics, previous hunts table, profit-over-time chart, market overview, loot analysis, and latest price alerts.
+   - Use this direction for dashboard, Hunt History, market summary, filtering/sorting, and future analytics views.
+
+3. Shared design rules:
+   - Dense dark professional UI with restrained accents and strong scanability.
+   - Small metric cards/strips rather than oversized hero content.
+   - Tables, tabs, drawers, filters, icons, and status badges should carry the workflow.
+   - Keep Tibia/game context visible through item names, icons, stats, and hunt language rather than fantasy decoration.
 
 ## UI Concept Prompt Starters
 
@@ -128,10 +150,13 @@
 ## Phase 4: Frontend Smoke Tests After UI Settles
 
 1. Add Playwright only after the redesigned UI flow is stable.
+   - Cover the add-new-hunt workflow first.
+   - Cover paste/import hunt analyser text.
    - Cover parse preview.
    - Cover hydration result display.
-   - Cover hide/restore loot rows.
-   - Cover open, edit, save, and delete previous hunts.
+   - Cover hide/restore loot rows before saving.
+   - Cover saving the hunt as a new saved hunt.
+   - Add previous-hunt open, edit, save, and delete coverage after the new-hunt flow is stable.
 
 2. Keep frontend tests workflow-focused.
    - Avoid brittle assertions against layout details.
@@ -147,7 +172,7 @@
 1. Add filtering and sorting before endpoint-heavy analytics.
    - Previous Hunts filters: location, character if available, date range, XP/H, GP/H, profit, duration.
    - Previous Hunts sorting: date, location, XP/H, GP/H, profit, duration.
-   - Hunting Areas filters/sorting: area, hunt count, averages, best/worst metrics, latest hunt.
+   - Hunt History area filters/sorting: area, hunt count, averages, best/worst metrics, latest hunt.
 
 2. Keep this phase mostly client-side.
    - Use existing loaded hunt and area data first.
@@ -155,17 +180,47 @@
 
 ## Phase 6: Endpoint-Backed Analytics
 
-1. Character lookup.
+1. Stage public Tibia reference data into the local database.
+   - Add migrations for public creatures, creature loot statistics, hunting places, hunting-place area creature summaries, hunting-place recommendations, quests, spells, locations, NPCs, bestiary entries, and bosstiary entries.
+   - Build a typed TibiaData client from the `public-api.json` contract or a small hand-maintained subset of the relevant endpoints.
+   - Add sync tooling that can fetch list endpoints first, hydrate details by id/name, and record `last_updated`/source timestamps where the API exposes them.
+   - Store normalized tables as the durable query model, retaining endpoint `last_updated`/source timestamp style fields where available.
+   - Start with creatures and hunting places before importing the wider content set.
+
+2. Map saved hunts to hunting places automatically.
+   - Match hunt analyser monster names against staged creature aliases/details.
+   - Score candidate hunting places by overlapping creatures, location text, player-entered hunt location, level/vocation ranges, and known hunting-place creature summaries.
+   - Use fuzzy matching so travel kills do not dominate the match, and so surface-only, lower-level, specific-floor, or other subsection hunts can still map to the broader hunting place with useful confidence.
+   - Prefer auto-assigning high-confidence matches while preserving confidence, match reasons, and ambiguous alternatives.
+   - Store the selected hunting-place id on saved hunts, with confidence and an override path for manual correction.
+   - Surface low-confidence matches as review prompts instead of silently assigning the wrong place.
+
+3. Generate hunt recommendations from staged reference data.
+   - Use character level/vocation, recent hunt performance, staged hunting-place level ranges, vocation recommendations, expected loot/XP stars, creature difficulty, and quest access requirements.
+   - Show why each recommendation was made: matching creatures, level range, expected XP/loot, missing prerequisites, and known risk flags.
+   - Separate "try next", "farm profit", "complete bestiary", "boss/bosstiary", and "quest unlock" recommendation modes.
+
+4. Character lookup.
    - Add endpoint to search/select known characters.
    - On hunt import, detect or select the character.
    - Look up approximate level at hunt time.
    - Store character and level context with saved hunts.
 
-2. Event detection.
+5. Event detection.
    - Add endpoint or data source for double XP, boosted spawn, and similar event windows.
    - Detect whether a hunt overlaps an event.
    - Surface event context on hunt detail and area summaries.
    - Decide whether event-normalized rates should be stored or computed at read time.
+
+6. Quest and unlock context.
+   - Link staged quest requirements/rewards to hunting-place recommendations where the source data exposes access constraints.
+   - Track account/character unlock notes manually until a reliable character-specific source exists.
+   - Flag recommendations that may need access quests, premium status, or level requirements.
+
+7. Verification gate for this phase.
+   - Backend migration/app build.
+   - Focused sync-client tests using recorded public API fixtures.
+   - Hunt-place matching tests for exact creature overlap, partial overlap, aliases, and low-confidence no-match cases.
 
 ## Phase 7: Analytics That Need More Product Rules
 
@@ -173,6 +228,7 @@
    - Define how aggressive downtime correction should be.
    - Decide whether short hunts should be smoothed, flagged as low confidence, or left raw.
    - Define minimum duration thresholds.
+   - Replace current Hunt History location leaderboards' raw averages with normalized averages that give longer hunts more weight.
    - Decide whether normalized values are shown beside raw values or used as defaults.
 
 2. Hunt safety rating.
@@ -181,8 +237,27 @@
    - Decide whether safety is per hunt, per area, per character level range, or all three.
    - Define rating labels and whether they should affect sorting/filtering.
 
+## Future Public Data Expansion Ideas
+
+1. Bestiary and bosstiary planning.
+   - Use staged bestiary/bosstiary categories, difficulty, charm points, boss point rewards, kill requirements, and level requirements to create completion dashboards.
+   - Suggest hunts that advance unfinished bestiary entries while still matching character level and desired profit/XP goals.
+
+2. Quest, achievement, and unlock roadmaps.
+   - Use quests, achievements, locations, NPCs, keys, books, objects, and mount/outfit data to build longer-term progression checklists.
+   - Link unlocks back to relevant hunting places and items when the source data provides enough relationship hints.
+
+3. Vocation build support.
+   - Use spell and Wheel of Destiny data for vocation-aware hunt recommendations, required level checks, cooldown/tooling notes, and future build comparison views.
+
+4. Market enrichment from public item metadata.
+   - Use item category, class, vocation restriction, attributes, imbuement-like fields, and images to improve market filters and loot-table explanations.
+   - Keep Tibia market price data separate from public metadata so the pricing pipeline remains clear.
+
+5. World/location/NPC context.
+   - Use locations, NPCs, buildings, streets, and houses to add city/route context around hunts, quests, and vendors.
+   - Treat this as a second-pass experience layer after creature and hunting-place matching is reliable.
+
 ## Open Questions Before Implementation
 
-1. Is Vue/Vite still the right frontend foundation for the new scope, or should the overhaul move to SvelteKit or Next.js?
-2. If changing frontend stack, should the migration be a clean replacement app or a gradual side-by-side migration?
-3. Which UI concept direction should be chosen after reviewing generated mockups/reference sites?
+1. None currently.

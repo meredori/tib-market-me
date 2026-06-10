@@ -11,6 +11,7 @@ import {
   ignoreHuntLogImport,
   listHuntingAreaSummaries,
   listHuntLogImportCandidates,
+  listGlobalLootSummary,
   listHuntUploads,
   parseHuntPreview,
   updateHuntUpload
@@ -34,6 +35,7 @@ import {
   parsePositiveId
 } from "./lib/http/validation";
 import { ensureItemHistory, summarizeItemHistory } from "./lib/pricing/itemHistory";
+import { setItemAlias } from "./lib/hunts/itemAliases";
 
 export function buildServer(db: Database.Database) {
   const app = Fastify({ logger: true });
@@ -108,6 +110,20 @@ export function buildServer(db: Database.Database) {
     }
   });
 
+  app.put("/api/item-aliases", async (request, reply) => {
+    try {
+      const body = objectBody(request.body);
+      const alias = setItemAlias(db, {
+        raw_name: typeof body.raw_name === "string" ? body.raw_name : "",
+        item_id: parsePositiveId(body.item_id, "item id")
+      });
+      return { ok: true, alias };
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
   app.post("/api/refresh", async (request, reply) => {
     try {
       const preflight = await preflightRefresh(db, request.log);
@@ -142,6 +158,15 @@ export function buildServer(db: Database.Database) {
   app.get("/api/hunts/areas", async (request, reply) => {
     try {
       return await listHuntingAreaSummaries(db);
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.get("/api/hunts/loot-summary", async (request, reply) => {
+    try {
+      return await listGlobalLootSummary(db);
     } catch (error) {
       reply.code(400);
       return { ok: false, error: String(error) };

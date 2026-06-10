@@ -55,7 +55,7 @@ function weightFromText(value: unknown): number | null {
 
 export function getCachedItemDetail(db: Database.Database, normalizedName: string): ItemDetailCacheRow | null {
   try {
-    return db
+    const row = db
       .prepare(
         `
         SELECT
@@ -71,6 +71,7 @@ export function getCachedItemDetail(db: Database.Database, normalizedName: strin
           npc_value,
           value,
           weight_oz,
+          item_ids_json,
           wiki_url,
           payload_json,
           last_fetched_at
@@ -78,7 +79,14 @@ export function getCachedItemDetail(db: Database.Database, normalizedName: strin
         WHERE normalized_name = ?
       `
       )
-      .get(normalizedName) as ItemDetailCacheRow | undefined ?? null;
+      .get(normalizedName) as (Omit<ItemDetailCacheRow, "item_ids"> & { item_ids_json?: string }) | undefined;
+    if (!row) {
+      return null;
+    }
+    return {
+      ...row,
+      item_ids: parseItemIdsJson(row.item_ids_json)
+    };
   } catch {
     return null;
   }
@@ -124,6 +132,47 @@ function extractItemWeightOz(payload: Record<string, unknown>): number | null {
   );
 }
 
+function extractItemIds(payload: Record<string, unknown>): number[] {
+  const itemPayload = itemPayloadFromResponse(payload);
+  const values = [
+    itemPayload.itemIds,
+    itemPayload.item_ids,
+    payload.itemIds,
+    payload.item_ids
+  ];
+  const ids: number[] = [];
+  for (const value of values) {
+    if (!Array.isArray(value)) {
+      continue;
+    }
+    for (const entry of value) {
+      const id = asNumberOrNull(entry);
+      if (id !== null && id > 0) {
+        ids.push(Math.trunc(id));
+      }
+    }
+  }
+  return Array.from(new Set(ids)).sort((a, b) => a - b);
+}
+
+function parseItemIdsJson(value: unknown): number[] {
+  if (typeof value !== "string" || !value.trim()) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((entry) => asNumberOrNull(entry))
+      .filter((entry): entry is number => entry !== null && entry > 0)
+      .map((entry) => Math.trunc(entry));
+  } catch {
+    return [];
+  }
+}
+
 export function extractItemDetailRow(requestedName: string, payload: Record<string, unknown>): ItemDetailCacheRow {
   const normalizedName = normalizeLootItemName(requestedName);
   const itemPayload = itemPayloadFromResponse(payload);
@@ -150,6 +199,7 @@ export function extractItemDetailRow(requestedName: string, payload: Record<stri
     npc_value: firstNumber(itemPayload.npcValue, itemPayload.npc_value, infobox.npcValue, fields.npcValue),
     value: firstNumber(itemPayload.value, infobox.value, fields.value),
     weight_oz: extractItemWeightOz(payload),
+    item_ids: extractItemIds(payload),
     wiki_url: firstText(itemPayload.wikiUrl, itemPayload.wiki_url, payload.wikiUrl, payload.wiki_url),
     payload_json: JSON.stringify(payload),
     last_fetched_at: nowIso()
@@ -199,10 +249,11 @@ export function saveItemDetail(
       npc_value,
       value,
       weight_oz,
+      item_ids_json,
       wiki_url,
       payload_json,
       last_fetched_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(normalized_name) DO UPDATE SET
       requested_name = excluded.requested_name,
       actual_name = excluded.actual_name,
@@ -215,6 +266,7 @@ export function saveItemDetail(
       npc_value = excluded.npc_value,
       value = excluded.value,
       weight_oz = excluded.weight_oz,
+      item_ids_json = excluded.item_ids_json,
       wiki_url = excluded.wiki_url,
       payload_json = excluded.payload_json,
       last_fetched_at = excluded.last_fetched_at
@@ -232,6 +284,7 @@ export function saveItemDetail(
     detail.npc_value,
     detail.value,
     detail.weight_oz,
+    JSON.stringify(detail.item_ids),
     detail.wiki_url,
     detail.payload_json,
     detail.last_fetched_at
@@ -243,7 +296,9 @@ async function fetchItemDetail(db: Database.Database, itemName: string): Promise
   const normalizedName = normalizeLootItemName(itemName);
   const cached = getCachedItemDetail(db, normalizedName);
   if (cached) {
-    const refreshedCached = cached.weight_oz === null ? refreshCachedItemDetailFromPayload(db, cached) : cached;
+    const refreshedCached = cached.weight_oz === null || cached.item_ids.length === 0
+      ? refreshCachedItemDetailFromPayload(db, cached)
+      : cached;
     if (refreshedCached && isFreshIso(refreshedCached.last_fetched_at, ITEM_DETAIL_CACHE_TTL_MS)) {
       return refreshedCached;
     }

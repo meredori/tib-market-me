@@ -11,6 +11,7 @@ import {
   deleteHuntUpload,
   getHuntUploadPreview as getRepositoryHuntUploadPreview,
   ignoreHuntLogImport,
+  listGlobalLootSummary as listRepositoryGlobalLootSummary,
   listHuntingAreaSummaries as listRepositoryHuntingAreaSummaries,
   listHuntLogImportCandidates as listRepositoryHuntLogImportCandidates,
   listHuntUploads,
@@ -113,6 +114,10 @@ export async function listHuntLogImportCandidates(db: Database.Database): Promis
 
 export async function listHuntingAreaSummaries(db: Database.Database): Promise<Record<string, unknown>> {
   return listRepositoryHuntingAreaSummaries(db, (payload) => parseHuntPreview(db, payload));
+}
+
+export async function listGlobalLootSummary(db: Database.Database): Promise<Record<string, unknown>> {
+  return listRepositoryGlobalLootSummary(db, (payload) => parseHuntPreview(db, payload));
 }
 
 export async function getHuntUploadPreview(
