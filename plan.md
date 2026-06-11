@@ -51,25 +51,26 @@
    - [x] `npm --prefix server run build`
    - [x] `npm --prefix server run migrate`
 
-## Phase 2: Hunt-To-Hunting-Place Matching
+## Phase 2: Hunt-To-Hunting-Place Matching - Completed
 
-1. [ ] Map saved hunts to staged hunting places.
+1. [x] Map saved hunts to staged hunting places.
    - Score candidates using monster overlap, location text, aliases, level/vocation hints, and fuzzy matching.
    - Avoid letting travel kills dominate the match.
    - Support partial/sub-area, surface-only, lower-level, and floor-specific hunts.
    - Hydrate missing creature or hunting-place details on demand when a hunt needs them.
 
-2. [ ] Store and expose match results.
+2. [x] Store and expose match results.
    - Store selected hunting-place id, confidence, match reasons, and alternate candidates on saved hunts.
    - Auto-assign only high-confidence matches.
    - Surface ambiguous or low-confidence matches for review.
    - Add a manual correction path in the hunt detail/edit workflow.
 
-3. [ ] Verification gate for this phase.
-   - Backend matching tests for exact overlap, partial overlap, aliases, travel-kill noise, and low-confidence no-match cases.
-   - `npm --prefix server test`
-   - `npm --prefix server run build`
-   - `npm --prefix ui-app run build`
+3. [x] Verification gate for this phase.
+   - [x] Backend matching tests for exact overlap, partial overlap, aliases, travel-kill noise, and low-confidence no-match cases.
+   - [x] `npm --prefix server test`
+   - [x] `npm --prefix server run build`
+   - [x] `npm --prefix ui-app run build`
+   - [x] `npm --prefix server run migrate`
 
 ## Phase 3: Market Intelligence Dashboard
 

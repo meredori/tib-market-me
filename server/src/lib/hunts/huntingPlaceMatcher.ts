@@ -1,0 +1,331 @@
+import type Database from "better-sqlite3";
+import {
+  normalizePublicName,
+  PublicTibiaDataClient,
+  replacePublicHuntingPlaceChildren,
+  upsertPublicHuntingPlace
+} from "../tibiadata/publicReference";
+import type { ParsedHuntText } from "./types";
+import { asNumber, asNumberOrNull, asText } from "./utils";
+
+export type HuntingPlaceCandidate = {
+  id: number;
+  name: string;
+  location: string | null;
+  confidence: number;
+  status: "auto" | "review" | "unmatched";
+  reasons: string[];
+  matched_monsters: string[];
+  missing_monsters: string[];
+};
+
+export type HuntingPlaceMatchResult = {
+  selected_hunting_place_id: number | null;
+  selected_hunting_place_name: string | null;
+  confidence: number;
+  status: "auto" | "review" | "unmatched" | "manual";
+  reasons: string[];
+  candidates: HuntingPlaceCandidate[];
+};
+
+type PlaceRow = {
+  id: number;
+  name: string;
+  normalized_name: string;
+  location: string | null;
+  min_level: number | null;
+  max_level: number | null;
+  area_names_json: string;
+  creatures_json: string;
+};
+
+type HuntMonster = {
+  name: string;
+  normalized_name: string;
+  count: number;
+  weight: number;
+};
+
+const AUTO_CONFIDENCE = 0.72;
+const REVIEW_CONFIDENCE = 0.46;
+const AUTO_MARGIN = 0.12;
+
+function tokenize(value: string): string[] {
+  return normalizePublicName(value)
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3);
+}
+
+function textSimilarity(a: string, b: string): number {
+  const aTokens = new Set(tokenize(a));
+  const bTokens = new Set(tokenize(b));
+  if (!aTokens.size || !bTokens.size) {
+    return 0;
+  }
+  let overlap = 0;
+  for (const token of aTokens) {
+    if (bTokens.has(token)) {
+      overlap += 1;
+    }
+  }
+  return overlap / Math.max(aTokens.size, bTokens.size);
+}
+
+function parseJsonArray(value: unknown): string[] {
+  if (typeof value !== "string" || !value.trim()) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map((entry) => asText(entry)).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function huntMonsterSignature(monsters: ParsedHuntText["monsters"]): HuntMonster[] {
+  const total = monsters.reduce((sum, monster) => sum + Math.max(0, asNumber(monster.count, 0)), 0);
+  if (total <= 0) {
+    return [];
+  }
+  const relevant = monsters
+    .map((monster) => ({
+      name: asText(monster.name),
+      normalized_name: normalizePublicName(asText(monster.name)),
+      count: Math.max(0, asNumber(monster.count, 0)),
+      weight: Math.max(0, asNumber(monster.count, 0)) / total
+    }))
+    .filter((monster) => monster.normalized_name && monster.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  const core = relevant.filter((monster) => monster.weight >= 0.05 || monster.count >= 5);
+  return (core.length ? core : relevant.slice(0, 8)).slice(0, 12);
+}
+
+function loadPlaceRows(db: Database.Database): PlaceRow[] {
+  return db
+    .prepare(
+      `
+      SELECT
+        place.id,
+        place.name,
+        place.normalized_name,
+        place.location,
+        place.min_level,
+        place.max_level,
+        COALESCE((
+          SELECT json_group_array(area_name)
+          FROM public_hunting_place_area_summaries area
+          WHERE area.hunting_place_id = place.id
+        ), '[]') AS area_names_json,
+        COALESCE((
+          SELECT json_group_array(normalized_creature_name)
+          FROM public_hunting_place_creatures creature
+          WHERE creature.hunting_place_id = place.id
+        ), '[]') AS creatures_json
+      FROM public_hunting_places place
+      ORDER BY place.name
+    `
+    )
+    .all() as PlaceRow[];
+}
+
+export async function hydrateMissingHuntingPlaceDetailsForMatch(
+  db: Database.Database,
+  parsed: ParsedHuntText | null,
+  locationName: string | null
+): Promise<number> {
+  if (!parsed?.monsters.length && !locationName) {
+    return 0;
+  }
+
+  let rows: Array<Record<string, unknown>> = [];
+  try {
+    rows = db
+      .prepare(
+        `
+        SELECT
+          place.id,
+          place.name,
+          place.location,
+          COALESCE((
+            SELECT COUNT(*)
+            FROM public_hunting_place_creatures creature
+            WHERE creature.hunting_place_id = place.id
+          ), 0) AS creature_count,
+          COALESCE((
+            SELECT json_group_array(area_name)
+            FROM public_hunting_place_area_summaries area
+            WHERE area.hunting_place_id = place.id
+          ), '[]') AS area_names_json
+        FROM public_hunting_places place
+        ORDER BY place.name
+      `
+      )
+      .all() as Array<Record<string, unknown>>;
+  } catch {
+    return 0;
+  }
+
+  const candidates = rows
+    .filter((row) => asNumber(row.creature_count, 0) === 0)
+    .map((row) => {
+      const names = [asText(row.name), asText(row.location), ...parseJsonArray(row.area_names_json)].filter(Boolean);
+      const score = locationName ? Math.max(...names.map((name) => textSimilarity(locationName, name)), 0) : 0;
+      return { id: asNumber(row.id, 0), name: asText(row.name), score };
+    })
+    .filter((row) => row.id > 0 && row.score >= 0.5)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 2);
+
+  if (!candidates.length) {
+    return 0;
+  }
+
+  const client = new PublicTibiaDataClient();
+  let hydrated = 0;
+  for (const candidate of candidates) {
+    try {
+      const payload = await client.getHuntingPlace(candidate.id || candidate.name);
+      const place = upsertPublicHuntingPlace(db, payload);
+      if (place) {
+        replacePublicHuntingPlaceChildren(db, place.id, payload);
+        hydrated += 1;
+      }
+    } catch {
+      // Matching should still return staged candidates when live detail hydration is unavailable.
+    }
+  }
+
+  return hydrated;
+}
+
+function scorePlace(
+  row: PlaceRow,
+  huntMonsters: HuntMonster[],
+  locationName: string | null,
+  characterLevel: number | null
+): HuntingPlaceCandidate {
+  const placeCreatures = new Set(parseJsonArray(row.creatures_json));
+  const matched = huntMonsters.filter((monster) => placeCreatures.has(monster.normalized_name));
+  const missing = huntMonsters.filter((monster) => !placeCreatures.has(monster.normalized_name));
+  const overlapWeight = matched.reduce((sum, monster) => sum + monster.weight, 0);
+  const matchedRatio = huntMonsters.length ? matched.length / huntMonsters.length : 0;
+  const monsterScore = Math.min(1, overlapWeight * 0.72 + matchedRatio * 0.28);
+
+  const areaNames = parseJsonArray(row.area_names_json);
+  const names = [row.name, row.location ?? "", ...areaNames].filter(Boolean);
+  const locationScore = locationName
+    ? Math.max(...names.map((name) => textSimilarity(locationName, name)), 0)
+    : 0;
+
+  let levelScore = 0;
+  if (characterLevel !== null && (row.min_level !== null || row.max_level !== null)) {
+    const min = row.min_level ?? 0;
+    const max = row.max_level ?? Number.POSITIVE_INFINITY;
+    if (characterLevel >= min && characterLevel <= max) {
+      levelScore = 1;
+    } else if (characterLevel < min) {
+      levelScore = characterLevel >= min - 30 ? 0.45 : 0;
+    } else if (Number.isFinite(max)) {
+      levelScore = characterLevel <= max + 80 ? 0.35 : 0.1;
+    }
+  }
+
+  const confidence = Number(Math.min(1, monsterScore * 0.74 + locationScore * 0.2 + levelScore * 0.06).toFixed(4));
+  const reasons: string[] = [];
+  if (matched.length) {
+    reasons.push(`${matched.length} matching monster${matched.length === 1 ? "" : "s"}`);
+  }
+  if (locationScore >= 0.5) {
+    reasons.push("location text matches staged place or sub-area");
+  }
+  if (levelScore >= 1) {
+    reasons.push("character level fits staged range");
+  }
+  if (missing.length && overlapWeight >= 0.45) {
+    reasons.push("partial overlap, possible sub-area/floor variant");
+  }
+
+  return {
+    id: asNumber(row.id, 0),
+    name: asText(row.name),
+    location: row.location ?? null,
+    confidence,
+    status: confidence >= AUTO_CONFIDENCE ? "auto" : confidence >= REVIEW_CONFIDENCE ? "review" : "unmatched",
+    reasons,
+    matched_monsters: matched.map((monster) => monster.name),
+    missing_monsters: missing.slice(0, 5).map((monster) => monster.name)
+  };
+}
+
+export function matchHuntToHuntingPlaces(
+  db: Database.Database,
+  parsed: ParsedHuntText | null,
+  options: {
+    locationName?: string | null;
+    characterLevel?: number | null;
+    manualHuntingPlaceId?: number | null;
+  } = {}
+): HuntingPlaceMatchResult {
+  const huntMonsters = huntMonsterSignature(parsed?.monsters ?? []);
+  if (!huntMonsters.length) {
+    return {
+      selected_hunting_place_id: null,
+      selected_hunting_place_name: null,
+      confidence: 0,
+      status: "unmatched",
+      reasons: ["no parsed monsters"],
+      candidates: []
+    };
+  }
+
+  let rows: PlaceRow[] = [];
+  try {
+    rows = loadPlaceRows(db);
+  } catch {
+    return {
+      selected_hunting_place_id: null,
+      selected_hunting_place_name: null,
+      confidence: 0,
+      status: "unmatched",
+      reasons: ["public hunting-place data is not staged yet"],
+      candidates: []
+    };
+  }
+
+  const candidates = rows
+    .map((row) => scorePlace(row, huntMonsters, options.locationName ?? null, options.characterLevel ?? null))
+    .filter((candidate) => candidate.confidence >= REVIEW_CONFIDENCE || candidate.matched_monsters.length > 0)
+    .sort((a, b) => b.confidence - a.confidence || b.matched_monsters.length - a.matched_monsters.length || a.name.localeCompare(b.name))
+    .slice(0, 5);
+
+  const manualId = options.manualHuntingPlaceId && options.manualHuntingPlaceId > 0
+    ? Math.trunc(options.manualHuntingPlaceId)
+    : null;
+  const manual = manualId ? candidates.find((candidate) => candidate.id === manualId) : null;
+  if (manual) {
+    return {
+      selected_hunting_place_id: manual.id,
+      selected_hunting_place_name: manual.name,
+      confidence: manual.confidence,
+      status: "manual",
+      reasons: ["manual hunting-place selection", ...manual.reasons],
+      candidates
+    };
+  }
+
+  const best = candidates[0] ?? null;
+  const runnerUp = candidates[1] ?? null;
+  const auto = Boolean(best && best.confidence >= AUTO_CONFIDENCE && best.confidence - (runnerUp?.confidence ?? 0) >= AUTO_MARGIN);
+
+  return {
+    selected_hunting_place_id: auto && best ? best.id : null,
+    selected_hunting_place_name: auto && best ? best.name : null,
+    confidence: best?.confidence ?? 0,
+    status: auto ? "auto" : best && best.confidence >= REVIEW_CONFIDENCE ? "review" : "unmatched",
+    reasons: best?.reasons.length ? best.reasons : best ? ["candidate needs review"] : ["no staged hunting-place candidate matched"],
+    candidates
+  };
+}

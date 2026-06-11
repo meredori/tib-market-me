@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import {
   hydrateHuntItemDetails
 } from "./itemDetailCache";
+import { hydrateMissingHuntingPlaceDetailsForMatch, matchHuntToHuntingPlaces } from "./huntingPlaceMatcher";
 import { enrichLootItems } from "./lootEnrichment";
 import { parseHuntSessionText } from "./parser";
 import {
@@ -48,6 +49,10 @@ async function buildHuntPreviewFromParsed(
   const locationSuggestion = explicitLocationName
     ? { name: explicitLocationName, confidence: 1, needs_setup: false }
     : suggestLocation(db, sortedMonsters);
+  await hydrateMissingHuntingPlaceDetailsForMatch(db, parsed, explicitLocationName ?? locationSuggestion.name);
+  const huntingPlaceMatch = matchHuntToHuntingPlaces(db, parsed, {
+    locationName: explicitLocationName ?? locationSuggestion.name
+  });
   const boostFactor = computeBoostFactor(rawTotalXp, totalXp);
 
   return {
@@ -82,7 +87,8 @@ async function buildHuntPreviewFromParsed(
       selected_name: explicitLocationName,
       suggested_name: locationSuggestion.name,
       confidence: locationSuggestion.confidence,
-      needs_setup: locationSuggestion.needs_setup
+      needs_setup: locationSuggestion.needs_setup,
+      hunting_place_match: huntingPlaceMatch
     },
     suggestions: enriched.suggestions,
     raw_text: rawText

@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Download,
+  MapPinned,
   RefreshCw,
   ShieldQuestion,
   Trash2,
@@ -28,6 +29,14 @@ defineEmits([
   'open-item',
   'assign-item-id',
 ])
+
+function huntingPlaceMatch(preview) {
+  return preview?.location?.hunting_place_match || preview?.saved_hunt?.hunting_place_match || null
+}
+
+function matchConfidence(match) {
+  return `${Math.round(Number(match?.confidence || 0) * 100)}%`
+}
 </script>
 
 <template>
@@ -164,6 +173,24 @@ defineEmits([
         <span class="muted mono">{{ hunts.importHuntCandidate.value?.file_name }}</span>
         <label>Name<input v-model="hunts.importHuntDraftLabel.value" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Location<input v-model="hunts.importHuntDraftLocation.value" @input="hunts.markUnsavedHuntChanges" /></label>
+        <div v-if="huntingPlaceMatch(hunts.importHuntPreview.value)?.candidates?.length" class="match-review">
+          <div class="match-review-head">
+            <MapPinned :size="16" />
+            <span>Hunting Place</span>
+            <strong>{{ huntingPlaceMatch(hunts.importHuntPreview.value).status }} {{ matchConfidence(huntingPlaceMatch(hunts.importHuntPreview.value)) }}</strong>
+          </div>
+          <select v-model="hunts.importHuntDraftHuntingPlaceId.value" @change="hunts.markUnsavedHuntChanges">
+            <option value="">No staged place</option>
+            <option
+              v-for="candidate in huntingPlaceMatch(hunts.importHuntPreview.value).candidates"
+              :key="`import-place-${candidate.id}`"
+              :value="String(candidate.id)"
+            >
+              {{ candidate.name }} ({{ matchConfidence(candidate) }})
+            </option>
+          </select>
+          <small>{{ huntingPlaceMatch(hunts.importHuntPreview.value).reasons?.join(' | ') }}</small>
+        </div>
         <label>Character<input v-model="hunts.importHuntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Tags<input v-model="hunts.importHuntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
         <div class="button-row">
@@ -177,6 +204,24 @@ defineEmits([
         <span class="status-badge warning"><AlertTriangle :size="15" /> This parsed hunt is not saved yet.</span>
         <label>Name<input v-model="hunts.huntDraftLabel.value" :placeholder="hunts.huntPreview.value?.suggested_label || 'Untitled Hunt'" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Location<input v-model="hunts.huntDraftLocation.value" :placeholder="hunts.huntPreview.value?.location?.suggested_name || 'Optional location'" @input="hunts.markUnsavedHuntChanges" /></label>
+        <div v-if="huntingPlaceMatch(hunts.huntPreview.value)?.candidates?.length" class="match-review">
+          <div class="match-review-head">
+            <MapPinned :size="16" />
+            <span>Hunting Place</span>
+            <strong>{{ huntingPlaceMatch(hunts.huntPreview.value).status }} {{ matchConfidence(huntingPlaceMatch(hunts.huntPreview.value)) }}</strong>
+          </div>
+          <select v-model="hunts.huntDraftHuntingPlaceId.value" @change="hunts.markUnsavedHuntChanges">
+            <option value="">No staged place</option>
+            <option
+              v-for="candidate in huntingPlaceMatch(hunts.huntPreview.value).candidates"
+              :key="`new-place-${candidate.id}`"
+              :value="String(candidate.id)"
+            >
+              {{ candidate.name }} ({{ matchConfidence(candidate) }})
+            </option>
+          </select>
+          <small>{{ huntingPlaceMatch(hunts.huntPreview.value).reasons?.join(' | ') }}</small>
+        </div>
         <label>Character<input v-model="hunts.huntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Tags<input v-model="hunts.huntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
         <div class="button-row">
@@ -192,6 +237,24 @@ defineEmits([
         <h3>Edit Hunt Details</h3>
         <label>Name<input v-model="hunts.previousHuntDraftLabel.value" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Location<input v-model="hunts.previousHuntDraftLocation.value" @input="hunts.markUnsavedHuntChanges" /></label>
+        <div v-if="huntingPlaceMatch(hunts.previousHuntPreview.value)?.candidates?.length" class="match-review">
+          <div class="match-review-head">
+            <MapPinned :size="16" />
+            <span>Hunting Place</span>
+            <strong>{{ huntingPlaceMatch(hunts.previousHuntPreview.value).status }} {{ matchConfidence(huntingPlaceMatch(hunts.previousHuntPreview.value)) }}</strong>
+          </div>
+          <select v-model="hunts.previousHuntDraftHuntingPlaceId.value" @change="hunts.markUnsavedHuntChanges">
+            <option value="">No staged place</option>
+            <option
+              v-for="candidate in huntingPlaceMatch(hunts.previousHuntPreview.value).candidates"
+              :key="`previous-place-${candidate.id}`"
+              :value="String(candidate.id)"
+            >
+              {{ candidate.name }} ({{ matchConfidence(candidate) }})
+            </option>
+          </select>
+          <small>{{ huntingPlaceMatch(hunts.previousHuntPreview.value).reasons?.join(' | ') }}</small>
+        </div>
         <label>Character<input v-model="hunts.previousHuntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Tags<input v-model="hunts.previousHuntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
         <div class="button-row split">

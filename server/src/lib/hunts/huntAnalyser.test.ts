@@ -9,6 +9,7 @@ import {
   updateHuntUpload
 } from "./huntAnalyser";
 import { existingHuntsByImportIdentity } from "./repository";
+import { matchHuntToHuntingPlaces } from "./huntingPlaceMatcher";
 import { resetItemDetailFetchForTests, setItemDetailFetchForTests } from "./itemDetailCache";
 import type { ItemDetailCacheRow, LootLookupRow } from "./types";
 
@@ -114,6 +115,33 @@ function previewDb(options: {
   });
 }
 
+function matcherDb(rows: Array<Record<string, unknown>>): any {
+  return createMockDb((sql) => {
+    if (sql.includes("FROM public_hunting_places")) {
+      return { all: vi.fn(() => rows) };
+    }
+    return {};
+  });
+}
+
+function place(
+  id: number,
+  name: string,
+  creatures: string[],
+  options: { location?: string; areaNames?: string[]; minLevel?: number; maxLevel?: number } = {}
+): Record<string, unknown> {
+  return {
+    id,
+    name,
+    normalized_name: name.toLowerCase(),
+    location: options.location ?? null,
+    min_level: options.minLevel ?? null,
+    max_level: options.maxLevel ?? null,
+    area_names_json: JSON.stringify(options.areaNames ?? []),
+    creatures_json: JSON.stringify(creatures.map((creature) => creature.toLowerCase()))
+  };
+}
+
 afterEach(() => {
   resetItemDetailFetchForTests();
 });
@@ -213,6 +241,118 @@ describe("item detail hydration", () => {
         weight_oz: 48
       })
     });
+  });
+});
+
+describe("hunt to public hunting-place matching", () => {
+  it("auto-matches exact monster overlap", () => {
+    const result = matchHuntToHuntingPlaces(matcherDb([
+      place(201, "Dragon Lair", ["dragon", "dragon lord"], { minLevel: 80, maxLevel: 180 }),
+      place(202, "Demon Forge", ["demon"])
+    ]), {
+      label: null,
+      duration_minutes: 30,
+      raw_total_xp: 1000,
+      total_xp: 1000,
+      total_loot_gold: 0,
+      total_supply_cost: 0,
+      started_at: null,
+      ended_at: null,
+      hunt_date: null,
+      monsters: [{ name: "dragon", count: 50 }, { name: "dragon lord", count: 30 }],
+      loot_items: []
+    }, { characterLevel: 120 });
+
+    expect(result).toMatchObject({
+      selected_hunting_place_id: 201,
+      status: "auto"
+    });
+  });
+
+  it("keeps partial sub-area matches for review", () => {
+    const result = matchHuntToHuntingPlaces(matcherDb([
+      place(301, "Roshamuul Prison", ["frazzlemaw", "guzzlemaw", "silencer"], { areaNames: ["Lower Roshamuul Prison"] })
+    ]), {
+      label: null,
+      duration_minutes: 30,
+      raw_total_xp: 1000,
+      total_xp: 1000,
+      total_loot_gold: 0,
+      total_supply_cost: 0,
+      started_at: null,
+      ended_at: null,
+      hunt_date: null,
+      monsters: [{ name: "frazzlemaw", count: 100 }, { name: "guzzlemaw", count: 45 }, { name: "choking fear", count: 40 }],
+      loot_items: []
+    }, { locationName: "lower prison" });
+
+    expect(result.status).toBe("review");
+    expect(result.candidates[0]).toMatchObject({ id: 301 });
+    expect(result.reasons).toContain("partial overlap, possible sub-area/floor variant");
+  });
+
+  it("ignores small travel-kill noise when scoring", () => {
+    const result = matchHuntToHuntingPlaces(matcherDb([
+      place(401, "Werehyaena Cave", ["werehyaena", "werehyaena shaman"]),
+      place(402, "Dragon Lair", ["dragon"])
+    ]), {
+      label: null,
+      duration_minutes: 30,
+      raw_total_xp: 1000,
+      total_xp: 1000,
+      total_loot_gold: 0,
+      total_supply_cost: 0,
+      started_at: null,
+      ended_at: null,
+      hunt_date: null,
+      monsters: [{ name: "werehyaena", count: 140 }, { name: "werehyaena shaman", count: 60 }, { name: "dragon", count: 1 }],
+      loot_items: []
+    });
+
+    expect(result.selected_hunting_place_id).toBe(401);
+    expect(result.candidates[0].missing_monsters).not.toContain("dragon");
+  });
+
+  it("uses location aliases as review evidence", () => {
+    const result = matchHuntToHuntingPlaces(matcherDb([
+      place(501, "Asura Palace", ["midnight asura"], { areaNames: ["Mirror"] })
+    ]), {
+      label: null,
+      duration_minutes: 30,
+      raw_total_xp: 1000,
+      total_xp: 1000,
+      total_loot_gold: 0,
+      total_supply_cost: 0,
+      started_at: null,
+      ended_at: null,
+      hunt_date: null,
+      monsters: [{ name: "midnight asura", count: 20 }, { name: "frost flower asura", count: 20 }],
+      loot_items: []
+    }, { locationName: "mirror asuras" });
+
+    expect(result.candidates[0]).toMatchObject({ id: 501 });
+    expect(result.candidates[0].reasons).toContain("location text matches staged place or sub-area");
+  });
+
+  it("does not auto-match low-confidence hunts", () => {
+    const result = matchHuntToHuntingPlaces(matcherDb([
+      place(601, "Dragon Lair", ["dragon"])
+    ]), {
+      label: null,
+      duration_minutes: 30,
+      raw_total_xp: 1000,
+      total_xp: 1000,
+      total_loot_gold: 0,
+      total_supply_cost: 0,
+      started_at: null,
+      ended_at: null,
+      hunt_date: null,
+      monsters: [{ name: "rat", count: 80 }, { name: "cave rat", count: 40 }],
+      loot_items: []
+    });
+
+    expect(result.selected_hunting_place_id).toBeNull();
+    expect(result.status).toBe("unmatched");
   });
 });
 

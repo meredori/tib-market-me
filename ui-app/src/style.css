@@ -630,6 +630,35 @@ tr.selected {
   margin-bottom: 0;
 }
 
+.match-review {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(10, 22, 34, 0.64);
+}
+
+.match-review-head {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.match-review-head strong {
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-transform: capitalize;
+}
+
+.match-review small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .split {
   justify-content: flex-end;
 }

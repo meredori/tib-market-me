@@ -10,6 +10,7 @@ import {
   readHuntLogFiles
 } from "./parser";
 import type { HuntInput } from "./types";
+import { matchHuntToHuntingPlaces } from "./huntingPlaceMatcher";
 import {
   asNumber,
   asNumberOrNull,
@@ -305,6 +306,7 @@ function buildHuntInput(payload: unknown): HuntInput {
     loot_items: lootItems,
     processed_at: nowIso()
   });
+  const manualHuntingPlaceId = asNumberOrNull(row.public_hunting_place_id ?? row.hunting_place_id);
 
   return {
     label: asText(row.label).trim() || parsedText?.label || "Untitled Hunt",
@@ -321,6 +323,12 @@ function buildHuntInput(payload: unknown): HuntInput {
     character_level: asNumberOrNull(row.character_level),
     character_world: asText(row.character_world).trim() || null,
     character_lookup_at: toIsoOrNull(row.character_lookup_at),
+    public_hunting_place_id: manualHuntingPlaceId,
+    hunting_place_confidence: 0,
+    hunting_place_match_status: manualHuntingPlaceId ? "manual" : "unmatched",
+    hunting_place_match_reasons_json: "[]",
+    hunting_place_alternates_json: "[]",
+    hunting_place_match_manual: manualHuntingPlaceId ? 1 : 0,
     tags: coerceTags(row.tags),
     excluded_item_names: coerceExcludedItemNames(row.excluded_item_names),
     raw_text: rawText,
@@ -329,8 +337,31 @@ function buildHuntInput(payload: unknown): HuntInput {
   };
 }
 
+function applyHuntingPlaceMatch(db: Database.Database, input: HuntInput): HuntInput {
+  const processed = JSON.parse(input.processed_json) as Record<string, unknown>;
+  const parsed = asRecord(processed.parsed) as import("./types").ParsedHuntText | null;
+  const match = matchHuntToHuntingPlaces(db, parsed, {
+    locationName: input.location_name,
+    characterLevel: input.character_level,
+    manualHuntingPlaceId: input.public_hunting_place_id
+  });
+
+  input.public_hunting_place_id = match.selected_hunting_place_id;
+  input.hunting_place_confidence = match.confidence;
+  input.hunting_place_match_status = match.status;
+  input.hunting_place_match_reasons_json = JSON.stringify(match.reasons);
+  input.hunting_place_alternates_json = JSON.stringify(match.candidates);
+  input.hunting_place_match_manual = match.status === "manual" ? 1 : 0;
+
+  if (!input.location_name && match.selected_hunting_place_name) {
+    input.location_name = match.selected_hunting_place_name;
+  }
+
+  return input;
+}
+
 export function createHuntUpload(db: Database.Database, payload: unknown): Record<string, unknown> {
-  const input = buildHuntInput(payload);
+  const input = applyHuntingPlaceMatch(db, buildHuntInput(payload));
   const row = asRecord(payload) ?? {};
 
   if (asText(row.source) === "log_import") {
@@ -367,8 +398,14 @@ export function createHuntUpload(db: Database.Database, payload: unknown): Recor
         character_vocation,
         character_level,
         character_world,
-        character_lookup_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        character_lookup_at,
+        public_hunting_place_id,
+        hunting_place_confidence,
+        hunting_place_match_status,
+        hunting_place_match_reasons_json,
+        hunting_place_alternates_json,
+        hunting_place_match_manual
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
     )
     .run(
@@ -391,7 +428,13 @@ export function createHuntUpload(db: Database.Database, payload: unknown): Recor
       input.character_vocation,
       input.character_level,
       input.character_world,
-      input.character_lookup_at
+      input.character_lookup_at,
+      input.public_hunting_place_id,
+      input.hunting_place_confidence,
+      input.hunting_place_match_status,
+      input.hunting_place_match_reasons_json,
+      input.hunting_place_alternates_json,
+      input.hunting_place_match_manual
     );
   saveLocationSignature(db, input.location_name, JSON.parse(input.processed_json).monsters ?? []);
 
@@ -407,7 +450,7 @@ export function updateHuntUpload(
     throw new Error("Invalid hunt id");
   }
 
-  const input = buildHuntInput(payload);
+  const input = applyHuntingPlaceMatch(db, buildHuntInput(payload));
   const updated = db
     .prepare(
       `
@@ -432,7 +475,13 @@ export function updateHuntUpload(
         character_vocation = ?,
         character_level = ?,
         character_world = ?,
-        character_lookup_at = ?
+        character_lookup_at = ?,
+        public_hunting_place_id = ?,
+        hunting_place_confidence = ?,
+        hunting_place_match_status = ?,
+        hunting_place_match_reasons_json = ?,
+        hunting_place_alternates_json = ?,
+        hunting_place_match_manual = ?
       WHERE id = ?
     `
     )
@@ -457,6 +506,12 @@ export function updateHuntUpload(
       input.character_level,
       input.character_world,
       input.character_lookup_at,
+      input.public_hunting_place_id,
+      input.hunting_place_confidence,
+      input.hunting_place_match_status,
+      input.hunting_place_match_reasons_json,
+      input.hunting_place_alternates_json,
+      input.hunting_place_match_manual,
       Math.trunc(huntId)
     );
 
@@ -501,7 +556,13 @@ function getHuntUploadRow(db: Database.Database, huntId: number): Record<string,
         character_vocation,
         character_level,
         character_world,
-        character_lookup_at
+        character_lookup_at,
+        public_hunting_place_id,
+        hunting_place_confidence,
+        hunting_place_match_status,
+        hunting_place_match_reasons_json,
+        hunting_place_alternates_json,
+        hunting_place_match_manual
       FROM hunt_uploads
       WHERE id = ?
     `
@@ -541,6 +602,26 @@ function normalizeHuntRow(row: Record<string, unknown>): Record<string, unknown>
     }
   }
 
+  let matchReasons: string[] = [];
+  if (typeof row.hunting_place_match_reasons_json === "string") {
+    try {
+      const parsed = JSON.parse(row.hunting_place_match_reasons_json);
+      matchReasons = Array.isArray(parsed) ? parsed.map((entry) => asText(entry)).filter(Boolean) : [];
+    } catch {
+      matchReasons = [];
+    }
+  }
+
+  let matchCandidates: Array<Record<string, unknown>> = [];
+  if (typeof row.hunting_place_alternates_json === "string") {
+    try {
+      const parsed = JSON.parse(row.hunting_place_alternates_json);
+      matchCandidates = Array.isArray(parsed) ? parsed as Array<Record<string, unknown>> : [];
+    } catch {
+      matchCandidates = [];
+    }
+  }
+
   return {
     id: asNumber(row.id, 0),
     label: asText(row.label),
@@ -564,6 +645,14 @@ function normalizeHuntRow(row: Record<string, unknown>): Record<string, unknown>
     character_level: asNumberOrNull(row.character_level),
     character_world: row.character_world ?? null,
     character_lookup_at: row.character_lookup_at ?? null,
+    hunting_place_match: {
+      selected_hunting_place_id: asNumberOrNull(row.public_hunting_place_id),
+      confidence: asNumber(row.hunting_place_confidence, 0),
+      status: asText(row.hunting_place_match_status) || "unmatched",
+      manual: asNumber(row.hunting_place_match_manual, 0) === 1,
+      reasons: matchReasons,
+      candidates: matchCandidates
+    },
     tags,
     excluded_item_names: excludedItemNames
   };
@@ -593,7 +682,13 @@ export function listHuntUploads(db: Database.Database): Record<string, unknown> 
         character_vocation,
         character_level,
         character_world,
-        character_lookup_at
+        character_lookup_at,
+        public_hunting_place_id,
+        hunting_place_confidence,
+        hunting_place_match_status,
+        hunting_place_match_reasons_json,
+        hunting_place_alternates_json,
+        hunting_place_match_manual
       FROM hunt_uploads
       ORDER BY uploaded_at DESC, id DESC
     `
@@ -875,6 +970,12 @@ export async function getHuntUploadPreview(
         character_level,
         character_world,
         character_lookup_at,
+        public_hunting_place_id,
+        hunting_place_confidence,
+        hunting_place_match_status,
+        hunting_place_match_reasons_json,
+        hunting_place_alternates_json,
+        hunting_place_match_manual,
         tags_json,
         excluded_items_json
       FROM hunt_uploads
@@ -938,8 +1039,13 @@ export async function getHuntUploadPreview(
       location_name: row.location_name
     });
 
+  const normalized = normalizeHuntRow(row);
   return {
     ...preview,
+    location: {
+      ...(asRecord(preview.location) ?? {}),
+      hunting_place_match: normalized.hunting_place_match
+    },
     saved_hunt: {
       id: asNumber(row.id, 0),
       label: asText(row.label),
@@ -948,7 +1054,8 @@ export async function getHuntUploadPreview(
       character_vocation: row.character_vocation ?? null,
       character_level: asNumberOrNull(row.character_level),
       character_world: row.character_world ?? null,
-      character_lookup_at: row.character_lookup_at ?? null
+      character_lookup_at: row.character_lookup_at ?? null,
+      hunting_place_match: normalized.hunting_place_match
     }
   };
 }
