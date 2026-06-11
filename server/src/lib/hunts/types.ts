@@ -11,6 +11,11 @@ export type HuntInput = {
   started_at: string | null;
   ended_at: string | null;
   location_name: string | null;
+  character_name: string | null;
+  character_vocation: string | null;
+  character_level: number | null;
+  character_world: string | null;
+  character_lookup_at: string | null;
   tags: string[];
   excluded_item_names: string[];
   raw_text: string;

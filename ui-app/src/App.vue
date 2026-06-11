@@ -342,6 +342,9 @@ const filteredHuntRows = computed(() => {
     const haystack = [
       row.label,
       row.location_name,
+      row.character_name,
+      row.character_vocation,
+      row.character_world,
       ...(row.tags || []),
     ].filter(Boolean).join(' ').toLowerCase()
     return matchesLocation && (!query || haystack.includes(query))

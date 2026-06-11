@@ -21,6 +21,7 @@ function buildHuntPayload(preview, draft, rawText, source = null) {
     ended_at: preview.parsed?.ended_at || null,
     excluded_item_names: draft.excluded.value,
     location_name: draft.location.value.trim() || preview.location?.suggested_name || null,
+    character_name: draft.character.value.trim() || null,
     raw_text: rawText,
   }
   if (source) {
@@ -40,10 +41,12 @@ export function useHunts() {
   const huntDraftLabel = ref('')
   const huntDraftTags = ref('')
   const huntDraftLocation = ref('')
+  const huntDraftCharacter = ref('')
   const previousHuntPreview = ref(null)
   const previousHuntDraftLabel = ref('')
   const previousHuntDraftTags = ref('')
   const previousHuntDraftLocation = ref('')
+  const previousHuntDraftCharacter = ref('')
   const huntImportBusy = ref(false)
   const huntImportInfo = ref('')
   const huntImportCandidates = ref([])
@@ -53,6 +56,7 @@ export function useHunts() {
   const importHuntDraftLabel = ref('')
   const importHuntDraftTags = ref('')
   const importHuntDraftLocation = ref('')
+  const importHuntDraftCharacter = ref('')
   const huntingAreas = ref([])
   const huntingAreaInfo = ref('')
   const huntingAreaBusy = ref(false)
@@ -126,6 +130,7 @@ export function useHunts() {
     huntDraftLabel.value = ''
     huntDraftTags.value = ''
     huntDraftLocation.value = ''
+    huntDraftCharacter.value = ''
     excludedHuntItems.value = []
     showHiddenLoot.value = false
     clearUnsavedHuntChanges()
@@ -146,6 +151,7 @@ export function useHunts() {
           label: huntDraftLabel,
           tags: huntDraftTags,
           location: huntDraftLocation,
+          character: huntDraftCharacter,
           excluded: excludedHuntItems,
         },
         huntForm.raw_text,
@@ -193,6 +199,7 @@ export function useHunts() {
       huntDraftLabel.value = hadPreview && huntDraftLabel.value ? huntDraftLabel.value : out.suggested_label || ''
       huntDraftTags.value = hadPreview ? huntDraftTags.value : ''
       huntDraftLocation.value = hadPreview ? huntDraftLocation.value : (out.location?.suggested_name || '')
+      huntDraftCharacter.value = hadPreview ? huntDraftCharacter.value : ''
       huntInfo.value = 'Parsed hunt data. Review label and tags, then save.'
       hasUnsavedHuntChanges.value = true
       loadHistoryForPreview(out)
@@ -425,6 +432,7 @@ export function useHunts() {
     importHuntDraftLabel.value = candidate.preview.suggested_label || ''
     importHuntDraftTags.value = ''
     importHuntDraftLocation.value = candidate.preview.location?.suggested_name || ''
+    importHuntDraftCharacter.value = ''
     excludedHuntItems.value = candidate.preview.loot_summary?.excluded_item_names || []
     showHiddenLoot.value = false
     huntImportInfo.value = `Reviewing ${candidate.file_name}`
@@ -439,6 +447,7 @@ export function useHunts() {
     importHuntDraftLabel.value = ''
     importHuntDraftTags.value = ''
     importHuntDraftLocation.value = ''
+    importHuntDraftCharacter.value = ''
     excludedHuntItems.value = []
     showHiddenLoot.value = false
     clearUnsavedHuntChanges()
@@ -458,6 +467,7 @@ export function useHunts() {
           label: importHuntDraftLabel,
           tags: importHuntDraftTags,
           location: importHuntDraftLocation,
+          character: importHuntDraftCharacter,
           excluded: excludedHuntItems,
         },
         importHuntPreview.value.raw_text || importHuntCandidate.value.raw_text,
@@ -553,6 +563,7 @@ export function useHunts() {
       previousHuntDraftLabel.value = out.saved_hunt?.label || out.suggested_label || ''
       previousHuntDraftTags.value = (row.tags || []).join(',')
       previousHuntDraftLocation.value = row.location_name || out.location?.selected_name || out.location?.suggested_name || ''
+      previousHuntDraftCharacter.value = row.character_name || out.saved_hunt?.character_name || ''
       excludedHuntItems.value = out.loot_summary?.excluded_item_names || []
       showHiddenLoot.value = false
       clearUnsavedHuntChanges()
@@ -586,6 +597,7 @@ export function useHunts() {
           label: previousHuntDraftLabel,
           tags: previousHuntDraftTags,
           location: previousHuntDraftLocation,
+          character: previousHuntDraftCharacter,
           excluded: excludedHuntItems,
         },
         previousHuntPreview.value.raw_text || huntForm.raw_text,
@@ -666,10 +678,12 @@ export function useHunts() {
     huntDraftLabel,
     huntDraftTags,
     huntDraftLocation,
+    huntDraftCharacter,
     previousHuntPreview,
     previousHuntDraftLabel,
     previousHuntDraftTags,
     previousHuntDraftLocation,
+    previousHuntDraftCharacter,
     huntImportBusy,
     huntImportInfo,
     huntImportCandidates,
@@ -679,6 +693,7 @@ export function useHunts() {
     importHuntDraftLabel,
     importHuntDraftTags,
     importHuntDraftLocation,
+    importHuntDraftCharacter,
     huntingAreas,
     huntingAreaInfo,
     huntingAreaBusy,

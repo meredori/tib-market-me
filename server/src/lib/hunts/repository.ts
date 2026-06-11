@@ -316,6 +316,11 @@ function buildHuntInput(payload: unknown): HuntInput {
     started_at: parsedText?.started_at ?? toIsoOrNull(row.started_at),
     ended_at: parsedText?.ended_at ?? toIsoOrNull(row.ended_at),
     location_name: asText(row.location_name).trim() || null,
+    character_name: asText(row.character_name).trim() || null,
+    character_vocation: asText(row.character_vocation).trim() || null,
+    character_level: asNumberOrNull(row.character_level),
+    character_world: asText(row.character_world).trim() || null,
+    character_lookup_at: toIsoOrNull(row.character_lookup_at),
     tags: coerceTags(row.tags),
     excluded_item_names: coerceExcludedItemNames(row.excluded_item_names),
     raw_text: rawText,
@@ -357,8 +362,13 @@ export function createHuntUpload(db: Database.Database, payload: unknown): Recor
         processed_json,
         raw_text_hash,
         location_name,
-        boost_factor
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        boost_factor,
+        character_name,
+        character_vocation,
+        character_level,
+        character_world,
+        character_lookup_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
     )
     .run(
@@ -376,7 +386,12 @@ export function createHuntUpload(db: Database.Database, payload: unknown): Recor
       input.processed_json,
       input.raw_text_hash,
       input.location_name,
-      computeBoostFactor(input.raw_total_xp, input.total_xp)
+      computeBoostFactor(input.raw_total_xp, input.total_xp),
+      input.character_name,
+      input.character_vocation,
+      input.character_level,
+      input.character_world,
+      input.character_lookup_at
     );
   saveLocationSignature(db, input.location_name, JSON.parse(input.processed_json).monsters ?? []);
 
@@ -412,7 +427,12 @@ export function updateHuntUpload(
         processed_json = ?,
         raw_text_hash = ?,
         location_name = ?,
-        boost_factor = ?
+        boost_factor = ?,
+        character_name = ?,
+        character_vocation = ?,
+        character_level = ?,
+        character_world = ?,
+        character_lookup_at = ?
       WHERE id = ?
     `
     )
@@ -432,6 +452,11 @@ export function updateHuntUpload(
       input.raw_text_hash,
       input.location_name,
       computeBoostFactor(input.raw_total_xp, input.total_xp),
+      input.character_name,
+      input.character_vocation,
+      input.character_level,
+      input.character_world,
+      input.character_lookup_at,
       Math.trunc(huntId)
     );
 
@@ -471,7 +496,12 @@ function getHuntUploadRow(db: Database.Database, huntId: number): Record<string,
         excluded_items_json,
         location_name,
         location_confidence,
-        boost_factor
+        boost_factor,
+        character_name,
+        character_vocation,
+        character_level,
+        character_world,
+        character_lookup_at
       FROM hunt_uploads
       WHERE id = ?
     `
@@ -529,6 +559,11 @@ function normalizeHuntRow(row: Record<string, unknown>): Record<string, unknown>
     location_name: row.location_name ?? null,
     location_confidence: asNumber(row.location_confidence, 0),
     boost_factor: row.boost_factor ?? computeBoostFactor(rawTotalXp, totalXp),
+    character_name: row.character_name ?? null,
+    character_vocation: row.character_vocation ?? null,
+    character_level: asNumberOrNull(row.character_level),
+    character_world: row.character_world ?? null,
+    character_lookup_at: row.character_lookup_at ?? null,
     tags,
     excluded_item_names: excludedItemNames
   };
@@ -553,7 +588,12 @@ export function listHuntUploads(db: Database.Database): Record<string, unknown> 
         excluded_items_json,
         location_name,
         location_confidence,
-        boost_factor
+        boost_factor,
+        character_name,
+        character_vocation,
+        character_level,
+        character_world,
+        character_lookup_at
       FROM hunt_uploads
       ORDER BY uploaded_at DESC, id DESC
     `
@@ -830,6 +870,11 @@ export async function getHuntUploadPreview(
         raw_text,
         processed_json,
         location_name,
+        character_name,
+        character_vocation,
+        character_level,
+        character_world,
+        character_lookup_at,
         tags_json,
         excluded_items_json
       FROM hunt_uploads
@@ -898,7 +943,12 @@ export async function getHuntUploadPreview(
     saved_hunt: {
       id: asNumber(row.id, 0),
       label: asText(row.label),
-      uploaded_at: asText(row.uploaded_at)
+      uploaded_at: asText(row.uploaded_at),
+      character_name: row.character_name ?? null,
+      character_vocation: row.character_vocation ?? null,
+      character_level: asNumberOrNull(row.character_level),
+      character_world: row.character_world ?? null,
+      character_lookup_at: row.character_lookup_at ?? null
     }
   };
 }

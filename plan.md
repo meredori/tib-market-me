@@ -195,6 +195,28 @@
 
 ## Phase 6: Endpoint-Backed Analytics
 
+### Phase 6A: Character Context Groundwork - Completed
+
+1. [x] Add TibiaData character lookup foundation.
+   - Added a small hand-maintained TibiaData v4 character client for `/v4/character/{name}`.
+   - Normalizes character name, vocation, level, world, residence, guild, account status, last login, and source timestamp.
+   - Added cached known-character search backed by the local database.
+
+2. [x] Store character context on saved hunts.
+   - Added hunt columns for character name, vocation, level, world, and lookup timestamp.
+   - Threaded character context through hunt create, update, list, and detail preview responses.
+   - Added character fields to new hunt, log import, and previous-hunt edit drawers.
+
+3. [x] Add API and tests for the first character-backed slice.
+   - Added `GET /api/characters` for cached known-character search.
+   - Added `GET /api/characters/lookup?name=` to fetch from TibiaData and cache the result.
+   - Added focused server tests around TibiaData response normalization, lookup caching, and cached search.
+
+4. [x] Verification gate for this slice.
+   - `npm --prefix server test`
+   - `npm --prefix server run build`
+   - `npm --prefix ui-app run build`
+
 1. Stage public Tibia reference data into the local database.
    - Add migrations for public creatures, creature loot statistics, hunting places, hunting-place area creature summaries, hunting-place recommendations, quests, spells, locations, NPCs, bestiary entries, and bosstiary entries.
    - Build a typed TibiaData client from the `public-api.json` contract or a small hand-maintained subset of the relevant endpoints.

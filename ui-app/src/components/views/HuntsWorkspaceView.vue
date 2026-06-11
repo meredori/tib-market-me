@@ -118,7 +118,7 @@ defineEmits([
             >
               <span>{{ row.label || `Hunt ${row.id}` }}</span>
               <strong>{{ formatSigned(row.net_profit) }}</strong>
-              <small>{{ row.location_name || 'Unassigned' }} | {{ formatValue(row.xp_per_hour) }} XP/H | {{ formatValue(row.total_loot_gold) }} loot</small>
+              <small>{{ row.location_name || 'Unassigned' }} | {{ row.character_name || 'No character' }} | {{ formatValue(row.xp_per_hour) }} XP/H | {{ formatValue(row.total_loot_gold) }} loot</small>
             </button>
             <p v-if="!group.rows.length" class="muted">No close matches yet.</p>
           </section>
@@ -155,7 +155,7 @@ defineEmits([
         >
           <span>{{ row.label || `Hunt ${row.id}` }}</span>
           <strong>{{ formatSigned(row.net_profit) }}</strong>
-          <small>{{ row.location_name || 'Unassigned' }} | {{ row.duration_minutes }}m</small>
+          <small>{{ row.location_name || 'Unassigned' }} | {{ row.character_name || 'No character' }} | {{ row.duration_minutes }}m</small>
         </button>
       </div>
 
@@ -164,6 +164,7 @@ defineEmits([
         <span class="muted mono">{{ hunts.importHuntCandidate.value?.file_name }}</span>
         <label>Name<input v-model="hunts.importHuntDraftLabel.value" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Location<input v-model="hunts.importHuntDraftLocation.value" @input="hunts.markUnsavedHuntChanges" /></label>
+        <label>Character<input v-model="hunts.importHuntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Tags<input v-model="hunts.importHuntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
         <div class="button-row">
           <button :disabled="hunts.huntSubmitBusy.value" @click="hunts.saveHuntLogImport">Save Import</button>
@@ -176,6 +177,7 @@ defineEmits([
         <span class="status-badge warning"><AlertTriangle :size="15" /> This parsed hunt is not saved yet.</span>
         <label>Name<input v-model="hunts.huntDraftLabel.value" :placeholder="hunts.huntPreview.value?.suggested_label || 'Untitled Hunt'" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Location<input v-model="hunts.huntDraftLocation.value" :placeholder="hunts.huntPreview.value?.location?.suggested_name || 'Optional location'" @input="hunts.markUnsavedHuntChanges" /></label>
+        <label>Character<input v-model="hunts.huntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Tags<input v-model="hunts.huntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
         <div class="button-row">
           <button :disabled="hunts.huntSubmitBusy.value" @click="hunts.submitHuntScaffold">
@@ -190,6 +192,7 @@ defineEmits([
         <h3>Edit Hunt Details</h3>
         <label>Name<input v-model="hunts.previousHuntDraftLabel.value" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Location<input v-model="hunts.previousHuntDraftLocation.value" @input="hunts.markUnsavedHuntChanges" /></label>
+        <label>Character<input v-model="hunts.previousHuntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Tags<input v-model="hunts.previousHuntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
         <div class="button-row split">
           <button class="danger-btn" :disabled="hunts.huntDeleteBusy.value" @click="hunts.deleteHunt()">

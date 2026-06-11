@@ -36,6 +36,7 @@ import {
 } from "./lib/http/validation";
 import { ensureItemHistory, summarizeItemHistory } from "./lib/pricing/itemHistory";
 import { setItemAlias } from "./lib/hunts/itemAliases";
+import { lookupTibiaCharacter, searchKnownCharacters } from "./lib/tibiadata/characters";
 
 export function buildServer(db: Database.Database) {
   const app = Fastify({ logger: true });
@@ -154,6 +155,32 @@ export function buildServer(db: Database.Database) {
   });
 
   app.get("/api/hunts", async () => listHuntUploads(db));
+
+  app.get("/api/characters", async (request, reply) => {
+    try {
+      const query = typeof request.query === "object" && request.query !== null
+        ? (request.query as Record<string, unknown>)
+        : {};
+      const q = typeof query.q === "string" ? query.q : "";
+      return { ok: true, items: searchKnownCharacters(db, q) };
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.get("/api/characters/lookup", async (request, reply) => {
+    try {
+      const query = typeof request.query === "object" && request.query !== null
+        ? (request.query as Record<string, unknown>)
+        : {};
+      const name = typeof query.name === "string" ? query.name : "";
+      return { ok: true, item: await lookupTibiaCharacter(db, name) };
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
 
   app.get("/api/hunts/areas", async (request, reply) => {
     try {

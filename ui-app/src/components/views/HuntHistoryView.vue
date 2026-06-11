@@ -102,7 +102,7 @@ defineEmits([
       <div class="filter-bar">
         <label>
           Search
-          <input :value="savedHuntSearch" placeholder="hunt, location, tag" @input="$emit('update:savedHuntSearch', $event.target.value)" />
+          <input :value="savedHuntSearch" placeholder="hunt, location, character, tag" @input="$emit('update:savedHuntSearch', $event.target.value)" />
         </label>
         <label>
           Location
@@ -128,6 +128,7 @@ defineEmits([
             <tr>
               <th>Hunt</th>
               <th>Location</th>
+              <th>Character</th>
               <th>Duration</th>
               <th>Profit</th>
               <th>XP/H</th>
@@ -148,6 +149,7 @@ defineEmits([
                 </button>
                 <span v-else>n/a</span>
               </td>
+              <td>{{ row.character_name || 'n/a' }}</td>
               <td>{{ row.duration_minutes }}m</td>
               <td>{{ formatSigned(row.net_profit) }}</td>
               <td>{{ formatValue(row.xp_per_hour) }}</td>
@@ -159,7 +161,7 @@ defineEmits([
               </td>
             </tr>
             <tr v-if="!filteredHuntRows.length">
-              <td colspan="7" class="muted">No hunts match the current filters.</td>
+              <td colspan="8" class="muted">No hunts match the current filters.</td>
             </tr>
           </tbody>
         </table>
