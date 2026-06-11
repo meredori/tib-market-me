@@ -112,6 +112,21 @@
 2. [x] Verification gate for this phase.
    - `npm --prefix ui-app run build`
 
+### Phase 3F: Component Scope Addendum - Completed
+
+1. [x] Split large frontend surfaces into smaller component scopes before Phase 4 tests.
+   - Extracted the persistent app navigation/topbar frame into `ui-app/src/components/AppShell.vue`.
+   - Split shell internals into `ui-app/src/components/shell/AppNavigation.vue`, `AppNavItem.vue`, and `AppTopbar.vue`.
+   - Added shared UI primitives in `ui-app/src/components/common/MetricCard.vue` and `SectionHeader.vue`.
+   - Moved Dashboard, Hunts workspace, Item Lookup, Hunt History, and Settings into view components under `ui-app/src/components/views/`.
+   - Moved new-hunt, item-assignment, and item-details modals into focused components under `ui-app/src/components/modals/`.
+   - Split `ui-app/src/components/HuntSummary.vue` into focused hunt metrics, monster, loot table, and suggestion components under `ui-app/src/components/hunts/`.
+   - Kept hunt workflow state in `ui-app/src/composables/useHunts.js` so future frontend tests can target components without moving save/edit/delete behavior.
+   - Confirmed the current component names fit their scope: shell components own layout/navigation, view components match nav surfaces, modals own focused overlays, common components are reusable UI primitives, and hunt components own HuntSummary internals.
+
+2. [x] Verification gate for this addendum.
+   - `npm --prefix ui-app run build`
+
 ## Selected Phase 3 UI Direction
 
 1. HuntLens-inspired hunt workspace:
@@ -257,6 +272,14 @@
 5. World/location/NPC context.
    - Use locations, NPCs, buildings, streets, and houses to add city/route context around hunts, quests, and vendors.
    - Treat this as a second-pass experience layer after creature and hunting-place matching is reliable.
+
+6. Weekly taskboard helper.
+   - Add a planning board where the player can enter weekly task monsters, task items, desired quantities, and optional character/vocation context.
+   - For monster tasks, suggest hunting areas that contain the task monster, including stronger/weaker subsection matches where the staged hunting-place data supports floors, surface areas, or lower-level variants.
+   - For item tasks, suggest monsters that drop the task item and then suggest hunting areas for those monsters.
+   - Show current market price and estimated buy cost for the task item so the player can decide whether to buy it or hunt it.
+   - When loot chance data is available, estimate rough kills needed for the target quantity and present it as a planning hint, for example: `56x item y`, market cost around `700,000 gp`, hunt monster `z`, rough estimate `1,000 kills`.
+   - Mark estimates as rough when drop rates are sparse, source data is uncertain, or multiple monsters can drop the same item at very different rates.
 
 ## Open Questions Before Implementation
 
