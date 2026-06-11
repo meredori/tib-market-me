@@ -1,5 +1,6 @@
 <script setup>
 import {
+  Database,
   Eye,
   RefreshCw,
   Trash2,
@@ -12,13 +13,16 @@ defineProps({
   hasStatus: { type: Boolean, default: false },
   isRefreshing: { type: Boolean, default: false },
   refreshInfo: { type: String, default: '' },
+  publicReferenceStatus: { type: Object, default: () => ({ counts: {}, latest_sync_runs: [] }) },
+  publicReferenceInfo: { type: String, default: '' },
+  publicReferenceBusy: { type: Boolean, default: false },
   itemPriceMode: { type: String, default: 'conservative_min' },
   itemPriceInfo: { type: String, default: '' },
   itemPriceBusy: { type: Boolean, default: false },
   hunts: { type: Object, required: true },
 })
 
-defineEmits(['update:itemPriceMode', 'refresh', 'generate-prices', 'review-import'])
+defineEmits(['update:itemPriceMode', 'refresh', 'sync-public-reference', 'generate-prices', 'review-import'])
 </script>
 
 <template>
@@ -58,6 +62,37 @@ defineEmits(['update:itemPriceMode', 'refresh', 'generate-prices', 'review-impor
         <div class="button-row mt-10">
           <button :disabled="itemPriceBusy" @click="$emit('generate-prices')">Generate File</button>
           <span class="muted">{{ itemPriceInfo }}</span>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Public Reference Data</h2>
+        <p class="muted">Sync TibiaData creatures, loot, and hunting places into the local database for fast recommendations and matching.</p>
+        <div class="pills">
+          <span class="pill">Creatures {{ publicReferenceStatus.counts?.creatures || 0 }}</span>
+          <span class="pill">Loot {{ publicReferenceStatus.counts?.creature_loot_rows || 0 }}</span>
+          <span class="pill">Hunting Places {{ publicReferenceStatus.counts?.hunting_places || 0 }}</span>
+        </div>
+        <div class="muted">
+          <strong>Latest sync:</strong>
+          <span class="mono">{{ publicReferenceStatus.latest_sync_runs?.[0]?.finished_at || 'n/a' }}</span>
+        </div>
+        <div class="muted">
+          <strong>Status:</strong>
+          <span>{{ publicReferenceStatus.latest_sync_runs?.[0]?.status || 'not synced' }}</span>
+          <span v-if="publicReferenceStatus.latest_sync_runs?.[0]?.status === 'running'">
+            | {{ publicReferenceStatus.latest_sync_runs?.[0]?.item_count || 0 }} item(s) imported so far
+          </span>
+        </div>
+        <div v-if="publicReferenceStatus.latest_sync_runs?.[0]?.error_message" class="error">
+          {{ publicReferenceStatus.latest_sync_runs?.[0]?.error_message }}
+        </div>
+        <div class="button-row mt-10">
+          <button :disabled="publicReferenceBusy" @click="$emit('sync-public-reference')">
+            <Database :size="16" />
+            Sync Reference Data
+          </button>
+          <span class="muted">{{ publicReferenceInfo }}</span>
         </div>
       </article>
 

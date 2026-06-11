@@ -27,6 +27,10 @@ const status = reactive({
   world_data: {},
   generated_at: null,
 })
+const publicReferenceStatus = reactive({
+  counts: {},
+  latest_sync_runs: [],
+})
 
 const sections = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -47,6 +51,8 @@ const isItemDetailsLoading = ref(false)
 const itemDetailsError = ref('')
 const isRefreshing = ref(false)
 const refreshInfo = ref('')
+const publicReferenceInfo = ref('')
+const publicReferenceBusy = ref(false)
 const itemPriceMode = ref('conservative_min')
 const itemPriceInfo = ref('')
 const itemPriceBusy = ref(false)
@@ -72,6 +78,7 @@ const hunts = useHunts()
 let searchDebounce = null
 let latestSearchToken = 0
 let searchAbortController = null
+let publicReferencePoll = null
 
 async function loadStatus() {
   try {
@@ -79,6 +86,15 @@ async function loadStatus() {
     Object.assign(status, data)
   } catch (error) {
     refreshInfo.value = `Status error: ${error.message}`
+  }
+}
+
+async function loadPublicReferenceStatus() {
+  try {
+    const data = await api('/api/public-reference/status')
+    Object.assign(publicReferenceStatus, data)
+  } catch (error) {
+    publicReferenceInfo.value = `Reference status error: ${error.message}`
   }
 }
 
@@ -146,6 +162,36 @@ async function refreshData() {
     refreshInfo.value = `Refresh failed: ${error.message}`
   } finally {
     isRefreshing.value = false
+  }
+}
+
+async function syncPublicReferenceData() {
+  publicReferenceBusy.value = true
+  publicReferenceInfo.value = 'Syncing the local catalog first. Detailed creature loot and area hydration can fill in later as needed.'
+  if (publicReferencePoll) {
+    clearInterval(publicReferencePoll)
+  }
+  publicReferencePoll = setInterval(loadPublicReferenceStatus, 2000)
+  try {
+    const out = await api('/api/public-reference/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        hydrate_details: false,
+        fetch_creature_loot: false,
+      }),
+    })
+    await loadPublicReferenceStatus()
+    publicReferenceInfo.value = `Synced ${out.creatures || 0} creature(s), ${out.creature_loot_rows || 0} loot row(s), and ${out.hunting_places || 0} hunting place(s).`
+  } catch (error) {
+    publicReferenceInfo.value = `Reference sync failed: ${error.message}`
+  } finally {
+    if (publicReferencePoll) {
+      clearInterval(publicReferencePoll)
+      publicReferencePoll = null
+    }
+    await loadPublicReferenceStatus()
+    publicReferenceBusy.value = false
   }
 }
 
@@ -433,7 +479,7 @@ const similarHuntGroups = computed(() => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadStatus(), hunts.refreshHuntCollections()])
+  await Promise.all([loadStatus(), loadPublicReferenceStatus(), hunts.refreshHuntCollections()])
 })
 
 onBeforeUnmount(() => {
@@ -442,6 +488,9 @@ onBeforeUnmount(() => {
   }
   if (searchAbortController) {
     searchAbortController.abort()
+  }
+  if (publicReferencePoll) {
+    clearInterval(publicReferencePoll)
   }
 })
 </script>
@@ -530,10 +579,14 @@ onBeforeUnmount(() => {
         :has-status="hasStatus"
         :is-refreshing="isRefreshing"
         :refresh-info="refreshInfo"
+        :public-reference-status="publicReferenceStatus"
+        :public-reference-info="publicReferenceInfo"
+        :public-reference-busy="publicReferenceBusy"
         :item-price-info="itemPriceInfo"
         :item-price-busy="itemPriceBusy"
         :hunts="hunts"
         @refresh="refreshData"
+        @sync-public-reference="syncPublicReferenceData"
         @generate-prices="generateItemPrices"
         @review-import="reviewHuntLogImport"
       />
