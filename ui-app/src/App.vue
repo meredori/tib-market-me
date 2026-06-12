@@ -697,6 +697,7 @@ onBeforeUnmount(() => {
       :item="selectedItem"
       :is-favorite="favoriteItemIds.has(selectedItem?.id)"
       :watchlist-busy="watchlistBusy"
+      :loot-rows="hunts.globalLootRows.value"
       :override-info="itemOverrideInfo"
       :override-busy="itemOverrideBusy"
       :format-value="formatValue"

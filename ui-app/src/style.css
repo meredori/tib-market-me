@@ -1085,6 +1085,130 @@ tr.selected {
   margin-left: auto;
 }
 
+.item-detail-body {
+  display: grid;
+  gap: 14px;
+}
+
+.item-detail-hero {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.item-detail-image {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(7, 17, 29, 0.72);
+  padding: 8px;
+}
+
+.item-detail-title {
+  min-width: 0;
+}
+
+.item-detail-title strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: 1.35rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.item-value-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.item-value-grid div,
+.item-detail-section {
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(7, 17, 29, 0.5);
+}
+
+.item-value-grid div {
+  min-width: 0;
+  padding: 11px;
+}
+
+.item-value-grid span,
+.item-value-grid strong {
+  display: block;
+}
+
+.item-value-grid strong {
+  margin-top: 5px;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.item-detail-section {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.item-detail-section h4 {
+  margin: 0;
+  color: var(--ink);
+}
+
+.strategy-note {
+  margin: 0;
+}
+
+.vendor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.vendor-grid > div {
+  min-width: 0;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+}
+
+.vendor-grid strong,
+.vendor-list span {
+  display: block;
+}
+
+.vendor-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.vendor-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.vendor-list span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.advanced-stack {
+  display: grid;
+  gap: 12px;
+}
+
 .override-row {
   display: grid;
   grid-template-columns: minmax(180px, 240px) auto 1fr;
@@ -1095,7 +1219,8 @@ tr.selected {
 @media (max-width: 1180px) {
   .metric-strip,
   .detail-strip,
-  .market-status-grid {
+  .market-status-grid,
+  .item-value-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -1143,6 +1268,9 @@ tr.selected {
   .modal-grid,
   .market-status-grid,
   .market-row-card,
+  .item-detail-hero,
+  .item-value-grid,
+  .vendor-grid,
   .filter-bar,
   .similar-grid,
   .override-row,

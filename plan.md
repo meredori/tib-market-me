@@ -93,9 +93,9 @@
    - [x] `npm --prefix server run migrate`
    - [x] `npm --prefix ui-app run build`
 
-## Phase 4: Item Detail Modal Redesign
+## Phase 4: Item Detail Modal Redesign - Completed
 
-1. [ ] Redesign the item modal around high-value visible sections.
+1. [x] Redesign the item modal around high-value visible sections.
    - Item identity and image.
    - Current value and sale strategy.
    - Historical price range.
@@ -103,13 +103,13 @@
    - Loot relevance from saved hunts where available.
    - Public metadata such as dropped by, NPC/vendor context, category, weight, and restrictions once staged data exists.
 
-2. [ ] Move item override controls into Advanced.
+2. [x] Move item override controls into Advanced.
    - Keep override save behavior unchanged.
    - Keep item lookup and loot-table item links opening the same modal.
 
-3. [ ] Verification gate for this phase.
-   - `npm --prefix ui-app run build`
-   - Focused manual check from Item Lookup and loot-table item links.
+3. [x] Verification gate for this phase.
+   - [x] `npm --prefix ui-app run build`
+   - [x] Focused static path check from Market item lookup, dashboard loot links, hunt workspace item links, and Advanced override save binding.
 
 ## Phase 5: Market-Weighted Hunt Recommendations
 
