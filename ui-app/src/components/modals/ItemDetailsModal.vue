@@ -1,10 +1,12 @@
 <script setup>
-import { X } from '@lucide/vue'
+import { Star, X } from '@lucide/vue'
 
 defineProps({
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
   item: { type: Object, default: null },
+  isFavorite: { type: Boolean, default: false },
+  watchlistBusy: { type: Boolean, default: false },
   overrideMode: { type: String, default: 'auto' },
   overrideInfo: { type: String, default: '' },
   overrideBusy: { type: Boolean, default: false },
@@ -13,7 +15,7 @@ defineProps({
   itemImagePath: { type: Function, required: true },
 })
 
-defineEmits(['close', 'update:overrideMode', 'save-override', 'update:showAdvanced'])
+defineEmits(['close', 'update:overrideMode', 'save-override', 'update:showAdvanced', 'toggle-favorite'])
 </script>
 
 <template>
@@ -33,6 +35,10 @@ defineEmits(['close', 'update:overrideMode', 'save-override', 'update:showAdvanc
             <strong>{{ item.name || item.wiki_name || `Item ${item.id}` }}</strong>
             <div class="muted">ID {{ item.id }} | {{ item.category || 'n/a' }} | Tier {{ item.tier ?? 'n/a' }}</div>
           </div>
+          <button class="ghost-action item-title-action" :disabled="watchlistBusy" @click="$emit('toggle-favorite', item)">
+            <Star :size="16" :fill="isFavorite ? 'currentColor' : 'none'" />
+            {{ isFavorite ? 'Favorited' : 'Favorite' }}
+          </button>
         </div>
 
         <h4>Valuation</h4>

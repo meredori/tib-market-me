@@ -16,7 +16,7 @@ defineProps({
   totalXp: { type: Number, default: 0 },
   xpPerHour: { type: Number, default: 0 },
   totalSupplies: { type: Number, default: 0 },
-  sparklinePoints: { type: String, default: '' },
+  huntTrendLines: { type: Object, default: () => ({ profit: '', xp: '' }) },
   previousHuntBusy: { type: Boolean, default: false },
   formatValue: { type: Function, required: true },
   formatSigned: { type: Function, required: true },
@@ -76,13 +76,17 @@ defineEmits(['open-history', 'open-hunt', 'open-item'])
       </article>
 
       <article class="panel chart-panel">
-        <SectionHeader title="Profit Over Time">
-          <span class="pill">Recent</span>
+        <SectionHeader title="Profit / XP Over Time">
+          <div class="chart-legend">
+            <span><i class="legend-dot profit"></i> Profit</span>
+            <span><i class="legend-dot xp"></i> XP</span>
+          </div>
         </SectionHeader>
         <svg class="sparkline" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <polyline v-if="sparklinePoints" :points="sparklinePoints" />
+          <polyline v-if="huntTrendLines.profit" class="profit-line" :points="huntTrendLines.profit" />
+          <polyline v-if="huntTrendLines.xp" class="xp-line" :points="huntTrendLines.xp" />
         </svg>
-        <p v-if="!sparklinePoints" class="muted">Profit trend appears after saved hunts.</p>
+        <p v-if="!huntTrendLines.profit" class="muted">Profit and XP trends appear after saved hunts.</p>
       </article>
 
       <article class="panel table-panel">

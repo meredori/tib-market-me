@@ -38,6 +38,12 @@ import { ensureItemHistory, summarizeItemHistory } from "./lib/pricing/itemHisto
 import { setItemAlias } from "./lib/hunts/itemAliases";
 import { lookupTibiaCharacter, searchKnownCharacters } from "./lib/tibiadata/characters";
 import { getPublicReferenceStatus, syncPublicReferenceData } from "./lib/tibiadata/publicReference";
+import {
+  addMarketWatchlistItem,
+  getMarketDashboardSummary,
+  getMarketWatchlist,
+  removeMarketWatchlistItem
+} from "./lib/marketDashboard";
 
 export function buildServer(db: Database.Database) {
   const app = Fastify({ logger: true });
@@ -54,6 +60,31 @@ export function buildServer(db: Database.Database) {
   app.get("/api/status", async () => getStatus(db));
 
   app.get("/api/public-reference/status", async () => getPublicReferenceStatus(db));
+
+  app.get("/api/market-dashboard/summary", async () => getMarketDashboardSummary(db));
+
+  app.get("/api/market-watchlist", async () => getMarketWatchlist(db));
+
+  app.post("/api/market-watchlist/:itemId", async (request, reply) => {
+    try {
+      const itemId = parsePositiveId((request.params as Record<string, string>).itemId, "item id");
+      return { ok: true, item: addMarketWatchlistItem(db, itemId) };
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.delete("/api/market-watchlist/:itemId", async (request, reply) => {
+    try {
+      const itemId = parsePositiveId((request.params as Record<string, string>).itemId, "item id");
+      removeMarketWatchlistItem(db, itemId);
+      return { ok: true, deleted_id: itemId };
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
 
   app.get("/api/search", async (request) => {
     const startedAt = Date.now();

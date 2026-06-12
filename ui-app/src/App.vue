@@ -14,7 +14,7 @@ import NewHuntModal from './components/modals/NewHuntModal.vue'
 import DashboardView from './components/views/DashboardView.vue'
 import HuntHistoryView from './components/views/HuntHistoryView.vue'
 import HuntsWorkspaceView from './components/views/HuntsWorkspaceView.vue'
-import ItemSearchView from './components/views/ItemSearchView.vue'
+import MarketView from './components/views/MarketView.vue'
 import SettingsView from './components/views/SettingsView.vue'
 import { useHunts } from './composables/useHunts'
 import { api } from './lib/api'
@@ -34,8 +34,8 @@ const publicReferenceStatus = reactive({
 
 const sections = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'market', label: 'Market', icon: Search },
   { id: 'hunts', label: 'Hunts', icon: Swords },
-  { id: 'lookup', label: 'Items', icon: Search },
   { id: 'history', label: 'Hunt History', icon: AreaChart },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
@@ -60,6 +60,17 @@ const selectedItemOverrideMode = ref('auto')
 const itemOverrideInfo = ref('')
 const itemOverrideBusy = ref(false)
 const showAdvancedItemDetails = ref(false)
+const marketDashboard = ref({
+  freshness: {},
+  watchlist: [],
+  historicallyCheap: [],
+  notableMovers: [],
+  hotLootedItems: [],
+  quietItems: [],
+  warnings: [],
+})
+const marketDashboardBusy = ref(false)
+const watchlistBusy = ref(false)
 const savedHuntSearch = ref('')
 const savedLocationFilter = ref('')
 const savedHuntSort = ref('date_desc')
@@ -95,6 +106,29 @@ async function loadPublicReferenceStatus() {
     Object.assign(publicReferenceStatus, data)
   } catch (error) {
     publicReferenceInfo.value = `Reference status error: ${error.message}`
+  }
+}
+
+async function loadMarketDashboard() {
+  marketDashboardBusy.value = true
+  try {
+    const out = await api('/api/market-dashboard/summary')
+    marketDashboard.value = {
+      freshness: out.freshness || {},
+      watchlist: out.watchlist || [],
+      historicallyCheap: out.historicallyCheap || [],
+      notableMovers: out.notableMovers || [],
+      hotLootedItems: out.hotLootedItems || [],
+      quietItems: out.quietItems || [],
+      warnings: out.warnings || [],
+    }
+  } catch (error) {
+    marketDashboard.value = {
+      ...marketDashboard.value,
+      warnings: [`Market dashboard error: ${error.message}`],
+    }
+  } finally {
+    marketDashboardBusy.value = false
   }
 }
 
@@ -158,10 +192,36 @@ async function refreshData() {
     refreshInfo.value = out.skipped
       ? out.message || 'Refresh not run as no new data to fetch'
       : `Refresh complete at ${out.refreshed_at}`
+    await loadMarketDashboard()
   } catch (error) {
     refreshInfo.value = `Refresh failed: ${error.message}`
   } finally {
     isRefreshing.value = false
+  }
+}
+
+function itemIdFromFavoriteTarget(item) {
+  const id = Number(item?.item_id || item?.id)
+  return Number.isFinite(id) && id > 0 ? Math.trunc(id) : null
+}
+
+async function toggleFavoriteItem(item) {
+  const itemId = itemIdFromFavoriteTarget(item)
+  if (!itemId) {
+    return
+  }
+  watchlistBusy.value = true
+  try {
+    const isFavorite = favoriteItemIds.value.has(itemId)
+    await api(`/api/market-watchlist/${itemId}`, { method: isFavorite ? 'DELETE' : 'POST' })
+    await loadMarketDashboard()
+  } catch (error) {
+    marketDashboard.value = {
+      ...marketDashboard.value,
+      warnings: [`Favorite update failed: ${error.message}`],
+    }
+  } finally {
+    watchlistBusy.value = false
   }
 }
 
@@ -430,12 +490,9 @@ const totalXp = computed(() => hunts.huntRows.value.reduce((sum, row) => sum + N
 const profitPerHour = computed(() => totalDuration.value > 0 ? Math.round(totalProfit.value / (totalDuration.value / 60)) : 0)
 const xpPerHour = computed(() => totalDuration.value > 0 ? Math.round(totalXp.value / (totalDuration.value / 60)) : 0)
 const topLootRows = computed(() => hunts.globalLootRows.value.slice(0, 6))
-const sparklinePoints = computed(() => {
-  const rows = [...hunts.huntRows.value].slice(0, 8).reverse()
-  if (!rows.length) {
-    return ''
-  }
-  const values = rows.map((row) => Number(row.net_profit || 0))
+const favoriteItemIds = computed(() => new Set((marketDashboard.value.watchlist || []).map((item) => item.item_id || item.id)))
+function trendPoints(rows, key) {
+  const values = rows.map((row) => Number(row[key] || 0))
   const min = Math.min(...values)
   const max = Math.max(...values)
   const range = max - min || 1
@@ -444,6 +501,17 @@ const sparklinePoints = computed(() => {
     const y = 90 - ((value - min) / range) * 70
     return `${x},${y}`
   }).join(' ')
+}
+
+const huntTrendLines = computed(() => {
+  const rows = [...hunts.huntRows.value].slice(0, 8).reverse()
+  if (!rows.length) {
+    return { profit: '', xp: '' }
+  }
+  return {
+    profit: trendPoints(rows, 'net_profit'),
+    xp: trendPoints(rows, 'total_xp'),
+  }
 })
 const activeSavedHunt = computed(() => hunts.huntRows.value.find((row) => row.id === hunts.editingHuntId.value) || null)
 const similarHuntGroups = computed(() => {
@@ -479,7 +547,7 @@ const similarHuntGroups = computed(() => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadStatus(), loadPublicReferenceStatus(), hunts.refreshHuntCollections()])
+  await Promise.all([loadStatus(), loadPublicReferenceStatus(), loadMarketDashboard(), hunts.refreshHuntCollections()])
 })
 
 onBeforeUnmount(() => {
@@ -516,7 +584,7 @@ onBeforeUnmount(() => {
         :total-xp="totalXp"
         :xp-per-hour="xpPerHour"
         :total-supplies="totalSupplies"
-        :sparkline-points="sparklinePoints"
+        :hunt-trend-lines="huntTrendLines"
         :previous-hunt-busy="hunts.previousHuntBusy.value"
         :format-value="formatValue"
         :format-signed="formatSigned"
@@ -524,6 +592,23 @@ onBeforeUnmount(() => {
         @open-history="openHuntHistory"
         @open-hunt="openPreviousHunt"
         @open-item="openItemDetails"
+      />
+
+      <MarketView
+        v-else-if="activeSection === 'market'"
+        v-model:search-query="searchQuery"
+        :market-dashboard="marketDashboard"
+        :market-dashboard-busy="marketDashboardBusy"
+        :watchlist-busy="watchlistBusy"
+        :search-rows="searchRows"
+        :search-info="searchInfo"
+        :favorite-item-ids="favoriteItemIds"
+        :format-value="formatValue"
+        :item-image-path="itemImagePath"
+        @search-input="onSearchInput"
+        @open-item="openItemDetails"
+        @toggle-favorite="toggleFavoriteItem"
+        @refresh-market-dashboard="loadMarketDashboard"
       />
 
       <HuntsWorkspaceView
@@ -540,17 +625,6 @@ onBeforeUnmount(() => {
         @open-hunt="openPreviousHunt"
         @open-item="openItemDetails"
         @assign-item-id="openAssignItemId"
-      />
-
-      <ItemSearchView
-        v-else-if="activeSection === 'lookup'"
-        v-model:search-query="searchQuery"
-        :search-rows="searchRows"
-        :search-info="searchInfo"
-        :format-value="formatValue"
-        :item-image-path="itemImagePath"
-        @search-input="onSearchInput"
-        @open-item="openItemDetails"
       />
 
       <HuntHistoryView
@@ -621,12 +695,15 @@ onBeforeUnmount(() => {
       :loading="isItemDetailsLoading"
       :error="itemDetailsError"
       :item="selectedItem"
+      :is-favorite="favoriteItemIds.has(selectedItem?.id)"
+      :watchlist-busy="watchlistBusy"
       :override-info="itemOverrideInfo"
       :override-busy="itemOverrideBusy"
       :format-value="formatValue"
       :item-image-path="itemImagePath"
       @close="closeItemDetails"
       @save-override="saveItemOverride"
+      @toggle-favorite="toggleFavoriteItem"
     />
   </AppShell>
 </template>

@@ -72,22 +72,26 @@
    - [x] `npm --prefix ui-app run build`
    - [x] `npm --prefix server run migrate`
 
-## Phase 3: Market Intelligence Dashboard
+## Phase 3: Market Intelligence Dashboard - Completed
 
-1. [ ] Add backend market dashboard summary endpoints.
+1. [x] Add backend market dashboard summary endpoints.
    - Historically cheap items compared against median/reference bands.
    - Looted items that look hot or worth listing.
    - Overall market activity/quietness from latest sync volume, item activity, and world freshness.
    - Recent notable movers and stale/low-confidence data warnings.
 
-2. [ ] Expand the Dashboard view into a market operations surface.
+2. [x] Expand the Dashboard view into a market operations surface.
    - Show explainable reason labels such as `below historical band`, `high looted value`, and `low recent volume`.
-   - Keep the existing dashboard metrics and recent-hunt affordances.
+   - Keep the existing home dashboard metrics and recent-hunt affordances separate from the Market view.
+   - Add persisted market favorites/watchlist support from market rows, item lookup, and item details.
+   - Move market operations into a dedicated `Market` navigation item that includes item lookup.
 
-3. [ ] Verification gate for this phase.
-   - Backend summary tests.
-   - `npm --prefix server run build`
-   - `npm --prefix ui-app run build`
+3. [x] Verification gate for this phase.
+   - [x] Backend summary tests.
+   - [x] `npm --prefix server test`
+   - [x] `npm --prefix server run build`
+   - [x] `npm --prefix server run migrate`
+   - [x] `npm --prefix ui-app run build`
 
 ## Phase 4: Item Detail Modal Redesign
 

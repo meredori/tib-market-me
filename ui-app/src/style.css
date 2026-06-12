@@ -377,6 +377,111 @@ th {
   min-width: 0;
 }
 
+.market-status-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.market-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.market-status-grid div {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: rgba(10, 24, 37, 0.72);
+  padding: 10px;
+}
+
+.market-status-grid span,
+.market-status-grid strong {
+  display: block;
+}
+
+.market-status-grid strong {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.warning-list,
+.market-labels,
+.market-card-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.market-card-list {
+  flex-direction: column;
+}
+
+.market-row-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(120px, 0.8fr) 34px;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 8px 0;
+}
+
+.market-row-card > strong {
+  white-space: nowrap;
+}
+
+.warning-chip,
+.warning-pill {
+  border-color: rgba(245, 165, 16, 0.45);
+  color: #f7c56a;
+  background: rgba(245, 165, 16, 0.08);
+}
+
+.warning-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(245, 165, 16, 0.45);
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.78rem;
+}
+
+.snapshot-copy {
+  margin: 0;
+}
+
+.chart-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.legend-dot.profit {
+  background: var(--green);
+}
+
+.legend-dot.xp {
+  background: var(--blue);
+}
+
 .sparkline {
   width: 100%;
   height: 250px;
@@ -384,9 +489,16 @@ th {
 
 .sparkline polyline {
   fill: none;
-  stroke: var(--green);
   stroke-width: 2.5;
   vector-effect: non-scaling-stroke;
+}
+
+.sparkline .profit-line {
+  stroke: var(--green);
+}
+
+.sparkline .xp-line {
+  stroke: var(--blue);
 }
 
 .hunt-workspace {
@@ -969,6 +1081,10 @@ tr.selected {
   margin-bottom: 16px;
 }
 
+.item-title-action {
+  margin-left: auto;
+}
+
 .override-row {
   display: grid;
   grid-template-columns: minmax(180px, 240px) auto 1fr;
@@ -978,7 +1094,8 @@ tr.selected {
 
 @media (max-width: 1180px) {
   .metric-strip,
-  .detail-strip {
+  .detail-strip,
+  .market-status-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -1024,6 +1141,8 @@ tr.selected {
   .form-grid,
   .settings-grid,
   .modal-grid,
+  .market-status-grid,
+  .market-row-card,
   .filter-bar,
   .similar-grid,
   .override-row,
