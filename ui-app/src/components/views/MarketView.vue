@@ -25,6 +25,7 @@ defineEmits([
   'update:searchQuery',
   'search-input',
   'open-item',
+  'open-loot-inbox',
   'toggle-favorite',
   'refresh-market-dashboard',
 ])
@@ -188,7 +189,9 @@ defineEmits([
       </article>
 
       <article class="panel table-panel">
-        <SectionHeader title="Loot Worth Listing" :subtitle="`${marketDashboard.hotLootedItems?.length || 0} items`" />
+        <SectionHeader title="Loot Worth Listing" :subtitle="`${marketDashboard.hotLootedItems?.length || 0} items`">
+          <button class="ghost-action" @click="$emit('open-loot-inbox')">Open inbox</button>
+        </SectionHeader>
         <div class="table-wrap">
           <table>
             <thead>

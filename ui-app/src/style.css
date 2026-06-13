@@ -467,6 +467,68 @@ th {
   white-space: nowrap;
 }
 
+.loot-inbox-toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.loot-metric-strip {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.loot-inbox-table {
+  min-width: 1040px;
+}
+
+.loot-inbox-table th:nth-child(2),
+.loot-inbox-table td:nth-child(2) {
+  min-width: 260px;
+}
+
+.loot-hunt-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.inline-link {
+  min-height: auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #9ec5ff;
+  font-size: 0.76rem;
+}
+
+.loot-action-sell_now {
+  border-color: rgba(74, 163, 104, 0.45);
+  color: #7fd19c;
+  background: rgba(74, 163, 104, 0.1);
+}
+
+.loot-action-npc_vendor {
+  border-color: rgba(45, 212, 191, 0.45);
+  color: #73e2d6;
+  background: rgba(45, 212, 191, 0.1);
+}
+
+.loot-action-hold,
+.loot-action-watch {
+  border-color: rgba(96, 165, 250, 0.45);
+  color: #9ec5ff;
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.loot-action-review_price,
+.loot-action-unknown_price {
+  border-color: rgba(245, 165, 16, 0.45);
+  color: #f7c56a;
+  background: rgba(245, 165, 16, 0.08);
+}
+
 .warning-chip,
 .warning-pill {
   border-color: rgba(245, 165, 16, 0.45);

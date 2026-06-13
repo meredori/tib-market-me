@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import {
   AreaChart,
   LayoutDashboard,
+  PackageOpen,
   Search,
   Settings,
   Swords,
@@ -14,6 +15,7 @@ import NewHuntModal from './components/modals/NewHuntModal.vue'
 import DashboardView from './components/views/DashboardView.vue'
 import HuntHistoryView from './components/views/HuntHistoryView.vue'
 import HuntsWorkspaceView from './components/views/HuntsWorkspaceView.vue'
+import LootInboxView from './components/views/LootInboxView.vue'
 import MarketView from './components/views/MarketView.vue'
 import SettingsView from './components/views/SettingsView.vue'
 import { useHunts } from './composables/useHunts'
@@ -36,6 +38,7 @@ const publicReferenceStatus = reactive({
 const sections = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'market', label: 'Market', icon: Search },
+  { id: 'loot', label: 'Loot Inbox', icon: PackageOpen },
   { id: 'hunts', label: 'Hunts', icon: Swords },
   { id: 'history', label: 'Hunt History', icon: AreaChart },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -73,6 +76,15 @@ const marketDashboard = ref({
 })
 const marketDashboardBusy = ref(false)
 const watchlistBusy = ref(false)
+const lootInbox = ref({
+  freshness: {},
+  summary: { buckets: {} },
+  buckets: {},
+  items: [],
+})
+const lootInboxBusy = ref(false)
+const lootInboxInfo = ref('')
+const lootInboxDays = ref(30)
 const savedHuntSearch = ref('')
 const savedLocationFilter = ref('')
 const savedLocationKindFilter = ref('')
@@ -194,6 +206,30 @@ async function loadMarketDashboard() {
   }
 }
 
+async function loadLootInbox() {
+  lootInboxBusy.value = true
+  lootInboxInfo.value = 'Loading loot decisions...'
+  try {
+    const out = await api(`/api/loot-inbox?days=${encodeURIComponent(lootInboxDays.value)}&limit=120`)
+    lootInbox.value = {
+      freshness: out.freshness || {},
+      summary: out.summary || { buckets: {} },
+      buckets: out.buckets || {},
+      items: out.items || [],
+      filters: out.filters || {},
+    }
+    lootInboxInfo.value = `${out.items?.length || 0} item(s) classified.`
+  } catch (error) {
+    lootInboxInfo.value = `Loot inbox error: ${error.message}`
+    lootInbox.value = {
+      ...lootInbox.value,
+      items: [],
+    }
+  } finally {
+    lootInboxBusy.value = false
+  }
+}
+
 async function runSearch() {
   const q = searchQuery.value.trim()
   if (!q) {
@@ -255,6 +291,7 @@ async function refreshData() {
       ? out.message || 'Refresh not run as no new data to fetch'
       : `Refresh complete at ${out.refreshed_at}`
     await loadMarketDashboard()
+    await loadLootInbox()
   } catch (error) {
     refreshInfo.value = `Refresh failed: ${error.message}`
   } finally {
@@ -471,7 +508,7 @@ async function saveItemOverride() {
     })
     selectedItem.value = { ...selectedItem.value, ...out.item }
     itemOverrideInfo.value = 'Override saved.'
-    await Promise.all([hunts.loadHunts(), hunts.loadHuntingAreas()])
+    await Promise.all([hunts.loadHunts(), hunts.loadHuntingAreas(), loadLootInbox()])
   } catch (error) {
     itemOverrideInfo.value = `Override failed: ${error.message}`
   } finally {
@@ -547,6 +584,16 @@ function reviewHuntLogImport(candidate) {
 function openHuntHistory(locationName = '') {
   activeSection.value = 'history'
   savedLocationFilter.value = locationName
+}
+
+function openLootInbox() {
+  activeSection.value = 'loot'
+  loadLootInbox()
+}
+
+function openLootInboxFromItemDetails() {
+  closeItemDetails()
+  openLootInbox()
 }
 
 function clearHuntHistoryFilters() {
@@ -671,7 +718,7 @@ const similarHuntGroups = computed(() => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadStatus(), loadPublicReferenceStatus(), loadMarketDashboard(), hunts.refreshHuntCollections()])
+  await Promise.all([loadStatus(), loadPublicReferenceStatus(), loadMarketDashboard(), loadLootInbox(), hunts.refreshHuntCollections()])
 })
 
 onBeforeUnmount(() => {
@@ -717,6 +764,7 @@ onBeforeUnmount(() => {
         @open-history="openHuntHistory"
         @open-hunt="openPreviousHunt"
         @open-item="openItemDetails"
+        @open-loot-inbox="openLootInbox"
       />
 
       <MarketView
@@ -732,8 +780,22 @@ onBeforeUnmount(() => {
         :item-image-path="itemImagePath"
         @search-input="onSearchInput"
         @open-item="openItemDetails"
+        @open-loot-inbox="openLootInbox"
         @toggle-favorite="toggleFavoriteItem"
         @refresh-market-dashboard="loadMarketDashboard"
+      />
+
+      <LootInboxView
+        v-else-if="activeSection === 'loot'"
+        v-model:loot-inbox-days="lootInboxDays"
+        :loot-inbox="lootInbox"
+        :loot-inbox-busy="lootInboxBusy"
+        :loot-inbox-info="lootInboxInfo"
+        :format-value="formatValue"
+        :item-image-path="itemImagePath"
+        @refresh-loot-inbox="loadLootInbox"
+        @open-item="openItemDetails"
+        @open-hunt="openPreviousHunt"
       />
 
       <HuntsWorkspaceView
@@ -749,6 +811,7 @@ onBeforeUnmount(() => {
         @open-history="openHuntHistory"
         @open-hunt="openPreviousHunt"
         @open-item="openItemDetails"
+        @open-loot-inbox="openLootInbox"
         @assign-item-id="openAssignItemId"
         @save-previous-hunt="savePreviousHuntEditAndReturn"
       />
@@ -835,6 +898,7 @@ onBeforeUnmount(() => {
       @close="closeItemDetails"
       @save-override="saveItemOverride"
       @toggle-favorite="toggleFavoriteItem"
+      @open-loot-inbox="openLootInboxFromItemDetails"
     />
   </AppShell>
 </template>

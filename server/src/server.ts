@@ -48,6 +48,7 @@ import {
   getMarketWatchlist,
   removeMarketWatchlistItem
 } from "./lib/marketDashboard";
+import { getLootInbox } from "./lib/lootSelling";
 
 export function buildServer(db: Database.Database) {
   const app = Fastify({ logger: true });
@@ -66,6 +67,19 @@ export function buildServer(db: Database.Database) {
   app.get("/api/public-reference/status", async () => getPublicReferenceStatus(db));
 
   app.get("/api/market-dashboard/summary", async () => getMarketDashboardSummary(db));
+
+  app.get("/api/loot-inbox", async (request, reply) => {
+    try {
+      const query = request.query as Record<string, unknown>;
+      return getLootInbox(db, {
+        days: query.days,
+        limit: query.limit
+      });
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
 
   app.get("/api/market-watchlist", async () => getMarketWatchlist(db));
 

@@ -24,7 +24,7 @@ defineProps({
   itemImagePath: { type: Function, required: true },
 })
 
-defineEmits(['open-history', 'open-hunt', 'open-item'])
+defineEmits(['open-history', 'open-hunt', 'open-item', 'open-loot-inbox'])
 </script>
 
 <template>
@@ -126,7 +126,9 @@ defineEmits(['open-history', 'open-hunt', 'open-item'])
       </article>
 
       <article class="panel table-panel">
-        <SectionHeader title="Loot Analysis" :subtitle="`${topLootRows.length} items`" />
+        <SectionHeader title="Loot Analysis" :subtitle="`${topLootRows.length} items`">
+          <button class="ghost-action" @click="$emit('open-loot-inbox')">Open inbox</button>
+        </SectionHeader>
         <div class="table-wrap">
           <table>
             <thead>

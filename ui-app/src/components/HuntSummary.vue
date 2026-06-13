@@ -21,7 +21,7 @@ defineProps({
   itemImagePath: { type: Function, required: true },
 })
 
-defineEmits(['open-item', 'assign-item-id', 'hide-loot', 'restore-loot', 'toggle-hidden'])
+defineEmits(['open-item', 'assign-item-id', 'hide-loot', 'restore-loot', 'toggle-hidden', 'open-loot-inbox'])
 </script>
 
 <template>
@@ -53,6 +53,7 @@ defineEmits(['open-item', 'assign-item-id', 'hide-loot', 'restore-loot', 'toggle
       @hide-loot="$emit('hide-loot', $event)"
       @restore-loot="$emit('restore-loot', $event)"
       @toggle-hidden="$emit('toggle-hidden', $event)"
+      @open-loot-inbox="$emit('open-loot-inbox')"
     />
   </div>
 

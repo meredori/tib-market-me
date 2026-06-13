@@ -20,7 +20,7 @@ defineProps({
   itemImagePath: { type: Function, required: true },
 })
 
-defineEmits(['open-item', 'assign-item-id', 'hide-loot', 'restore-loot', 'toggle-hidden'])
+defineEmits(['open-item', 'assign-item-id', 'hide-loot', 'restore-loot', 'toggle-hidden', 'open-loot-inbox'])
 
 function hydrationIcon(status) {
   if (status === 'cached' || status === 'resolved') {
@@ -62,6 +62,7 @@ function hydrationLabel(status) {
         Show hidden
         <span v-if="hiddenLootCount" class="muted">({{ hiddenLootCount }})</span>
       </label>
+      <button v-else class="ghost-action" @click="$emit('open-loot-inbox')">Open inbox</button>
     </div>
     <div class="table-wrap">
       <table class="hunt-loot-table" :class="{ compact: !showAuditColumns && !allowLootControls }">

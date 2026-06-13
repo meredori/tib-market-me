@@ -22,7 +22,7 @@ const props = defineProps({
   itemImagePath: { type: Function, required: true },
 })
 
-defineEmits(['close', 'update:overrideMode', 'save-override', 'update:showAdvanced', 'toggle-favorite'])
+defineEmits(['close', 'update:overrideMode', 'save-override', 'update:showAdvanced', 'toggle-favorite', 'open-loot-inbox'])
 
 const itemName = computed(() => props.item?.name || props.item?.wiki_name || (props.item?.id ? `Item ${props.item.id}` : 'Item'))
 const bestNpcBuyer = computed(() => props.item?.npc_buy_rows?.[0] || null)
@@ -144,6 +144,9 @@ function npcLocation(row) {
           <button class="ghost-action item-title-action" :disabled="watchlistBusy" @click="$emit('toggle-favorite', item)">
             <Star :size="16" :fill="isFavorite ? 'currentColor' : 'none'" />
             {{ isFavorite ? 'Favorited' : 'Favorite' }}
+          </button>
+          <button class="ghost-action item-title-action" @click="$emit('open-loot-inbox')">
+            Loot Inbox
           </button>
         </div>
 

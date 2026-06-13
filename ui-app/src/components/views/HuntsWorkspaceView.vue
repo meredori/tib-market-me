@@ -26,6 +26,7 @@ defineEmits([
   'open-history',
   'open-hunt',
   'open-item',
+  'open-loot-inbox',
   'assign-item-id',
   'save-previous-hunt',
 ])
@@ -107,6 +108,7 @@ function optionLabel(candidate) {
         :item-image-path="itemImagePath"
         @toggle-hidden="hunts.showHiddenLoot.value = $event"
         @open-item="$emit('open-item', $event)"
+        @open-loot-inbox="$emit('open-loot-inbox')"
         @assign-item-id="$emit('assign-item-id', $event)"
         @hide-loot="hunts.hideLootItem"
         @restore-loot="hunts.restoreLootItem"
@@ -127,6 +129,7 @@ function optionLabel(candidate) {
         :item-image-path="itemImagePath"
         @toggle-hidden="hunts.showHiddenLoot.value = $event"
         @open-item="$emit('open-item', $event)"
+        @open-loot-inbox="$emit('open-loot-inbox')"
         @assign-item-id="$emit('assign-item-id', $event)"
         @hide-loot="hunts.hideLootItem"
         @restore-loot="hunts.restoreLootItem"

@@ -449,6 +449,10 @@ Turn market intelligence and saved hunt loot into a practical post-hunt workflow
 
 The app should help decide what to sell, hold, NPC, watch, or review.
 
+**Status: Completed.**
+
+Phase 4 has been implemented as a dedicated Loot Inbox workflow backed by reusable server-side loot-selling guidance. Recent saved-hunt loot is classified into sell, hold, NPC/vendor, watch, review, and unknown-price actions with shared freshness, confidence, provenance, and explanation metadata. The workflow is accessible from the main navigation, Dashboard loot summary, Market loot listing panel, Hunt loot tables, and Item Details.
+
 ## Build
 
 ### 1. Loot Inbox
