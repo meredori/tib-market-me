@@ -251,6 +251,10 @@ Turn staged public reference catalog data into usable detail data for creatures,
 
 Settings should evolve into a clearer Data Health area that shows what is staged, enriched, stale, failed, or missing.
 
+**Status: Completed.**
+
+Phase 2 now keeps catalog sync and detail enrichment as separate operations. Catalog sync stages public reference rows only, while detail enrichment runs as an in-process background job with explicit per-entity enrichment state, retry/backoff visibility, and Data Health reporting.
+
 ## Build
 
 ### 1. Enrichment Operation

@@ -16,21 +16,20 @@ afterEach(() => {
 
 describe("item details", () => {
   it("fills NPC names from raw metadata when older sync rows stored blank names", () => {
+    const freshAt = new Date().toISOString();
     const runId = Number(db.prepare(
       `
       INSERT INTO market_runs (
         server, started_at, finished_at, pulled_at, world_last_update, world_queried_at,
         pricing_model_version, sales_tax_pct, market_row_count, priced_item_count, status
-      ) VALUES ('Victoris', '2026-06-12T00:00:00.000Z', '2026-06-12T00:00:00.000Z',
-        '2026-06-12T00:00:00.000Z', '2026-06-12T00:00:00.000Z', '2026-06-12T00:00:00.000Z',
-        'test', 2, 1, 1, 'success')
+      ) VALUES ('Victoris', ?, ?, ?, ?, ?, 'test', 2, 1, 1, 'success')
       `
-    ).run().lastInsertRowid);
+    ).run(freshAt, freshAt, freshAt, freshAt, freshAt).lastInsertRowid);
 
     db.prepare(
       `
       INSERT INTO item_metadata (item_id, name, wiki_name, category, raw_payload_json, fetched_at)
-      VALUES (?, ?, ?, ?, ?, '2026-06-12T00:00:00.000Z')
+      VALUES (?, ?, ?, ?, ?, ?)
       `
     ).run(281, "giant shimmering pearl", "giant shimmering pearl", "Valuables", JSON.stringify({
       id: 281,
@@ -40,15 +39,15 @@ describe("item details", () => {
         { name: "Briasol", location: "Ab'Dendriel City", price: 3000 }
       ],
       npc_sell: []
-    }));
+    }), freshAt);
 
     db.prepare(
       `
       INSERT INTO item_npc_buy (
         item_id, npc_name, location, price, currency_object_type_id, currency_quest_flag_display_name, fetched_at
-      ) VALUES (281, '', 'Bounac', 3000, 0, '', '2026-06-12T00:00:00.000Z')
+      ) VALUES (281, '', 'Bounac', 3000, 0, '', ?)
       `
-    ).run();
+    ).run(freshAt);
     db.prepare(
       `
       INSERT INTO market_item_features (run_id, item_id, upstream_time, sell_offer, month_sold, month_average_sell)
@@ -71,7 +70,7 @@ describe("item details", () => {
       { npc_name: "Briasol", location: "Ab'Dendriel City", price: 3000 }
     ]);
     expect(details?.confidence_detail).toMatchObject({ level: "high", score: 0.9 });
-    expect(details?.freshness).toMatchObject({ stale: false, last_updated: "2026-06-12T00:00:00.000Z" });
+    expect(details?.freshness).toMatchObject({ stale: false, last_updated: freshAt });
     expect(details?.provenance).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "market_sync" }),
       expect.objectContaining({ type: "derived_calculation" })

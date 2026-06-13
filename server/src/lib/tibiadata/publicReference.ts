@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { confidence, entityRef, explanation, freshness, provenance } from "../intelligence/metadata";
 import { finishJob, recordJobFailure, startJob, summarizeJobs, updateJobProgress } from "../intelligence/jobs";
+import type { JobStatus } from "../intelligence/types";
 import { asNumberOrNull, asRecord, asText, firstNumber, firstText, nowIso } from "../hunts/utils";
 
 const DEFAULT_PUBLIC_DATA_BASE_URL = "https://tibiadata.bytewizards.de";
@@ -8,9 +9,6 @@ const DEFAULT_PUBLIC_DATA_BASE_URL = "https://tibiadata.bytewizards.de";
 export type PublicReferenceSyncOptions = {
   creatureLimit?: number;
   huntingPlaceLimit?: number;
-  hydrateCreatureDetails?: boolean;
-  hydrateHuntingPlaceDetails?: boolean;
-  fetchCreatureLoot?: boolean;
 };
 
 export type PublicReferenceSyncResult = {
@@ -22,6 +20,18 @@ export type PublicReferenceSyncResult = {
   hunting_place_area_summaries: number;
   started_at: string;
   finished_at: string;
+};
+
+export type PublicReferenceEnrichmentOptions = {
+  creatureLimit?: number;
+  huntingPlaceLimit?: number;
+  includeStale?: boolean;
+};
+
+export type PublicReferenceEnrichmentResult = PublicReferenceSyncResult & {
+  job: JobStatus;
+  failed_creatures: number;
+  failed_hunting_places: number;
 };
 
 type PublicCreature = {
@@ -58,6 +68,7 @@ type PublicHuntingPlace = {
 
 let publicReferenceFetchForTests: typeof fetch | null = null;
 let publicReferenceSyncInProgress = false;
+let publicReferenceEnrichmentInProgress = false;
 
 export function setPublicReferenceFetchForTests(fetchImpl: typeof fetch): void {
   publicReferenceFetchForTests = fetchImpl;
@@ -73,6 +84,15 @@ export function normalizePublicName(name: string): string {
 
 function publicFetch(): typeof fetch {
   return publicReferenceFetchForTests ?? fetch;
+}
+
+class PublicReferenceHttpError extends Error {
+  readonly status: number;
+
+  constructor(path: string, status: number) {
+    super(`TibiaData public reference request failed for ${path} with HTTP ${status}`);
+    this.status = status;
+  }
 }
 
 function jsonRecord(payload: unknown): Record<string, unknown> {
@@ -324,6 +344,17 @@ function huntingPlaceAreaRows(payload: unknown): Array<Record<string, unknown>> 
     .map(jsonRecord);
 }
 
+function uniqueAreaName(baseName: string, seenNames: Set<string>): string {
+  let candidate = baseName;
+  let suffix = 2;
+  while (seenNames.has(candidate)) {
+    candidate = `${baseName} (${suffix})`;
+    suffix += 1;
+  }
+  seenNames.add(candidate);
+  return candidate;
+}
+
 export class PublicTibiaDataClient {
   private readonly baseUrl: string;
 
@@ -341,7 +372,7 @@ export class PublicTibiaDataClient {
       clearTimeout(timeout);
     }
     if (!response.ok) {
-      throw new Error(`TibiaData public reference request failed for ${path} with HTTP ${response.status}`);
+      throw new PublicReferenceHttpError(path, response.status);
     }
     return response.json();
   }
@@ -392,6 +423,320 @@ function publicReferenceCounts(db: Database.Database): Record<string, number> {
     hunting_place_creatures: (db.prepare("SELECT COUNT(*) AS count FROM public_hunting_place_creatures").get() as { count: number }).count,
     hunting_place_area_summaries: (db.prepare("SELECT COUNT(*) AS count FROM public_hunting_place_area_summaries").get() as { count: number }).count
   };
+}
+
+function cutoffIso(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function countSql(db: Database.Database, sql: string, ...params: unknown[]): number {
+  return (db.prepare(sql).get(...params) as { count: number }).count;
+}
+
+function latestJobFor(jobs: Record<string, unknown>, jobType: string): Record<string, unknown> | null {
+  const byType = asRecord(jobs.by_type);
+  const list = Array.isArray(byType?.[jobType]) ? byType[jobType] as Array<Record<string, unknown>> : [];
+  return list[0] ?? null;
+}
+
+function activeJobFor(jobs: Record<string, unknown>, jobType: string): Record<string, unknown> | null {
+  const active = Array.isArray(jobs.active) ? jobs.active as Array<Record<string, unknown>> : [];
+  return active.find((job) => job.job_type === jobType) ?? null;
+}
+
+function detailBackoff(jobs: Record<string, unknown>): Record<string, unknown> | null {
+  const active = activeJobFor(jobs, "public-reference-enrichment");
+  const latest = latestJobFor(jobs, "public-reference-enrichment");
+  const job = active?.backoff_until ? active : latest?.backoff_until ? latest : null;
+  return job
+    ? {
+      job_id: job.id,
+      until: job.backoff_until,
+      reason: job.last_error ?? null
+    }
+    : null;
+}
+
+function markCreatureDetailState(
+  db: Database.Database,
+  creatureId: number,
+  status: "enriched" | "failed",
+  attemptedAt: string,
+  error: unknown = null
+): void {
+  db.prepare(
+    `
+    UPDATE public_creatures
+    SET detail_status = ?,
+      detail_enriched_at = CASE WHEN ? = 'enriched' THEN ? ELSE detail_enriched_at END,
+      detail_attempt_count = detail_attempt_count + 1,
+      detail_last_attempt_at = ?,
+      detail_last_error = ?
+    WHERE id = ?
+    `
+  ).run(status, status, attemptedAt, attemptedAt, error ? String(error) : null, Math.trunc(creatureId));
+}
+
+function markHuntingPlaceDetailState(
+  db: Database.Database,
+  huntingPlaceId: number,
+  status: "enriched" | "failed",
+  attemptedAt: string,
+  error: unknown = null
+): void {
+  db.prepare(
+    `
+    UPDATE public_hunting_places
+    SET detail_status = ?,
+      detail_enriched_at = CASE WHEN ? = 'enriched' THEN ? ELSE detail_enriched_at END,
+      detail_attempt_count = detail_attempt_count + 1,
+      detail_last_attempt_at = ?,
+      detail_last_error = ?
+    WHERE id = ?
+    `
+  ).run(status, status, attemptedAt, attemptedAt, error ? String(error) : null, Math.trunc(huntingPlaceId));
+}
+
+function isRetryableReferenceError(error: unknown): boolean {
+  if (error instanceof PublicReferenceHttpError) {
+    return error.status === 429 || error.status >= 500;
+  }
+  if (error instanceof Error) {
+    return error.name === "AbortError" || error.name === "TypeError";
+  }
+  return false;
+}
+
+function backoffUntil(): string {
+  return new Date(Date.now() + 5 * 60 * 1000).toISOString();
+}
+
+function normalizeLimit(value: number | undefined, fallback: number): number {
+  return value === undefined ? fallback : Math.max(0, Math.trunc(value));
+}
+
+function detailPrioritySql(includeStale: boolean): string {
+  const staleClause = includeStale ? "OR (detail_status = 'enriched' AND detail_enriched_at < ?)" : "";
+  return `
+    WHERE detail_status IN ('failed', 'pending')
+      ${staleClause}
+    ORDER BY
+      CASE
+        WHEN detail_status = 'failed' THEN 0
+        WHEN detail_status = 'pending' THEN 1
+        ELSE 2
+      END,
+      COALESCE(detail_last_attempt_at, fetched_at) ASC
+  `;
+}
+
+function creatureEnrichmentRows(db: Database.Database, limit: number, includeStale: boolean): Array<Record<string, unknown>> {
+  if (limit <= 0) {
+    return [];
+  }
+  const sql = `
+    SELECT id, name, normalized_name
+    FROM public_creatures
+    ${detailPrioritySql(includeStale)}
+    LIMIT ?
+  `;
+  return includeStale
+    ? db.prepare(sql).all(cutoffIso(30), limit) as Array<Record<string, unknown>>
+    : db.prepare(sql).all(limit) as Array<Record<string, unknown>>;
+}
+
+function huntingPlaceEnrichmentRows(db: Database.Database, limit: number, includeStale: boolean): Array<Record<string, unknown>> {
+  if (limit <= 0) {
+    return [];
+  }
+  const sql = `
+    SELECT id, name, normalized_name
+    FROM public_hunting_places
+    ${detailPrioritySql(includeStale)}
+    LIMIT ?
+  `;
+  return includeStale
+    ? db.prepare(sql).all(cutoffIso(30), limit) as Array<Record<string, unknown>>
+    : db.prepare(sql).all(limit) as Array<Record<string, unknown>>;
+}
+
+function createPublicReferenceEnrichmentJob(db: Database.Database, options: PublicReferenceEnrichmentOptions): JobStatus {
+  if (publicReferenceEnrichmentInProgress) {
+    throw new Error("Public reference enrichment is already running");
+  }
+
+  publicReferenceEnrichmentInProgress = true;
+  return startJob(db, {
+    jobType: "public-reference-enrichment",
+    entityType: "creature",
+    metadata: {
+      started_at: nowIso(),
+      creature_limit: normalizeLimit(options.creatureLimit, 50),
+      hunting_place_limit: normalizeLimit(options.huntingPlaceLimit, 50),
+      include_stale: Boolean(options.includeStale)
+    }
+  });
+}
+
+async function runPublicReferenceEnrichmentJob(
+  db: Database.Database,
+  job: JobStatus,
+  options: PublicReferenceEnrichmentOptions,
+  client: PublicTibiaDataClient
+): Promise<PublicReferenceEnrichmentResult> {
+  const startedAt = job.started_at;
+  const fetchedAt = nowIso();
+  const includeStale = Boolean(options.includeStale);
+  const creatureRows = creatureEnrichmentRows(db, normalizeLimit(options.creatureLimit, 50), includeStale);
+  const placeRows = huntingPlaceEnrichmentRows(db, normalizeLimit(options.huntingPlaceLimit, 50), includeStale);
+  const totalCount = creatureRows.length + placeRows.length;
+  let creatures = 0;
+  let creatureLootRows = 0;
+  let failedCreatures = 0;
+  let huntingPlaces = 0;
+  let huntingPlaceCreatures = 0;
+  let huntingPlaceAreaSummaries = 0;
+  let failedHuntingPlaces = 0;
+  let completed = 0;
+
+  try {
+    updateJobProgress(db, job.id, {
+      totalCount,
+      completedCount: 0,
+      cursor: { phase: "starting" }
+    });
+
+    for (const row of creatureRows) {
+      const id = firstNumber(row.id);
+      const name = firstText(row.name);
+      if (id === null) {
+        continue;
+      }
+      const current = entityRef("creature", { id, name, normalized_name: firstText(row.normalized_name) });
+      updateJobProgress(db, job.id, {
+        totalCount,
+        completedCount: completed,
+        currentEntity: current,
+        cursor: { phase: "creatures", lookup: id }
+      });
+      try {
+        const details = await client.getCreature(id);
+        const creature = upsertPublicCreature(db, details, fetchedAt);
+        if (!creature) {
+          throw new Error(`Could not normalize creature detail for ${name ?? id}`);
+        }
+        const loot = await client.getCreatureLoot(creature.id);
+        creatureLootRows += replacePublicCreatureLoot(db, creature.id, loot, fetchedAt);
+        markCreatureDetailState(db, creature.id, "enriched", fetchedAt);
+        creatures += 1;
+      } catch (error) {
+        failedCreatures += 1;
+        markCreatureDetailState(db, id, "failed", nowIso(), error);
+        recordJobFailure(db, job.id, {
+          error,
+          currentEntity: current,
+          backoffUntil: isRetryableReferenceError(error) ? backoffUntil() : null
+        });
+      } finally {
+        completed += 1;
+        updateJobProgress(db, job.id, {
+          totalCount,
+          completedCount: completed,
+          currentEntity: current,
+          cursor: { phase: "creatures", lookup: id }
+        });
+      }
+    }
+
+    for (const row of placeRows) {
+      const id = firstNumber(row.id);
+      const name = firstText(row.name);
+      if (id === null) {
+        continue;
+      }
+      const current = entityRef("hunting_place", { id, name, normalized_name: firstText(row.normalized_name) });
+      updateJobProgress(db, job.id, {
+        totalCount,
+        completedCount: completed,
+        currentEntity: current,
+        cursor: { phase: "hunting_places", lookup: id }
+      });
+      try {
+        const details = await client.getHuntingPlace(id);
+        const place = upsertPublicHuntingPlace(db, details, fetchedAt);
+        if (!place) {
+          throw new Error(`Could not normalize hunting-place detail for ${name ?? id}`);
+        }
+        const children = replacePublicHuntingPlaceChildren(db, place.id, details);
+        huntingPlaceCreatures += children.creatures;
+        huntingPlaceAreaSummaries += children.area_summaries;
+        markHuntingPlaceDetailState(db, place.id, "enriched", fetchedAt);
+        huntingPlaces += 1;
+      } catch (error) {
+        failedHuntingPlaces += 1;
+        markHuntingPlaceDetailState(db, id, "failed", nowIso(), error);
+        recordJobFailure(db, job.id, {
+          error,
+          currentEntity: current,
+          backoffUntil: isRetryableReferenceError(error) ? backoffUntil() : null
+        });
+      } finally {
+        completed += 1;
+        updateJobProgress(db, job.id, {
+          totalCount,
+          completedCount: completed,
+          currentEntity: current,
+          cursor: { phase: "hunting_places", lookup: id }
+        });
+      }
+    }
+
+    const finishedAt = nowIso();
+    const finishedJob = finishJob(db, job.id, "success", {
+      completedCount: completed,
+      metadata: {
+        finished_at: finishedAt,
+        creatures,
+        creature_loot_rows: creatureLootRows,
+        failed_creatures: failedCreatures,
+        hunting_places: huntingPlaces,
+        hunting_place_creatures: huntingPlaceCreatures,
+        hunting_place_area_summaries: huntingPlaceAreaSummaries,
+        failed_hunting_places: failedHuntingPlaces
+      }
+    });
+    return {
+      ok: true,
+      job: finishedJob,
+      creatures,
+      creature_loot_rows: creatureLootRows,
+      failed_creatures: failedCreatures,
+      hunting_places: huntingPlaces,
+      hunting_place_creatures: huntingPlaceCreatures,
+      hunting_place_area_summaries: huntingPlaceAreaSummaries,
+      failed_hunting_places: failedHuntingPlaces,
+      started_at: startedAt,
+      finished_at: finishedAt
+    };
+  } catch (error) {
+    recordJobFailure(db, job.id, { error });
+    finishJob(db, job.id, "error", {
+      error,
+      completedCount: completed,
+      metadata: {
+        creatures,
+        creature_loot_rows: creatureLootRows,
+        failed_creatures: failedCreatures,
+        hunting_places: huntingPlaces,
+        hunting_place_creatures: huntingPlaceCreatures,
+        hunting_place_area_summaries: huntingPlaceAreaSummaries,
+        failed_hunting_places: failedHuntingPlaces
+      }
+    });
+    throw error;
+  } finally {
+    publicReferenceEnrichmentInProgress = false;
+  }
 }
 
 export function upsertPublicCreature(db: Database.Database, payload: unknown, fetchedAt = nowIso()): PublicCreature | null {
@@ -630,8 +975,10 @@ export function replacePublicHuntingPlaceChildren(db: Database.Database, hunting
   `
   );
   let areaCount = 0;
+  const seenAreas = new Set<string>();
   for (const row of huntingPlaceAreaRows(payload)) {
-    const areaName = firstText(row.areaName, row.area_name, row.name, row.title) ?? `Area ${areaCount + 1}`;
+    const baseAreaName = firstText(row.areaName, row.area_name, row.name, row.title) ?? `Area ${areaCount + 1}`;
+    const areaName = uniqueAreaName(baseAreaName, seenAreas);
     insertArea.run(
       Math.trunc(huntingPlaceId),
       areaName,
@@ -649,25 +996,59 @@ export function replacePublicHuntingPlaceChildren(db: Database.Database, hunting
 
 export function getPublicReferenceStatus(db: Database.Database): Record<string, unknown> {
   const counts = publicReferenceCounts(db);
-  const jobs = summarizeJobs(db, ["public-reference-catalog"]);
-  const enrichedCreatures = (db.prepare(
-    "SELECT COUNT(*) AS count FROM public_creatures WHERE hitpoints IS NOT NULL OR experience IS NOT NULL OR bestiary_class IS NOT NULL"
-  ).get() as { count: number }).count;
-  const enrichedPlaces = (db.prepare(
+  const jobs = summarizeJobs(db, ["public-reference-catalog", "public-reference-enrichment"]);
+  const catalogJob = latestJobFor(jobs, "public-reference-catalog");
+  const enrichmentJob = latestJobFor(jobs, "public-reference-enrichment");
+  const activeEnrichment = activeJobFor(jobs, "public-reference-enrichment");
+  const staleCutoff = cutoffIso(30);
+  const enrichedCreatures = countSql(db, "SELECT COUNT(*) AS count FROM public_creatures WHERE detail_status = 'enriched'");
+  const enrichedPlaces = countSql(db, "SELECT COUNT(*) AS count FROM public_hunting_places WHERE detail_status = 'enriched'");
+  const failedCreatures = countSql(db, "SELECT COUNT(*) AS count FROM public_creatures WHERE detail_status = 'failed'");
+  const failedPlaces = countSql(db, "SELECT COUNT(*) AS count FROM public_hunting_places WHERE detail_status = 'failed'");
+  const staleCreatures = countSql(db, "SELECT COUNT(*) AS count FROM public_creatures WHERE detail_status = 'enriched' AND detail_enriched_at < ?", staleCutoff);
+  const stalePlaces = countSql(db, "SELECT COUNT(*) AS count FROM public_hunting_places WHERE detail_status = 'enriched' AND detail_enriched_at < ?", staleCutoff);
+  const pendingCreatures = countSql(db, "SELECT COUNT(*) AS count FROM public_creatures WHERE detail_status = 'pending'");
+  const pendingPlaces = countSql(db, "SELECT COUNT(*) AS count FROM public_hunting_places WHERE detail_status = 'pending'");
+  const unresolvedLootItems = countSql(db, "SELECT COUNT(*) AS count FROM public_creature_loot WHERE item_id IS NULL");
+  const placesMissingCreatures = countSql(
+    db,
     `
     SELECT COUNT(*) AS count
     FROM public_hunting_places place
-    WHERE EXISTS (
-      SELECT 1
-      FROM public_hunting_place_creatures creature
-      WHERE creature.hunting_place_id = place.id
-    )
+    WHERE detail_status = 'enriched'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public_hunting_place_creatures creature
+        WHERE creature.hunting_place_id = place.id
+      )
     `
-  ).get() as { count: number }).count;
-  const latestJob = Array.isArray((jobs as Record<string, unknown>).latest)
-    ? ((jobs as Record<string, unknown>).latest as Array<Record<string, unknown>>)[0]
-    : null;
-  const lastFinished = typeof latestJob?.finished_at === "string" ? latestJob.finished_at : null;
+  );
+  const creaturesMissingLoot = countSql(
+    db,
+    `
+    SELECT COUNT(*) AS count
+    FROM public_creatures creature
+    WHERE detail_status = 'enriched'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public_creature_loot loot
+        WHERE loot.creature_id = creature.id
+      )
+    `
+  );
+  const duplicateCreatureNames = countSql(
+    db,
+    "SELECT COUNT(*) AS count FROM (SELECT normalized_name FROM public_creatures GROUP BY normalized_name HAVING COUNT(*) > 1)"
+  );
+  const duplicatePlaceNames = countSql(
+    db,
+    "SELECT COUNT(*) AS count FROM (SELECT normalized_name FROM public_hunting_places GROUP BY normalized_name HAVING COUNT(*) > 1)"
+  );
+  const lastFinished = typeof enrichmentJob?.finished_at === "string"
+    ? enrichmentJob.finished_at
+    : typeof catalogJob?.finished_at === "string"
+      ? catalogJob.finished_at
+      : null;
   const dataFreshness = freshness(lastFinished, {
     staleAfterHours: 24 * 14,
     agingAfterHours: 24 * 7,
@@ -682,12 +1063,19 @@ export function getPublicReferenceStatus(db: Database.Database): Record<string, 
         missing_data_reason: "No public reference catalog rows are staged.",
         provenance: [provenance("public_tibia_reference")]
       }),
-    enrichedCreatures < counts.creatures || enrichedPlaces < counts.hunting_places
-      ? explanation("details pending", "warning", "Some staged public rows are catalog-only and need later enrichment.", {
-        missing_data_reason: "Detail enrichment is a later roadmap phase.",
+    pendingCreatures > 0 || pendingPlaces > 0
+      ? explanation("details pending", "warning", "Some staged public rows are waiting for detail enrichment.", {
+        missing_data_reason: "Run detail enrichment before matching or recommendations can rely on complete public data.",
         provenance: [provenance("derived_calculation")]
       })
       : explanation("details available", "positive", "Staged public reference rows include detail data where currently supported.", {
+        provenance: [provenance("derived_calculation")]
+      }),
+    failedCreatures > 0 || failedPlaces > 0
+      ? explanation("enrichment failures", "warning", "Some public reference details failed to enrich and can be retried.", {
+        provenance: [provenance("derived_calculation")]
+      })
+      : explanation("no enrichment failures", "positive", "No public reference enrichment failures are currently recorded.", {
         provenance: [provenance("derived_calculation")]
       })
   ];
@@ -709,12 +1097,28 @@ export function getPublicReferenceStatus(db: Database.Database): Record<string, 
         hunting_places: enrichedPlaces
       },
       pending: {
-        creatures: Math.max(0, counts.creatures - enrichedCreatures),
-        hunting_places: Math.max(0, counts.hunting_places - enrichedPlaces)
+        creatures: pendingCreatures,
+        hunting_places: pendingPlaces
       },
       failed: {
-        latest_job_failed_count: Number(latestJob?.failed_count ?? 0)
+        creatures: failedCreatures,
+        hunting_places: failedPlaces,
+        latest_job_failed_count: Number(enrichmentJob?.failed_count ?? 0)
       },
+      stale: {
+        creatures: staleCreatures,
+        hunting_places: stalePlaces
+      },
+      diagnostics: {
+        creatures_missing_loot: creaturesMissingLoot,
+        hunting_places_missing_creatures: placesMissingCreatures,
+        unresolved_loot_items: unresolvedLootItems,
+        duplicate_creature_names: duplicateCreatureNames,
+        duplicate_hunting_place_names: duplicatePlaceNames
+      },
+      last_catalog_sync: catalogJob?.finished_at ?? null,
+      last_enrichment_run: enrichmentJob?.finished_at ?? activeEnrichment?.updated_at ?? null,
+      backoff: detailBackoff(jobs),
       explanations: healthExplanations
     }
   };
@@ -735,18 +1139,12 @@ export async function syncPublicReferenceData(
     jobType: "public-reference-catalog",
     entityType: "creature",
     metadata: {
-      started_at: startedAt,
-      hydrate_creature_details: Boolean(options.hydrateCreatureDetails),
-      hydrate_hunting_place_details: Boolean(options.hydrateHuntingPlaceDetails),
-      fetch_creature_loot: Boolean(options.fetchCreatureLoot)
+      started_at: startedAt
     }
   });
   const fetchedAt = nowIso();
   let creatures = 0;
-  let creatureLootRows = 0;
   let huntingPlaces = 0;
-  let huntingPlaceCreatures = 0;
-  let huntingPlaceAreaSummaries = 0;
 
   try {
     const creatureList = prioritizeMissingEntries(await client.listPagedCreatures(), existingPublicCreatureKeys(db), creatureIdentity);
@@ -764,8 +1162,7 @@ export async function syncPublicReferenceData(
         currentEntity: current,
         cursor: { phase: "creatures", lookup }
       });
-      const details = options.hydrateCreatureDetails ? await client.getCreature(lookup) : entry;
-      const creature = upsertPublicCreature(db, details, fetchedAt);
+      const creature = upsertPublicCreature(db, entry, fetchedAt);
       if (!creature) {
         continue;
       }
@@ -774,10 +1171,6 @@ export async function syncPublicReferenceData(
         completedCount: creatures + huntingPlaces,
         currentEntity: entityRef("creature", { id: creature.id, name: creature.name, normalized_name: normalizePublicName(creature.name) })
       });
-      if (options.fetchCreatureLoot === true) {
-        const loot = await client.getCreatureLoot(creature.id);
-        creatureLootRows += replacePublicCreatureLoot(db, creature.id, loot, fetchedAt);
-      }
     }
 
     const placeList = prioritizeMissingEntries(await client.listHuntingPlaces(), existingPublicHuntingPlaceKeys(db), huntingPlaceIdentity);
@@ -795,17 +1188,11 @@ export async function syncPublicReferenceData(
         currentEntity: current,
         cursor: { phase: "hunting_places", lookup }
       });
-      const details = options.hydrateHuntingPlaceDetails ? await client.getHuntingPlace(lookup) : entry;
-      const place = upsertPublicHuntingPlace(db, details, fetchedAt);
+      const place = upsertPublicHuntingPlace(db, entry, fetchedAt);
       if (!place) {
         continue;
       }
       huntingPlaces += 1;
-      if (options.hydrateHuntingPlaceDetails) {
-        const children = replacePublicHuntingPlaceChildren(db, place.id, details);
-        huntingPlaceCreatures += children.creatures;
-        huntingPlaceAreaSummaries += children.area_summaries;
-      }
       updateJobProgress(db, job.id, {
         completedCount: creatures + huntingPlaces,
         totalCount: creatureLimit + placeLimit,
@@ -819,19 +1206,19 @@ export async function syncPublicReferenceData(
       metadata: {
         finished_at: finishedAt,
         creatures,
-        creature_loot_rows: creatureLootRows,
+        creature_loot_rows: 0,
         hunting_places: huntingPlaces,
-        hunting_place_creatures: huntingPlaceCreatures,
-        hunting_place_area_summaries: huntingPlaceAreaSummaries
+        hunting_place_creatures: 0,
+        hunting_place_area_summaries: 0
       }
     });
     return {
       ok: true,
       creatures,
-      creature_loot_rows: creatureLootRows,
+      creature_loot_rows: 0,
       hunting_places: huntingPlaces,
-      hunting_place_creatures: huntingPlaceCreatures,
-      hunting_place_area_summaries: huntingPlaceAreaSummaries,
+      hunting_place_creatures: 0,
+      hunting_place_area_summaries: 0,
       started_at: startedAt,
       finished_at: finishedAt
     };
@@ -842,14 +1229,34 @@ export async function syncPublicReferenceData(
       completedCount: creatures + huntingPlaces,
       metadata: {
         creatures,
-        creature_loot_rows: creatureLootRows,
+        creature_loot_rows: 0,
         hunting_places: huntingPlaces,
-        hunting_place_creatures: huntingPlaceCreatures,
-        hunting_place_area_summaries: huntingPlaceAreaSummaries
+        hunting_place_creatures: 0,
+        hunting_place_area_summaries: 0
       }
     });
     throw error;
   } finally {
     publicReferenceSyncInProgress = false;
   }
+}
+
+export async function enrichPublicReferenceData(
+  db: Database.Database,
+  options: PublicReferenceEnrichmentOptions = {},
+  client = new PublicTibiaDataClient()
+): Promise<PublicReferenceEnrichmentResult> {
+  const job = createPublicReferenceEnrichmentJob(db, options);
+  return runPublicReferenceEnrichmentJob(db, job, options, client);
+}
+
+export function startPublicReferenceEnrichment(
+  db: Database.Database,
+  options: PublicReferenceEnrichmentOptions = {}
+): JobStatus {
+  const job = createPublicReferenceEnrichmentJob(db, options);
+  void runPublicReferenceEnrichmentJob(db, job, options, new PublicTibiaDataClient()).catch(() => {
+    // The job record already captures background failures.
+  });
+  return job;
 }

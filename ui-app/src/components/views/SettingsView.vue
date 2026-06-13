@@ -20,13 +20,25 @@ defineProps({
   publicReferenceStatus: { type: Object, default: () => ({ counts: {}, jobs: {}, data_health: {} }) },
   publicReferenceInfo: { type: String, default: '' },
   publicReferenceBusy: { type: Boolean, default: false },
+  repeatPublicReferenceEnrichment: { type: Boolean, default: false },
   itemPriceMode: { type: String, default: 'conservative_min' },
   itemPriceInfo: { type: String, default: '' },
   itemPriceBusy: { type: Boolean, default: false },
   hunts: { type: Object, required: true },
 })
 
-defineEmits(['update:itemPriceMode', 'refresh', 'sync-public-reference', 'generate-prices', 'review-import'])
+const activeJobStatuses = new Set(['queued', 'running', 'paused', 'backoff'])
+
+function jobGroup(jobs, type) {
+  const list = jobs?.by_type?.[type] || []
+  return {
+    active: list.filter((job) => activeJobStatuses.has(job.status)),
+    latest: list,
+    by_type: { [type]: list },
+  }
+}
+
+defineEmits(['update:itemPriceMode', 'update:repeatPublicReferenceEnrichment', 'refresh', 'sync-public-reference', 'enrich-public-reference', 'generate-prices', 'review-import'])
 </script>
 
 <template>
@@ -70,27 +82,53 @@ defineEmits(['update:itemPriceMode', 'refresh', 'sync-public-reference', 'genera
       </article>
 
       <article class="panel">
-        <h2>Public Reference Data</h2>
-        <p class="muted">Sync TibiaData creatures, loot, and hunting places into the local database for fast recommendations and matching.</p>
+        <h2>Data Health</h2>
         <div class="pills">
-          <span class="pill">Creatures {{ publicReferenceStatus.counts?.creatures || 0 }}</span>
-          <span class="pill">Loot {{ publicReferenceStatus.counts?.creature_loot_rows || 0 }}</span>
-          <span class="pill">Hunting Places {{ publicReferenceStatus.counts?.hunting_places || 0 }}</span>
+          <span class="pill">Creatures {{ publicReferenceStatus.data_health?.staged?.creatures || 0 }}</span>
+          <span class="pill">Hunting Places {{ publicReferenceStatus.data_health?.staged?.hunting_places || 0 }}</span>
+          <span class="pill">Loot Rows {{ publicReferenceStatus.data_health?.staged?.creature_loot_rows || 0 }}</span>
         </div>
         <FreshnessBadge :freshness="publicReferenceStatus.data_health?.freshness" />
         <CompactMetricRow label="Enriched creatures" :value="`${publicReferenceStatus.data_health?.enriched?.creatures || 0} / ${publicReferenceStatus.data_health?.staged?.creatures || 0}`" />
         <CompactMetricRow label="Enriched hunting places" :value="`${publicReferenceStatus.data_health?.enriched?.hunting_places || 0} / ${publicReferenceStatus.data_health?.staged?.hunting_places || 0}`" />
+        <CompactMetricRow label="Pending details" :value="`${publicReferenceStatus.data_health?.pending?.creatures || 0} creature(s), ${publicReferenceStatus.data_health?.pending?.hunting_places || 0} place(s)`" />
+        <CompactMetricRow label="Failed details" :value="`${publicReferenceStatus.data_health?.failed?.creatures || 0} creature(s), ${publicReferenceStatus.data_health?.failed?.hunting_places || 0} place(s)`" />
+        <CompactMetricRow label="Stale details" :value="`${publicReferenceStatus.data_health?.stale?.creatures || 0} creature(s), ${publicReferenceStatus.data_health?.stale?.hunting_places || 0} place(s)`" />
+        <CompactMetricRow label="Place creature rows" :value="publicReferenceStatus.data_health?.staged?.hunting_place_creatures || 0" />
+        <CompactMetricRow label="Last catalog sync" :value="publicReferenceStatus.data_health?.last_catalog_sync || 'n/a'" />
+        <CompactMetricRow label="Last enrichment" :value="publicReferenceStatus.data_health?.last_enrichment_run || 'n/a'" />
+        <div v-if="publicReferenceStatus.data_health?.backoff" class="warning mt-10">
+          Backoff until <span class="mono">{{ publicReferenceStatus.data_health.backoff.until }}</span>
+        </div>
         <DecisionLabels
           :reasons="(publicReferenceStatus.data_health?.explanations || []).filter((item) => item.severity !== 'warning' && item.severity !== 'blocked')"
           :warnings="(publicReferenceStatus.data_health?.explanations || []).filter((item) => item.severity === 'warning' || item.severity === 'blocked')"
         />
-        <JobStatusPanel title="Catalog Sync" :jobs="publicReferenceStatus.jobs" />
+        <JobStatusPanel title="Catalog Sync" :jobs="jobGroup(publicReferenceStatus.jobs, 'public-reference-catalog')" />
+        <JobStatusPanel title="Detail Enrichment" :jobs="jobGroup(publicReferenceStatus.jobs, 'public-reference-enrichment')" />
         <div class="button-row mt-10">
           <button :disabled="publicReferenceBusy" @click="$emit('sync-public-reference')">
             <Database :size="16" />
-            Sync Reference Data
+            Sync Catalog
           </button>
+          <button :disabled="publicReferenceBusy" @click="$emit('enrich-public-reference')">
+            <RefreshCw :size="16" />
+            Enrich Details
+          </button>
+          <label class="toggle-label">
+            <input
+              type="checkbox"
+              :checked="repeatPublicReferenceEnrichment"
+              @change="$emit('update:repeatPublicReferenceEnrichment', $event.target.checked)"
+            />
+            Repeat
+          </label>
           <span class="muted">{{ publicReferenceInfo }}</span>
+        </div>
+        <div class="status-row mt-10">
+          <span class="status-badge">Missing loot {{ publicReferenceStatus.data_health?.diagnostics?.creatures_missing_loot || 0 }}</span>
+          <span class="status-badge">Missing place creatures {{ publicReferenceStatus.data_health?.diagnostics?.hunting_places_missing_creatures || 0 }}</span>
+          <span class="status-badge">Unresolved loot items {{ publicReferenceStatus.data_health?.diagnostics?.unresolved_loot_items || 0 }}</span>
         </div>
       </article>
 

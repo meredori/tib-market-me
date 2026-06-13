@@ -54,6 +54,7 @@ const isRefreshing = ref(false)
 const refreshInfo = ref('')
 const publicReferenceInfo = ref('')
 const publicReferenceBusy = ref(false)
+const repeatPublicReferenceEnrichment = ref(false)
 const itemPriceMode = ref('conservative_min')
 const itemPriceInfo = ref('')
 const itemPriceBusy = ref(false)
@@ -91,6 +92,9 @@ let searchDebounce = null
 let latestSearchToken = 0
 let searchAbortController = null
 let publicReferencePoll = null
+let publicReferencePollMode = null
+
+const PUBLIC_REFERENCE_ENRICH_BATCH_SIZE = 100
 
 async function loadStatus() {
   try {
@@ -105,9 +109,64 @@ async function loadPublicReferenceStatus() {
   try {
     const data = await api('/api/public-reference/status')
     Object.assign(publicReferenceStatus, data)
+    if (publicReferencePoll && !hasActivePublicReferenceJob(data)) {
+      const nextBatch = publicReferencePollMode === 'enrichment' && shouldRepeatPublicReferenceEnrichment(data)
+      if (nextBatch) {
+        publicReferenceInfo.value = `Completed a clean enrichment batch. Starting the next ${PUBLIC_REFERENCE_ENRICH_BATCH_SIZE}.`
+        try {
+          await startPublicReferenceEnrichmentBatch()
+        } catch (error) {
+          clearInterval(publicReferencePoll)
+          publicReferencePoll = null
+          publicReferencePollMode = null
+          publicReferenceBusy.value = false
+          publicReferenceInfo.value = `Reference enrichment failed: ${error.message}`
+        }
+        return
+      }
+      const completedPollMode = publicReferencePollMode
+      clearInterval(publicReferencePoll)
+      publicReferencePoll = null
+      publicReferencePollMode = null
+      publicReferenceBusy.value = false
+      if (completedPollMode === 'enrichment' && repeatPublicReferenceEnrichment.value && publicReferencePendingDetails(data) === 0) {
+        publicReferenceInfo.value = 'Public reference enrichment completed all pending details.'
+      } else if (completedPollMode === 'enrichment' && repeatPublicReferenceEnrichment.value) {
+        publicReferenceInfo.value = 'Public reference enrichment stopped after an issue. Review Data Health before retrying.'
+      }
+    }
   } catch (error) {
     publicReferenceInfo.value = `Reference status error: ${error.message}`
   }
+}
+
+function hasActivePublicReferenceJob(data = publicReferenceStatus) {
+  const activeJobs = Array.isArray(data.jobs?.active) ? data.jobs.active : []
+  return activeJobs.some((job) => job.job_type === 'public-reference-catalog' || job.job_type === 'public-reference-enrichment')
+}
+
+function latestPublicReferenceEnrichmentJob(data = publicReferenceStatus) {
+  return data.jobs?.by_type?.['public-reference-enrichment']?.[0] || null
+}
+
+function publicReferencePendingDetails(data = publicReferenceStatus) {
+  return Number(data.data_health?.pending?.creatures || 0) + Number(data.data_health?.pending?.hunting_places || 0)
+}
+
+function latestEnrichmentBatchHadIssue(data = publicReferenceStatus) {
+  const latest = latestPublicReferenceEnrichmentJob(data)
+  return Boolean(
+    data.data_health?.backoff
+    || latest?.status === 'error'
+    || latest?.status === 'backoff'
+    || Number(latest?.failed_count || 0) > 0
+  )
+}
+
+function shouldRepeatPublicReferenceEnrichment(data = publicReferenceStatus) {
+  return repeatPublicReferenceEnrichment.value
+    && publicReferencePendingDetails(data) > 0
+    && !latestEnrichmentBatchHadIssue(data)
 }
 
 async function loadMarketDashboard() {
@@ -228,22 +287,23 @@ async function toggleFavoriteItem(item) {
 
 async function syncPublicReferenceData() {
   publicReferenceBusy.value = true
-  publicReferenceInfo.value = 'Syncing the local catalog first. Detailed creature loot and area hydration can fill in later as needed.'
+  publicReferenceInfo.value = 'Syncing the local public reference catalog.'
   if (publicReferencePoll) {
     clearInterval(publicReferencePoll)
   }
+  publicReferencePollMode = 'catalog'
   publicReferencePoll = setInterval(loadPublicReferenceStatus, 2000)
   try {
     const out = await api('/api/public-reference/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        hydrate_details: false,
-        fetch_creature_loot: false,
+        creature_limit: 100,
+        hunting_place_limit: 100,
       }),
     })
     await loadPublicReferenceStatus()
-    publicReferenceInfo.value = `Synced ${out.creatures || 0} creature(s), ${out.creature_loot_rows || 0} loot row(s), and ${out.hunting_places || 0} hunting place(s).`
+    publicReferenceInfo.value = `Synced ${out.creatures || 0} creature catalog row(s) and ${out.hunting_places || 0} hunting place catalog row(s).`
   } catch (error) {
     publicReferenceInfo.value = `Reference sync failed: ${error.message}`
   } finally {
@@ -251,7 +311,45 @@ async function syncPublicReferenceData() {
       clearInterval(publicReferencePoll)
       publicReferencePoll = null
     }
+    publicReferencePollMode = null
     await loadPublicReferenceStatus()
+    publicReferenceBusy.value = false
+  }
+}
+
+async function startPublicReferenceEnrichmentBatch() {
+  return api('/api/public-reference/enrich', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      creature_limit: PUBLIC_REFERENCE_ENRICH_BATCH_SIZE,
+      hunting_place_limit: PUBLIC_REFERENCE_ENRICH_BATCH_SIZE,
+      include_stale: false,
+    }),
+  })
+}
+
+async function enrichPublicReferenceData() {
+  publicReferenceBusy.value = true
+  publicReferenceInfo.value = repeatPublicReferenceEnrichment.value
+    ? `Starting public reference detail enrichment. Repeat will continue in ${PUBLIC_REFERENCE_ENRICH_BATCH_SIZE}-row batches until pending details are done or an issue appears.`
+    : 'Starting public reference detail enrichment.'
+  if (publicReferencePoll) {
+    clearInterval(publicReferencePoll)
+  }
+  publicReferencePollMode = 'enrichment'
+  publicReferencePoll = setInterval(loadPublicReferenceStatus, 2000)
+  try {
+    const out = await startPublicReferenceEnrichmentBatch()
+    publicReferenceInfo.value = out.message || 'Public reference enrichment started.'
+    await loadPublicReferenceStatus()
+  } catch (error) {
+    publicReferenceInfo.value = `Reference enrichment failed: ${error.message}`
+    if (publicReferencePoll) {
+      clearInterval(publicReferencePoll)
+      publicReferencePoll = null
+    }
+    publicReferencePollMode = null
     publicReferenceBusy.value = false
   }
 }
@@ -561,6 +659,7 @@ onBeforeUnmount(() => {
   if (publicReferencePoll) {
     clearInterval(publicReferencePoll)
   }
+  publicReferencePollMode = null
 })
 </script>
 
@@ -657,11 +756,13 @@ onBeforeUnmount(() => {
         :public-reference-status="publicReferenceStatus"
         :public-reference-info="publicReferenceInfo"
         :public-reference-busy="publicReferenceBusy"
+        v-model:repeat-public-reference-enrichment="repeatPublicReferenceEnrichment"
         :item-price-info="itemPriceInfo"
         :item-price-busy="itemPriceBusy"
         :hunts="hunts"
         @refresh="refreshData"
         @sync-public-reference="syncPublicReferenceData"
+        @enrich-public-reference="enrichPublicReferenceData"
         @generate-prices="generateItemPrices"
         @review-import="reviewHuntLogImport"
       />

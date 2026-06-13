@@ -37,7 +37,7 @@ import {
 import { ensureItemHistory, summarizeItemHistory } from "./lib/pricing/itemHistory";
 import { setItemAlias } from "./lib/hunts/itemAliases";
 import { lookupTibiaCharacter, searchKnownCharacters } from "./lib/tibiadata/characters";
-import { getPublicReferenceStatus, syncPublicReferenceData } from "./lib/tibiadata/publicReference";
+import { getPublicReferenceStatus, startPublicReferenceEnrichment, syncPublicReferenceData } from "./lib/tibiadata/publicReference";
 import {
   addMarketWatchlistItem,
   getMarketDashboardSummary,
@@ -195,16 +195,35 @@ export function buildServer(db: Database.Database) {
         : {};
       const creatureLimit = Number(body.creature_limit ?? body.creatureLimit);
       const huntingPlaceLimit = Number(body.hunting_place_limit ?? body.huntingPlaceLimit);
-      const fetchCreatureLoot = body.fetch_creature_loot ?? body.fetchCreatureLoot;
-      const hydrateCreatureDetails = body.hydrate_creature_details ?? body.hydrateCreatureDetails ?? body.hydrate_details ?? body.hydrateDetails;
-      const hydrateHuntingPlaceDetails = body.hydrate_hunting_place_details ?? body.hydrateHuntingPlaceDetails ?? body.hydrate_details ?? body.hydrateDetails;
       return await syncPublicReferenceData(db, {
         creatureLimit: Number.isFinite(creatureLimit) ? Math.max(0, Math.trunc(creatureLimit)) : undefined,
-        huntingPlaceLimit: Number.isFinite(huntingPlaceLimit) ? Math.max(0, Math.trunc(huntingPlaceLimit)) : undefined,
-        hydrateCreatureDetails: typeof hydrateCreatureDetails === "boolean" ? hydrateCreatureDetails : undefined,
-        hydrateHuntingPlaceDetails: typeof hydrateHuntingPlaceDetails === "boolean" ? hydrateHuntingPlaceDetails : undefined,
-        fetchCreatureLoot: typeof fetchCreatureLoot === "boolean" ? fetchCreatureLoot : undefined
+        huntingPlaceLimit: Number.isFinite(huntingPlaceLimit) ? Math.max(0, Math.trunc(huntingPlaceLimit)) : undefined
       });
+    } catch (error) {
+      reply.code(String(error).includes("already running") ? 409 : 500);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.post("/api/public-reference/enrich", async (request, reply) => {
+    try {
+      const body = typeof request.body === "object" && request.body !== null
+        ? (request.body as Record<string, unknown>)
+        : {};
+      const creatureLimit = Number(body.creature_limit ?? body.creatureLimit);
+      const huntingPlaceLimit = Number(body.hunting_place_limit ?? body.huntingPlaceLimit);
+      const includeStale = body.include_stale ?? body.includeStale;
+      const job = startPublicReferenceEnrichment(db, {
+        creatureLimit: Number.isFinite(creatureLimit) ? Math.max(0, Math.trunc(creatureLimit)) : undefined,
+        huntingPlaceLimit: Number.isFinite(huntingPlaceLimit) ? Math.max(0, Math.trunc(huntingPlaceLimit)) : undefined,
+        includeStale: typeof includeStale === "boolean" ? includeStale : undefined
+      });
+      reply.code(202);
+      return {
+        ok: true,
+        job,
+        message: "Public reference enrichment started."
+      };
     } catch (error) {
       reply.code(String(error).includes("already running") ? 409 : 500);
       return { ok: false, error: String(error) };
