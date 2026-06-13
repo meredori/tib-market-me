@@ -81,6 +81,17 @@ The following functionality already exists and should not be rebuilt as future r
 - Match confidence, reasons, alternate candidates, and manual corrections are structurally supported.
 - Practical matching is not reliable yet and must be repaired after public detail enrichment.
 
+### Shared Intelligence Foundation
+
+- Shared backend intelligence types and helpers for entity references, provenance, confidence, freshness, explanations, and job status.
+- Unified long-running intelligence job tables and lifecycle helpers.
+- Public reference status, data health, market dashboard, item details, and hunt matching expose shared metadata instead of one-off status shapes.
+- Shared UI primitives for entity links, confidence, freshness, provenance, decision labels, job status, compact metrics, empty states, and advanced disclosure.
+- Public reference rows persist lightweight intelligence metadata.
+- Existing market, item detail, public reference, hunt matching, and hunt loot surfaces have been migrated onto the shared intelligence language.
+- Item value strategy now consistently separates market, NPC, and ignored values: ignored loot uses NPC value when available, otherwise 0 gp.
+- Hunt Overview and Loot tab layouts have been refined so overview remains compact while the dedicated Loot tab keeps the fuller audit view.
+
 ---
 
 ## Roadmap Principles
@@ -103,6 +114,10 @@ The following functionality already exists and should not be rebuilt as future r
 Create the common product and technical foundation that prevents future features from becoming disconnected screens.
 
 This phase should introduce reusable concepts for entity identity, provenance, confidence, freshness, sync jobs, and explanation metadata.
+
+**Status: Completed.**
+
+Phase 1 has been implemented app-wide rather than as a parallel "new framework." Existing market, item detail, public reference, hunt matching, settings/status, and hunt loot workflows now use the shared intelligence foundation where applicable.
 
 ## Build
 

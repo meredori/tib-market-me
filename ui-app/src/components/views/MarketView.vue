@@ -5,6 +5,7 @@ import {
 } from '@lucide/vue'
 import ConfidenceBadge from '../common/ConfidenceBadge.vue'
 import DecisionLabels from '../common/DecisionLabels.vue'
+import EntityLinkPill from '../common/EntityLinkPill.vue'
 import FreshnessBadge from '../common/FreshnessBadge.vue'
 import SectionHeader from '../common/SectionHeader.vue'
 
@@ -93,7 +94,13 @@ defineEmits([
               <td class="item-image-cell">
                 <img class="item-image" :src="row.image_path || itemImagePath(row.id)" :alt="row.name" loading="lazy" />
               </td>
-              <td><button class="item-link" @click="$emit('open-item', row.id)">{{ row.name || row.wiki_name || `Item ${row.id}` }}</button></td>
+              <td>
+                <EntityLinkPill
+                  :entity="{ type: 'item', id: row.id, name: row.name || row.wiki_name || `Item ${row.id}` }"
+                  clickable
+                  @activate="$emit('open-item', row.id)"
+                />
+              </td>
               <td>{{ formatValue(row.loot_logic?.fair_sale_price ?? row.client_value) }}</td>
               <td>{{ formatValue(row.sell_offer) }}</td>
               <td><ConfidenceBadge :confidence="row.confidence_detail ?? row.confidence" /></td>
@@ -117,10 +124,7 @@ defineEmits([
         <SectionHeader title="Favorites Watchlist" :subtitle="`${marketDashboard.watchlist?.length || 0} items`" />
         <div class="market-card-list">
           <div v-for="item in marketDashboard.watchlist || []" :key="item.item_id" class="market-row-card">
-            <button class="loot-item-link" @click="$emit('open-item', item.item_id)">
-              <img class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.name" loading="lazy" />
-              <span>{{ item.name }}</span>
-            </button>
+            <EntityLinkPill :entity="{ type: 'item', id: item.item_id, name: item.name }" :image-src="itemImagePath(item.item_id)" clickable @activate="$emit('open-item', item.item_id)" />
             <strong>{{ formatValue(item.latest_price) }}</strong>
             <DecisionLabels class="market-labels" :reasons="item.reasons" :warnings="item.warnings" :reason-labels="item.reason_labels" :warning-labels="item.warning_labels" />
             <button class="icon-btn" title="Remove favorite" :disabled="watchlistBusy" @click="$emit('toggle-favorite', item)">
@@ -147,10 +151,7 @@ defineEmits([
             <tbody>
               <tr v-for="item in marketDashboard.historicallyCheap || []" :key="item.item_id">
                 <td>
-                  <button class="loot-item-link" @click="$emit('open-item', item.item_id)">
-                    <img class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.name" loading="lazy" />
-                    <span>{{ item.name }}</span>
-                  </button>
+                  <EntityLinkPill :entity="{ type: 'item', id: item.item_id, name: item.name }" :image-src="itemImagePath(item.item_id)" clickable @activate="$emit('open-item', item.item_id)" />
                 </td>
                 <td>{{ formatValue(item.latest_price) }}</td>
                 <td>{{ formatValue(item.low_band) }} - {{ formatValue(item.high_band) }}</td>
@@ -175,10 +176,7 @@ defineEmits([
         <SectionHeader title="Notable Movers" :subtitle="`${marketDashboard.notableMovers?.length || 0} items`" />
         <div class="market-card-list">
           <div v-for="item in marketDashboard.notableMovers || []" :key="item.item_id" class="market-row-card">
-            <button class="loot-item-link" @click="$emit('open-item', item.item_id)">
-              <img class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.name" loading="lazy" />
-              <span>{{ item.name }}</span>
-            </button>
+            <EntityLinkPill :entity="{ type: 'item', id: item.item_id, name: item.name }" :image-src="itemImagePath(item.item_id)" clickable @activate="$emit('open-item', item.item_id)" />
             <strong>{{ item.divergence_pct === null ? 'n/a' : `${Number(item.divergence_pct).toFixed(1)}%` }}</strong>
             <DecisionLabels class="market-labels" :reasons="item.reasons" :warnings="item.warnings" :reason-labels="item.reason_labels" :warning-labels="item.warning_labels" :limit="3" />
             <button class="icon-btn" title="Toggle favorite" :disabled="watchlistBusy" @click="$emit('toggle-favorite', item)">
@@ -204,10 +202,7 @@ defineEmits([
             <tbody>
               <tr v-for="item in marketDashboard.hotLootedItems || []" :key="item.item_id">
                 <td>
-                  <button class="loot-item-link" @click="$emit('open-item', item.item_id)">
-                    <img class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.name" loading="lazy" />
-                    <span>{{ item.name }}</span>
-                  </button>
+                  <EntityLinkPill :entity="{ type: 'item', id: item.item_id, name: item.name }" :image-src="itemImagePath(item.item_id)" clickable @activate="$emit('open-item', item.item_id)" />
                 </td>
                 <td>{{ formatValue(item.looted_quantity) }}</td>
                 <td>{{ formatValue(item.looted_value) }}</td>
@@ -225,10 +220,7 @@ defineEmits([
         <SectionHeader title="Quiet Or Low Confidence" :subtitle="`${marketDashboard.quietItems?.length || 0} items`" />
         <div class="market-card-list">
           <div v-for="item in marketDashboard.quietItems || []" :key="item.item_id" class="market-row-card">
-            <button class="loot-item-link" @click="$emit('open-item', item.item_id)">
-              <img class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.name" loading="lazy" />
-              <span>{{ item.name }}</span>
-            </button>
+            <EntityLinkPill :entity="{ type: 'item', id: item.item_id, name: item.name }" :image-src="itemImagePath(item.item_id)" clickable @activate="$emit('open-item', item.item_id)" />
             <strong>{{ formatValue(item.month_sold) }} sold/mo</strong>
             <DecisionLabels class="market-labels" :warnings="item.warnings" :warning-labels="item.warning_labels" />
             <button class="icon-btn" title="Toggle favorite" :disabled="watchlistBusy" @click="$emit('toggle-favorite', item)">

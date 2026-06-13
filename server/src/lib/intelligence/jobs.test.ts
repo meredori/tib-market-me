@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { entityRef } from "./metadata";
-import { finishJob, listJobs, recordJobFailure, startJob, updateJobProgress } from "./jobs";
+import { cancelJob, finishJob, listJobs, pauseJob, recordJobFailure, retryJob, startJob, updateJobProgress } from "./jobs";
 
 let db: Database.Database;
 
@@ -78,5 +78,17 @@ describe("intelligence job lifecycle", () => {
     expect(second.status).toBe("running");
     expect(jobs.find((job) => job.id === first.id)?.status).toBe("interrupted");
     expect(jobs.find((job) => job.id === first.id)?.last_error).toBe("Job was interrupted by a newer run");
+  });
+
+  it("supports practical pause, retry, and cancel transitions", () => {
+    const job = startJob(db, { jobType: "public-reference-catalog" });
+    const paused = pauseJob(db, job.id);
+    const retried = retryJob(db, job.id);
+    const cancelled = cancelJob(db, job.id);
+
+    expect(paused.status).toBe("paused");
+    expect(retried).toMatchObject({ status: "running", retry_count: 1, last_error: null });
+    expect(cancelled).toMatchObject({ status: "cancelled" });
+    expect(cancelled.finished_at).toBeTruthy();
   });
 });

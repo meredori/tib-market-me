@@ -62,7 +62,11 @@ function createDb(): Database.Database {
       last_updated TEXT,
       last_seen TEXT,
       fetched_at TEXT NOT NULL,
-      payload_json TEXT NOT NULL
+      payload_json TEXT NOT NULL,
+      provenance_type TEXT NOT NULL DEFAULT 'public_tibia_reference',
+      confidence_score REAL,
+      freshness_status TEXT,
+      intelligence_metadata_json TEXT NOT NULL DEFAULT '{}'
     );
     CREATE TABLE public_creature_loot (
       creature_id INTEGER NOT NULL,
@@ -93,7 +97,11 @@ function createDb(): Database.Database {
       last_updated TEXT,
       last_seen TEXT,
       fetched_at TEXT NOT NULL,
-      payload_json TEXT NOT NULL
+      payload_json TEXT NOT NULL,
+      provenance_type TEXT NOT NULL DEFAULT 'public_tibia_reference',
+      confidence_score REAL,
+      freshness_status TEXT,
+      intelligence_metadata_json TEXT NOT NULL DEFAULT '{}'
     );
     CREATE TABLE public_hunting_place_creatures (
       hunting_place_id INTEGER NOT NULL,
@@ -182,11 +190,19 @@ describe("public Tibia reference data", () => {
     const creature = upsertPublicCreature(db, creaturePayload(), "2026-06-11T00:00:00Z");
 
     expect(creature).toMatchObject({ id: 101, name: "Dragon", last_updated: "2026-06-10T00:00:00Z" });
-    expect(db.prepare("SELECT name, normalized_name, hitpoints, experience FROM public_creatures").get()).toMatchObject({
+    expect(db.prepare("SELECT name, normalized_name, hitpoints, experience, provenance_type, confidence_score, freshness_status FROM public_creatures").get()).toMatchObject({
       name: "Dragon",
       normalized_name: "dragon",
       hitpoints: 1000,
-      experience: 700
+      experience: 700,
+      provenance_type: "public_tibia_reference",
+      confidence_score: 0.85,
+      freshness_status: "fresh"
+    });
+    const metadata = JSON.parse((db.prepare("SELECT intelligence_metadata_json FROM public_creatures").get() as { intelligence_metadata_json: string }).intelligence_metadata_json);
+    expect(metadata).toMatchObject({
+      entity: { type: "creature", id: 101, name: "Dragon" },
+      provenance: [{ type: "public_tibia_reference" }]
     });
   });
 
@@ -194,8 +210,11 @@ describe("public Tibia reference data", () => {
     const place = upsertPublicHuntingPlace(db, huntingPlacePayload(), "2026-06-11T00:00:00Z");
 
     expect(place).toMatchObject({ id: 201, name: "Dragon Lair", min_level: 40, risk_level: "medium" });
-    expect(db.prepare("SELECT last_updated FROM public_hunting_places WHERE id = 201").get()).toEqual({
-      last_updated: "2026-06-09T00:00:00Z"
+    expect(db.prepare("SELECT last_updated, provenance_type, confidence_score, freshness_status FROM public_hunting_places WHERE id = 201").get()).toEqual({
+      last_updated: "2026-06-09T00:00:00Z",
+      provenance_type: "public_tibia_reference",
+      confidence_score: 0.8,
+      freshness_status: "fresh"
     });
   });
 

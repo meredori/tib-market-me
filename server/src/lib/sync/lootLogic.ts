@@ -56,12 +56,15 @@ export function buildLootLogicPreview(row: Record<string, unknown>): LootLogicPr
     ? withNpcSaleFloor(Math.max(1, Math.floor(fairSalePrice * 0.9)), npcBuy)
     : (npcBuy > 0 ? npcBuy : -1);
 
-  const veryLowVolume = monthSold >= 0 && monthSold < 6;
-  const staleAndThin = daySold === 0 && monthSold >= 0 && monthSold < 25 && liquidity < 0.2;
-  const lowMarketQuality = liquidity < 0.1 || confidence < 0.6 || veryLowVolume || staleAndThin;
+  const meaningfulMonthlySales = monthSold >= 10;
+  const veryLowVolume = monthSold >= 0 && monthSold < 5;
+  const staleAndThin = daySold === 0 && monthSold >= 0 && monthSold < 10 && liquidity < 0.15;
+  const lowLiquidity = liquidity < 0.1 && !meaningfulMonthlySales;
+  const lowConfidence = confidence < 0.45 || (confidence < 0.6 && !meaningfulMonthlySales);
+  const lowMarketQuality = lowLiquidity || lowConfidence || veryLowVolume || staleAndThin;
   const hasMarketEvidence = marketSellOffer > 0 || monthSold > 0 || daySold > 0;
   const slowValuableMarket = fairSalePrice >= 10_000 && hasMarketEvidence && confidence >= 0.45;
-  const marketAllowed = fairSalePrice > 0 && (!lowMarketQuality || slowValuableMarket);
+  const marketAllowed = fairSalePrice > 0 && (!lowMarketQuality || slowValuableMarket || meaningfulMonthlySales);
 
   if (!marketAllowed) {
     if (npcBuy > 0) {
@@ -70,7 +73,7 @@ export function buildLootLogicPreview(row: Record<string, unknown>): LootLogicPr
         trend_display: "n/a",
         reason: "Market ignored due to low volume/quality; using NPC sale fallback.",
         market_allowed: false,
-        max_list_price: maxListPrice,
+        max_list_price: -1,
         fair_sale_price: npcBuy,
         min_list_price: npcBuy,
         market_sell_offer: marketSellOffer
@@ -82,9 +85,9 @@ export function buildLootLogicPreview(row: Record<string, unknown>): LootLogicPr
       trend_display: "n/a",
       reason: "Market ignored due to low volume/quality and no known sell value.",
       market_allowed: false,
-      max_list_price: maxListPrice,
-      fair_sale_price: fairSalePrice,
-      min_list_price: minListPrice,
+      max_list_price: -1,
+      fair_sale_price: 0,
+      min_list_price: 0,
       market_sell_offer: marketSellOffer
     };
   }
@@ -125,16 +128,19 @@ function applyLootLogicOverride(
   const trend = asText(row.trend) || base.trend_display || "unknown";
 
   if (overrideMode === "ignore") {
+    const ignoredValue = npcBuy > 0 ? npcBuy : 0;
     return {
       ...base,
       override_mode: "ignore",
       strategy: "ignore",
       trend_display: "n/a",
-      reason: "Manual override: ignore this item for loot value calculations.",
+      reason: npcBuy > 0
+        ? "Manual override: ignore market value and use NPC sale value."
+        : "Manual override: ignore market value; no NPC sale value is known.",
       market_allowed: false,
-      fair_sale_price: -1,
       max_list_price: -1,
-      min_list_price: -1
+      fair_sale_price: ignoredValue,
+      min_list_price: ignoredValue
     };
   }
 
@@ -148,7 +154,7 @@ function applyLootLogicOverride(
         ? "Manual override: use NPC sale value."
         : "Manual override requested NPC value, but no NPC sale value is known.",
       market_allowed: false,
-      max_list_price: npcBuy > 0 ? npcBuy : -1,
+      max_list_price: -1,
       fair_sale_price: npcBuy > 0 ? npcBuy : -1,
       min_list_price: npcBuy > 0 ? npcBuy : -1
     };

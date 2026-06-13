@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { entityRef, explanation, freshness, provenance } from "../intelligence/metadata";
+import { confidence, entityRef, explanation, freshness, provenance } from "../intelligence/metadata";
 import { finishJob, recordJobFailure, startJob, summarizeJobs, updateJobProgress } from "../intelligence/jobs";
 import { asNumberOrNull, asRecord, asText, firstNumber, firstText, nowIso } from "../hunts/utils";
 
@@ -399,13 +399,36 @@ export function upsertPublicCreature(db: Database.Database, payload: unknown, fe
   if (!creature) {
     return null;
   }
+  const creatureFreshness = freshness(creature.last_updated ?? creature.fetched_at, {
+    lastVerified: creature.fetched_at,
+    staleAfterHours: 24 * 30,
+    agingAfterHours: 24 * 14
+  });
+  const creatureConfidence = confidence(creature.hitpoints !== null || creature.experience !== null || creature.bestiary_class !== null ? 0.85 : 0.45, {
+    estimated: true,
+    missingDataReason: creature.hitpoints === null && creature.experience === null && creature.bestiary_class === null
+      ? "Only catalog-level creature data is available."
+      : null
+  });
+  const creatureProvenance = provenance("public_tibia_reference", {
+    source_ref: entityRef("creature", { id: creature.id, name: creature.name, normalized_name: normalizePublicName(creature.name) }),
+    observed_at: creature.last_updated,
+    imported_at: creature.fetched_at
+  });
+  const metadataJson = JSON.stringify({
+    entity: entityRef("creature", { id: creature.id, name: creature.name, normalized_name: normalizePublicName(creature.name) }),
+    provenance: [creatureProvenance],
+    confidence: creatureConfidence,
+    freshness: creatureFreshness
+  });
 
   db.prepare(
     `
     INSERT INTO public_creatures (
       id, name, normalized_name, hitpoints, experience, bestiary_class, bestiary_category,
-      bestiary_difficulty, charm_points, total_kills, last_updated, last_seen, fetched_at, payload_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      bestiary_difficulty, charm_points, total_kills, last_updated, last_seen, fetched_at, payload_json,
+      provenance_type, confidence_score, freshness_status, intelligence_metadata_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       normalized_name = excluded.normalized_name,
@@ -419,7 +442,11 @@ export function upsertPublicCreature(db: Database.Database, payload: unknown, fe
       last_updated = excluded.last_updated,
       last_seen = excluded.last_seen,
       fetched_at = excluded.fetched_at,
-      payload_json = excluded.payload_json
+      payload_json = excluded.payload_json,
+      provenance_type = excluded.provenance_type,
+      confidence_score = excluded.confidence_score,
+      freshness_status = excluded.freshness_status,
+      intelligence_metadata_json = excluded.intelligence_metadata_json
   `
   ).run(
     creature.id,
@@ -435,7 +462,11 @@ export function upsertPublicCreature(db: Database.Database, payload: unknown, fe
     creature.last_updated,
     creature.last_seen,
     creature.fetched_at,
-    creature.payload_json
+    creature.payload_json,
+    creatureProvenance.type,
+    creatureConfidence.score,
+    creatureFreshness.status,
+    metadataJson
   );
 
   return creature;
@@ -481,13 +512,36 @@ export function upsertPublicHuntingPlace(db: Database.Database, payload: unknown
   if (!place) {
     return null;
   }
+  const placeFreshness = freshness(place.last_updated ?? place.fetched_at, {
+    lastVerified: place.fetched_at,
+    staleAfterHours: 24 * 30,
+    agingAfterHours: 24 * 14
+  });
+  const placeConfidence = confidence(place.min_level !== null || place.location !== null || place.risk_level !== null ? 0.8 : 0.45, {
+    estimated: true,
+    missingDataReason: place.min_level === null && place.location === null && place.risk_level === null
+      ? "Only catalog-level hunting-place data is available."
+      : null
+  });
+  const placeProvenance = provenance("public_tibia_reference", {
+    source_ref: entityRef("hunting_place", { id: place.id, name: place.name, normalized_name: normalizePublicName(place.name) }),
+    observed_at: place.last_updated,
+    imported_at: place.fetched_at
+  });
+  const metadataJson = JSON.stringify({
+    entity: entityRef("hunting_place", { id: place.id, name: place.name, normalized_name: normalizePublicName(place.name) }),
+    provenance: [placeProvenance],
+    confidence: placeConfidence,
+    freshness: placeFreshness
+  });
 
   db.prepare(
     `
     INSERT INTO public_hunting_places (
       id, name, normalized_name, location, min_level, max_level, exp_stars, loot_stars,
-      bestiary_stars, risk_level, last_updated, last_seen, fetched_at, payload_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      bestiary_stars, risk_level, last_updated, last_seen, fetched_at, payload_json,
+      provenance_type, confidence_score, freshness_status, intelligence_metadata_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       normalized_name = excluded.normalized_name,
@@ -501,7 +555,11 @@ export function upsertPublicHuntingPlace(db: Database.Database, payload: unknown
       last_updated = excluded.last_updated,
       last_seen = excluded.last_seen,
       fetched_at = excluded.fetched_at,
-      payload_json = excluded.payload_json
+      payload_json = excluded.payload_json,
+      provenance_type = excluded.provenance_type,
+      confidence_score = excluded.confidence_score,
+      freshness_status = excluded.freshness_status,
+      intelligence_metadata_json = excluded.intelligence_metadata_json
   `
   ).run(
     place.id,
@@ -517,7 +575,11 @@ export function upsertPublicHuntingPlace(db: Database.Database, payload: unknown
     place.last_updated,
     place.last_seen,
     place.fetched_at,
-    place.payload_json
+    place.payload_json,
+    placeProvenance.type,
+    placeConfidence.score,
+    placeFreshness.status,
+    metadataJson
   );
 
   return place;

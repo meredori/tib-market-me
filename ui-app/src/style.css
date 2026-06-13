@@ -94,6 +94,42 @@ table {
   min-width: 640px;
 }
 
+.hunt-loot-table.compact {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.hunt-loot-table.compact th:nth-child(1),
+.hunt-loot-table.compact td:nth-child(1) {
+  width: 42%;
+}
+
+.hunt-loot-table.compact th:nth-child(2),
+.hunt-loot-table.compact td:nth-child(2) {
+  width: 12%;
+}
+
+.hunt-loot-table.compact th:nth-child(3),
+.hunt-loot-table.compact td:nth-child(3),
+.hunt-loot-table.compact th:nth-child(4),
+.hunt-loot-table.compact td:nth-child(4) {
+  width: 16%;
+}
+
+.hunt-loot-table.compact th:nth-child(5),
+.hunt-loot-table.compact td:nth-child(5) {
+  width: 14%;
+}
+
+.hunt-loot-table.compact th,
+.hunt-loot-table.compact td,
+.hunt-loot-table.compact .source-cell,
+.hunt-loot-table.compact .entity-link-pill span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 th,
 td {
   border-bottom: 1px solid var(--line-soft);
@@ -671,6 +707,10 @@ th {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   gap: 10px;
+}
+
+.workspace-grid.loot-only {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .monster-total {

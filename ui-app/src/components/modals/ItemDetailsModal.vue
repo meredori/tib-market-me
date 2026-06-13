@@ -26,6 +26,9 @@ defineEmits(['close', 'update:overrideMode', 'save-override', 'update:showAdvanc
 
 const itemName = computed(() => props.item?.name || props.item?.wiki_name || (props.item?.id ? `Item ${props.item.id}` : 'Item'))
 const bestNpcBuyer = computed(() => props.item?.npc_buy_rows?.[0] || null)
+const lootStrategy = computed(() => props.item?.loot_logic?.strategy || 'ignore')
+const usesMarketListing = computed(() => lootStrategy.value === 'market')
+const usesNpcValue = computed(() => lootStrategy.value === 'npc_buy' || lootStrategy.value === 'npc_sell')
 const lootRelevance = computed(() => {
   const itemId = Number(props.item?.id)
   if (!Number.isFinite(itemId)) {
@@ -54,6 +57,21 @@ const minPrice = computed(() => firstPositive(
   props.item?.fair_price,
   props.item?.npc_buy,
 ))
+const primaryValueLabel = computed(() => {
+  if (usesNpcValue.value) {
+    return 'NPC sale value'
+  }
+  if (usesMarketListing.value) {
+    return 'Fair sale price'
+  }
+  return 'Loot value'
+})
+const primaryValue = computed(() => {
+  if (usesNpcValue.value) {
+    return firstPositive(props.item?.loot_logic?.fair_sale_price, bestNpcBuyer.value?.price, props.item?.npc_buy)
+  }
+  return fairSalePrice.value
+})
 
 function numericValue(value) {
   const numeric = Number(value)
@@ -130,17 +148,17 @@ function npcLocation(row) {
         </div>
 
         <div class="item-value-grid">
-          <div>
+          <div v-if="usesMarketListing">
             <span class="muted">Max list price</span>
             <strong>{{ formatValue(maxListPrice) }}</strong>
           </div>
-          <div>
+          <div v-if="usesMarketListing">
             <span class="muted">Min list price</span>
             <strong>{{ formatValue(minPrice) }}</strong>
           </div>
           <div>
-            <span class="muted">Fair sale price</span>
-            <strong>{{ formatValue(fairSalePrice) }}</strong>
+            <span class="muted">{{ primaryValueLabel }}</span>
+            <strong>{{ formatValue(primaryValue) }}</strong>
           </div>
           <div>
             <span class="muted">Sold this month</span>
@@ -186,10 +204,10 @@ function npcLocation(row) {
               <span class="muted">{{ overrideInfo }}</span>
             </div>
             <div class="modal-grid">
-              <div><strong>Strategy:</strong> {{ item.loot_logic?.strategy || 'n/a' }}</div>
-              <div><strong>Max list price:</strong> {{ formatValue(maxListPrice) }}</div>
-              <div><strong>Fair sale price:</strong> {{ formatValue(fairSalePrice) }}</div>
-              <div><strong>Min list price:</strong> {{ formatValue(minPrice) }}</div>
+              <div><strong>Strategy:</strong> {{ lootStrategy || 'n/a' }}</div>
+              <div v-if="usesMarketListing"><strong>Max list price:</strong> {{ formatValue(maxListPrice) }}</div>
+              <div><strong>{{ primaryValueLabel }}:</strong> {{ formatValue(primaryValue) }}</div>
+              <div v-if="usesMarketListing"><strong>Min list price:</strong> {{ formatValue(minPrice) }}</div>
               <div><strong>Current market offer:</strong> {{ formatValue(item.sell_offer) }}</div>
               <div><strong>Trend:</strong> {{ item.loot_logic?.trend_display || item.trend || 'n/a' }}</div>
               <div><strong>Trend score:</strong> {{ displayNumber(item.trend_score) }}</div>

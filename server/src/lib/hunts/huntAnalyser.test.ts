@@ -204,6 +204,64 @@ describe("hunt analyser preview", () => {
       })
     ]));
   });
+
+  it("does not let ignored market prices inflate hunt loot totals", async () => {
+    const ignoredMarketLoot = {
+      ...lootRow("dusty trinket", 2500),
+      sell_offer: -1,
+      month_sold: 2,
+      day_sold: 0,
+      liquidity: 0.02,
+      confidence: 0.4,
+      npc_buy: 0
+    };
+
+    const preview = await parseHuntPreview(previewDb({
+      loot: {
+        "dusty trinket": ignoredMarketLoot
+      }
+    }), {
+      raw_text: sampleHunt("  3x dusty trinket")
+    });
+
+    expect((preview.loot_items as Array<Record<string, unknown>>)[0]).toMatchObject({
+      name: "dusty trinket",
+      unit_value: 0,
+      total_value: 0,
+      value_source: "loot_logic",
+      loot_logic: expect.objectContaining({
+        strategy: "ignore",
+        fair_sale_price: 0
+      })
+    });
+  });
+
+  it("uses NPC value for manually ignored loot when available", async () => {
+    const ignoredNpcLoot = {
+      ...lootRow("npc trinket", 2500),
+      npc_buy: 800,
+      override_mode: "ignore"
+    };
+
+    const preview = await parseHuntPreview(previewDb({
+      loot: {
+        "npc trinket": ignoredNpcLoot
+      }
+    }), {
+      raw_text: sampleHunt("  3x npc trinket")
+    });
+
+    expect((preview.loot_items as Array<Record<string, unknown>>)[0]).toMatchObject({
+      name: "npc trinket",
+      unit_value: 800,
+      total_value: 2400,
+      value_source: "loot_logic",
+      loot_logic: expect.objectContaining({
+        strategy: "ignore",
+        fair_sale_price: 800
+      })
+    });
+  });
 });
 
 describe("item detail hydration", () => {
@@ -267,6 +325,15 @@ describe("hunt to public hunting-place matching", () => {
       selected_hunting_place_id: 201,
       status: "auto"
     });
+    expect(result.confidence_detail).toMatchObject({ level: "high" });
+    expect(result.provenance).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "public_tibia_reference" }),
+      expect.objectContaining({ type: "personal_hunt" }),
+      expect.objectContaining({ type: "derived_calculation" })
+    ]));
+    expect(result.explanations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "2 matching monsters" })
+    ]));
   });
 
   it("keeps partial sub-area matches for review", () => {

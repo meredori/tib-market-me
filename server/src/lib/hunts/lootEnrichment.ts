@@ -111,6 +111,18 @@ function fallbackLookupRow(itemId: number, name: string | null): LootLookupRow {
   };
 }
 
+function lootLogicUnitValue(lootLogic: ReturnType<typeof getEffectiveLootLogicPreview> | null): number | null {
+  if (!lootLogic) {
+    return null;
+  }
+
+  if (lootLogic.strategy === "ignore") {
+    return Math.max(0, Math.round(lootLogic.fair_sale_price || 0));
+  }
+
+  return lootLogic.fair_sale_price > 0 ? Math.round(lootLogic.fair_sale_price) : null;
+}
+
 export function lookupLootItem(db: Database.Database, name: string): LootLookupRow | null {
   const latestRun = db.prepare("SELECT id FROM market_runs WHERE status = 'success' ORDER BY id DESC LIMIT 1").get() as { id: number } | undefined;
   if (!latestRun) {
@@ -194,8 +206,8 @@ export async function enrichLootItems(
     const hardCoded = HARD_CODED_ITEM_VALUES[item.normalized_name] ?? null;
     const lookup = lookupLootItem(db, item.name);
     const lootLogic = lookup ? getEffectiveLootLogicPreview(lookup as unknown as Record<string, unknown>) : null;
-    const lookupPrice = lootLogic?.fair_sale_price && lootLogic.fair_sale_price > 0 ? lootLogic.fair_sale_price : null;
-    const unitValue = hardCoded?.unit_value ?? (lookupPrice !== null ? Math.round(lookupPrice) : null);
+    const lookupPrice = lootLogicUnitValue(lootLogic);
+    const unitValue = hardCoded?.unit_value ?? lookupPrice;
     const excluded = excludedSet.has(item.normalized_name);
     const rawTotalValue = unitValue !== null ? unitValue * item.quantity : 0;
     const totalValue = excluded ? 0 : rawTotalValue;
@@ -237,7 +249,7 @@ export async function enrichLootItems(
       lookup,
       item_detail: itemDetail,
       item_detail_status: itemDetailStatus,
-      value_source: hardCoded ? "coin" : lookupPrice !== null ? "loot_logic" : "unknown"
+      value_source: hardCoded ? "coin" : lootLogic ? "loot_logic" : "unknown"
     });
   }
 

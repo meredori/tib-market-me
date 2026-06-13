@@ -5,6 +5,7 @@ import {
 } from '@lucide/vue'
 import MetricCard from '../common/MetricCard.vue'
 import SectionHeader from '../common/SectionHeader.vue'
+import EntityLinkPill from '../common/EntityLinkPill.vue'
 
 defineProps({
   recentHunts: { type: Array, default: () => [] },
@@ -105,7 +106,13 @@ defineEmits(['open-history', 'open-hunt', 'open-item'])
             </thead>
             <tbody>
               <tr v-for="area in huntingAreas.slice(0, 6)" :key="area.location_name">
-                <td><button class="item-link" @click="$emit('open-history', area.location_name)">{{ area.location_name }}</button></td>
+                <td>
+                  <EntityLinkPill
+                    :entity="{ type: 'hunting_place', id: area.location_name, name: area.location_name }"
+                    clickable
+                    @activate="$emit('open-history', area.location_name)"
+                  />
+                </td>
                 <td>{{ area.hunt_count }}</td>
                 <td>{{ formatValue(area.average_xp_per_hour) }}</td>
                 <td>{{ formatValue(area.average_gp_per_hour) }}</td>
@@ -132,16 +139,13 @@ defineEmits(['open-history', 'open-hunt', 'open-item'])
             <tbody>
               <tr v-for="item in topLootRows" :key="item.name">
                 <td>
-                  <button v-if="item.item_id" class="loot-item-link" @click="$emit('open-item', item.item_id)">
-                    <img
-                      class="loot-item-image"
-                      :src="itemImagePath(item.item_id)"
-                      :alt="item.name"
-                      loading="lazy"
-                      @error="$event.currentTarget.classList.add('is-missing')"
-                    />
-                    <span>{{ item.name }}</span>
-                  </button>
+                  <EntityLinkPill
+                    v-if="item.item_id"
+                    :entity="{ type: 'item', id: item.item_id, name: item.name }"
+                    :image-src="itemImagePath(item.item_id)"
+                    clickable
+                    @activate="$emit('open-item', item.item_id)"
+                  />
                   <span v-else class="loot-item-cell">
                     <span class="loot-image-placeholder">ID</span>
                     <span>{{ item.name }}</span>

@@ -241,6 +241,60 @@ export function finishJob(
   return getJob(db, jobId);
 }
 
+export function pauseJob(db: Database.Database, jobId: number, message = "Job paused"): JobStatus {
+  const updatedAt = nowIso();
+  db.prepare(
+    `
+    UPDATE intelligence_jobs
+    SET status = 'paused',
+      updated_at = ?
+    WHERE id = ?
+      AND status IN ('queued', 'running', 'backoff')
+    `
+  ).run(updatedAt, Math.trunc(jobId));
+  recordEvent(db, jobId, "paused", message);
+  return getJob(db, jobId);
+}
+
+export function cancelJob(db: Database.Database, jobId: number, message = "Job cancelled"): JobStatus {
+  const finishedAt = nowIso();
+  db.prepare(
+    `
+    UPDATE intelligence_jobs
+    SET status = 'cancelled',
+      finished_at = ?,
+      updated_at = ?,
+      last_error = NULL,
+      last_error_at = NULL,
+      backoff_until = NULL
+    WHERE id = ?
+      AND status IN ('queued', 'running', 'paused', 'backoff')
+    `
+  ).run(finishedAt, finishedAt, Math.trunc(jobId));
+  recordEvent(db, jobId, "cancelled", message);
+  return getJob(db, jobId);
+}
+
+export function retryJob(db: Database.Database, jobId: number, message = "Job retry requested"): JobStatus {
+  const updatedAt = nowIso();
+  db.prepare(
+    `
+    UPDATE intelligence_jobs
+    SET status = 'running',
+      retry_count = retry_count + 1,
+      backoff_until = NULL,
+      last_error = NULL,
+      last_error_at = NULL,
+      finished_at = NULL,
+      updated_at = ?
+    WHERE id = ?
+      AND status IN ('paused', 'backoff', 'error', 'interrupted')
+    `
+  ).run(updatedAt, Math.trunc(jobId));
+  recordEvent(db, jobId, "retry", message);
+  return getJob(db, jobId);
+}
+
 export function getJob(db: Database.Database, jobId: number): JobStatus {
   const row = db.prepare("SELECT * FROM intelligence_jobs WHERE id = ?").get(Math.trunc(jobId)) as Record<string, unknown> | undefined;
   if (!row) {

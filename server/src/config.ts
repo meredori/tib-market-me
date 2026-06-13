@@ -26,7 +26,6 @@ export const config = {
   maxRetries: envNumber("MAX_RETRIES", 6),
   pageLimit: envNumber("PAGE_LIMIT", 250),
   pagePauseMs: envNumber("PAGE_PAUSE_MS", 350),
-  ignoredItemExportValue: envNumber("IGNORED_ITEM_EXPORT_VALUE", 1),
   dbPath: path.resolve(PROJECT_ROOT, "data", "tibia-market.sqlite"),
   migrationsDir: path.resolve(PROJECT_ROOT, "db", "migrations"),
   outputItemPricesPath: path.resolve(WORKSPACE_ROOT, "itemprices.json"),

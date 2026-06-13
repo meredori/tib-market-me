@@ -123,7 +123,18 @@ describe("market dashboard summary", () => {
 
     expect(cheap[0].name).toBe("Cheap Loot");
     expect(cheap[0].reason_labels).toContain("below historical band");
+    expect(cheap[0].reasons).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        label: "below historical band",
+        provenance: expect.arrayContaining([expect.objectContaining({ type: "market_sync" })])
+      })
+    ]));
+    expect(cheap[0].confidence_detail).toMatchObject({ level: "high" });
+    expect(cheap[0].freshness).toMatchObject({ status: "fresh" });
     expect(quiet.find((item) => item.name === "Thin Loot")?.warning_labels).toContain("needs more snapshots");
+    expect(quiet.find((item) => item.name === "Thin Loot")?.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "needs more snapshots" })
+    ]));
   });
 
   it("includes watchlist context and supports idempotent favorite add/remove", () => {

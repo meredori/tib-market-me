@@ -12,6 +12,8 @@ defineProps({
   historyByItemId: { type: Object, default: () => ({}) },
   historyLoadingByItemId: { type: Object, default: () => ({}) },
   allowLootControls: { type: Boolean, default: true },
+  showMonsters: { type: Boolean, default: true },
+  showLootAuditColumns: { type: Boolean, default: true },
   showSuggestions: { type: Boolean, default: true },
   formatValue: { type: Function, required: true },
   formatSigned: { type: Function, required: true },
@@ -29,8 +31,9 @@ defineEmits(['open-item', 'assign-item-id', 'hide-loot', 'restore-loot', 'toggle
     :format-signed="formatSigned"
   />
 
-  <div class="workspace-grid">
+  <div class="workspace-grid" :class="{ 'loot-only': !showMonsters }">
     <HuntMonsters
+      v-if="showMonsters"
       :monsters="preview.monsters || []"
       :format-value="formatValue"
     />
@@ -42,6 +45,7 @@ defineEmits(['open-item', 'assign-item-id', 'hide-loot', 'restore-loot', 'toggle
       :visible-loot-items="visibleLootItems"
       :history-loading-by-item-id="historyLoadingByItemId"
       :allow-loot-controls="allowLootControls"
+      :show-audit-columns="showLootAuditColumns"
       :format-value="formatValue"
       :item-image-path="itemImagePath"
       @open-item="$emit('open-item', $event)"

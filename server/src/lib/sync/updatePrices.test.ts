@@ -70,6 +70,12 @@ describe("item details", () => {
       { npc_name: "Augustin", location: "Bounac", price: 3000 },
       { npc_name: "Briasol", location: "Ab'Dendriel City", price: 3000 }
     ]);
+    expect(details?.confidence_detail).toMatchObject({ level: "high", score: 0.9 });
+    expect(details?.freshness).toMatchObject({ stale: false, last_updated: "2026-06-12T00:00:00.000Z" });
+    expect(details?.provenance).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "market_sync" }),
+      expect.objectContaining({ type: "derived_calculation" })
+    ]));
   });
 
   it("exposes max, fair, and minimum sale prices as the canonical loot logic values", () => {

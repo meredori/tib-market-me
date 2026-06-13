@@ -6,6 +6,7 @@ import {
   RotateCcw,
   X,
 } from '@lucide/vue'
+import EntityLinkPill from '../common/EntityLinkPill.vue'
 
 defineProps({
   lootSummary: { type: Object, default: () => ({}) },
@@ -14,6 +15,7 @@ defineProps({
   visibleLootItems: { type: Array, default: () => [] },
   historyLoadingByItemId: { type: Object, default: () => ({}) },
   allowLootControls: { type: Boolean, default: true },
+  showAuditColumns: { type: Boolean, default: true },
   formatValue: { type: Function, required: true },
   itemImagePath: { type: Function, required: true },
 })
@@ -62,17 +64,17 @@ function hydrationLabel(status) {
       </label>
     </div>
     <div class="table-wrap">
-      <table>
+      <table class="hunt-loot-table" :class="{ compact: !showAuditColumns && !allowLootControls }">
         <thead>
           <tr>
             <th>Item</th>
             <th>Qty</th>
             <th>Unit GP</th>
             <th>Total GP</th>
-            <th>GP/OZ</th>
+            <th v-if="showAuditColumns">GP/OZ</th>
             <th>Source</th>
-            <th>Status</th>
-            <th class="action-col"></th>
+            <th v-if="showAuditColumns">Status</th>
+            <th v-if="allowLootControls" class="action-col"></th>
           </tr>
         </thead>
         <tbody>
@@ -83,27 +85,21 @@ function hydrationLabel(status) {
           >
             <td>
               <span v-if="item.item_id" class="loot-item-cell">
-                <button class="loot-item-link" @click="$emit('open-item', item.item_id)">
-                  <img
-                    class="loot-item-image"
-                    :src="itemImagePath(item.item_id)"
-                    :alt="item.name"
-                    loading="lazy"
-                    @error="$event.currentTarget.classList.add('is-missing')"
-                  />
-                  <span>{{ item.name }}</span>
-                </button>
+                <EntityLinkPill
+                  :entity="{ type: 'item', id: item.item_id, name: item.name }"
+                  :image-src="itemImagePath(item.item_id)"
+                  clickable
+                  @activate="$emit('open-item', item.item_id)"
+                />
                 <span v-if="historyLoadingByItemId[item.item_id]" class="tiny-spinner" title="Loading history"></span>
               </span>
-              <button
+              <EntityLinkPill
                 v-else
-                class="loot-item-link unresolved"
-                title="Assign an item id"
-                @click="$emit('assign-item-id', item)"
-              >
-                <span class="loot-image-placeholder">ID</span>
-                <span>{{ item.name }}</span>
-              </button>
+                :entity="{ type: 'item', id: null, name: item.name }"
+                clickable
+                unresolved
+                @activate="$emit('assign-item-id', item)"
+              />
             </td>
             <td>{{ formatValue(item.quantity) }}</td>
             <td>{{ formatValue(item.unit_value) }}</td>
@@ -111,17 +107,17 @@ function hydrationLabel(status) {
               {{ formatValue(item.total_value) }}
               <span v-if="item.excluded" class="muted">hidden</span>
             </td>
-            <td>{{ item.gp_per_oz ?? 'n/a' }}</td>
-            <td>{{ item.loot_logic?.strategy || 'n/a' }}</td>
-            <td>
+            <td v-if="showAuditColumns">{{ item.gp_per_oz ?? 'n/a' }}</td>
+            <td class="source-cell">{{ item.loot_logic?.strategy || 'n/a' }}</td>
+            <td v-if="showAuditColumns">
               <span class="status-icon" :title="hydrationLabel(item.item_detail_status)">
                 <component :is="hydrationIcon(item.item_detail_status)" :size="15" />
                 {{ item.item_detail_status || 'unknown' }}
               </span>
             </td>
-            <td class="action-col">
+            <td v-if="allowLootControls" class="action-col">
               <button
-                v-if="allowLootControls && item.excluded"
+                v-if="item.excluded"
                 class="icon-btn"
                 title="Restore item"
                 @click="$emit('restore-loot', item)"
@@ -129,7 +125,7 @@ function hydrationLabel(status) {
                 <RotateCcw :size="15" />
               </button>
               <button
-                v-else-if="allowLootControls"
+                v-else
                 class="icon-btn danger"
                 title="Hide item"
                 aria-label="Hide item"
@@ -140,7 +136,7 @@ function hydrationLabel(status) {
             </td>
           </tr>
           <tr v-if="!visibleLootItems.length">
-            <td colspan="8" class="muted">No loot items parsed.</td>
+            <td :colspan="4 + (showAuditColumns ? 2 : 0) + (allowLootControls ? 1 : 0)" class="muted">No loot items parsed.</td>
           </tr>
         </tbody>
       </table>

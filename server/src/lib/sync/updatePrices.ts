@@ -858,7 +858,7 @@ export function generateItemPricesFile(
     const clientValue = asInt(row.client_value, -1);
 
     const selectedValue = lootLogic.strategy === "ignore"
-      ? Math.max(0, asInt(config.ignoredItemExportValue, 1))
+      ? Math.max(0, asInt(row.npc_buy, 0))
       : mode === "sell_offer"
         ? (lootLogic.fair_sale_price > 0 ? lootLogic.fair_sale_price : clientValue)
         : (lootLogic.min_list_price > 0 ? lootLogic.min_list_price : (lootLogic.fair_sale_price > 0 ? lootLogic.fair_sale_price : clientValue));
