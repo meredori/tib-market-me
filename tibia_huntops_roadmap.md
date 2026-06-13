@@ -346,6 +346,8 @@ Add diagnostics for:
 
 # Phase 3: Hunt Location Repair And Retroactive Matching
 
+**Status: Completed.**
+
 ## Goal
 
 Make hunt-to-hunting-place matching practical, explainable, and trustworthy.
@@ -401,22 +403,21 @@ Rules:
 
 Improve hunt detail/edit workflow with:
 
-- Known hunting-place search.
-- Suggested matches with confidence and reasons.
-- Accept suggestion.
-- Keep manual/free-text location.
+- A single Location text field for the saved display name.
+- A hunting spot dropdown where `None` keeps a custom location and selecting an imported hunting spot links the hunt.
+- Suggested/imported hunting spots in the same dropdown, with confidence shown only as option text where useful.
+- Search-as-you-type results feeding the same dropdown.
 - Mark as mixed route/travel hunt.
-- Clear automatic match if wrong.
+- Reverting the dropdown to `None` to remove the linked hunting spot while keeping custom text.
 
 ### 5. UI Markers
 
 Clearly distinguish:
 
-- Manual location text.
-- Automatic high-confidence match.
-- Suggested match not accepted.
-- Low-confidence ambiguous match.
-- Unknown/unmatched location.
+- `Custom` when the hunt has only `location_name` text.
+- `Linked` when the hunt has a `public_hunting_place_id` for an imported hunting spot.
+
+Do not surface automatic/review/unmatched/confidence states as hunt-history location type pills.
 
 ### 6. Hunting Place Match Summary
 
@@ -434,7 +435,7 @@ For matched hunts, show:
 - Matching explains why it did or did not run.
 - Retroactive matching can process old hunts safely.
 - Manual corrections are preserved unless explicitly replaced.
-- UI clearly distinguishes manual, automatic, suggested, and unmatched states.
+- UI clearly distinguishes custom text entries from linked imported hunting spots.
 - Regression tests cover exact matches, partial matches, aliases, noisy/travel kills, missing enrichment, low confidence, and manual-preservation rules.
 - Server and UI builds pass.
 

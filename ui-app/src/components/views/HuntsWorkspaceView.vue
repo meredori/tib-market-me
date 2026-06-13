@@ -4,13 +4,10 @@ import {
   CheckCircle2,
   ChevronRight,
   Download,
-  MapPinned,
   RefreshCw,
   ShieldQuestion,
   Trash2,
 } from '@lucide/vue'
-import ConfidenceBadge from '../common/ConfidenceBadge.vue'
-import DecisionLabels from '../common/DecisionLabels.vue'
 import HuntSummary from '../HuntSummary.vue'
 
 defineProps({
@@ -30,14 +27,31 @@ defineEmits([
   'open-hunt',
   'open-item',
   'assign-item-id',
+  'save-previous-hunt',
 ])
 
 function huntingPlaceMatch(preview) {
   return preview?.location?.hunting_place_match || preview?.saved_hunt?.hunting_place_match || null
 }
 
-function matchConfidence(match) {
-  return `${Math.round(Number(match?.confidence || 0) * 100)}%`
+function huntingPlaceOptions(match, hunts) {
+  const byId = new Map()
+  for (const candidate of match?.candidates || []) {
+    byId.set(Number(candidate.id), candidate)
+  }
+  for (const place of hunts.huntingPlaceSearchResults.value || []) {
+    if (!byId.has(Number(place.id))) {
+      byId.set(Number(place.id), { ...place, confidence: 0 })
+    }
+  }
+  return Array.from(byId.values())
+}
+
+function optionLabel(candidate) {
+  const confidence = Number(candidate?.confidence || 0)
+  const pct = confidence > 0 ? ` (${Math.round(confidence * 100)}%)` : ''
+  const location = candidate?.location ? ` - ${candidate.location}` : ''
+  return `${candidate?.name || 'Unknown'}${pct}${location}`
 }
 </script>
 
@@ -178,24 +192,33 @@ function matchConfidence(match) {
         <h3>Review Log Import</h3>
         <span class="muted mono">{{ hunts.importHuntCandidate.value?.file_name }}</span>
         <label>Name<input v-model="hunts.importHuntDraftLabel.value" @input="hunts.markUnsavedHuntChanges" /></label>
-        <label>Location<input v-model="hunts.importHuntDraftLocation.value" @input="hunts.markUnsavedHuntChanges" /></label>
-        <div v-if="huntingPlaceMatch(hunts.importHuntPreview.value)?.candidates?.length" class="match-review">
-          <div class="match-review-head">
-            <MapPinned :size="16" />
-            <span>Hunting Place</span>
-            <strong>{{ huntingPlaceMatch(hunts.importHuntPreview.value).status }} <ConfidenceBadge :confidence="huntingPlaceMatch(hunts.importHuntPreview.value).confidence_detail ?? huntingPlaceMatch(hunts.importHuntPreview.value).confidence" /></strong>
-          </div>
-          <select v-model="hunts.importHuntDraftHuntingPlaceId.value" @change="hunts.markUnsavedHuntChanges">
-            <option value="">No staged place</option>
-            <option
-              v-for="candidate in huntingPlaceMatch(hunts.importHuntPreview.value).candidates"
-              :key="`import-place-${candidate.id}`"
-              :value="String(candidate.id)"
+        <div class="location-field">
+          <label>
+            Location
+            <input
+              :value="hunts.importHuntDraftLocation.value"
+              placeholder="Custom location text"
+              @input="hunts.updateLocationSearch(hunts.importHuntDraftLocation, hunts.importHuntDraftHuntingPlaceId, $event.target.value)"
+            />
+          </label>
+          <label>
+            Hunting spot match
+            <select
+              :value="hunts.importHuntDraftHuntingPlaceId.value"
+              @change="hunts.selectHuntingPlaceFromOptions($event.target.value, huntingPlaceOptions(huntingPlaceMatch(hunts.importHuntPreview.value), hunts), hunts.importHuntDraftLocation, hunts.importHuntDraftHuntingPlaceId)"
             >
-              {{ candidate.name }} ({{ matchConfidence(candidate) }})
-            </option>
-          </select>
-          <DecisionLabels :reasons="huntingPlaceMatch(hunts.importHuntPreview.value).explanations" :reason-labels="huntingPlaceMatch(hunts.importHuntPreview.value).reasons" :limit="3" />
+              <option value="">None</option>
+              <option
+                v-for="candidate in huntingPlaceOptions(huntingPlaceMatch(hunts.importHuntPreview.value), hunts)"
+                :key="`import-place-${candidate.id}`"
+                :value="String(candidate.id)"
+              >
+                {{ optionLabel(candidate) }}
+              </option>
+            </select>
+          </label>
+          <label class="inline-check"><input v-model="hunts.importHuntDraftMatchMode.value" true-value="mixed_route" false-value="auto" type="checkbox" @change="hunts.markUnsavedHuntChanges" /> Mixed route/travel hunt</label>
+          <small v-if="hunts.huntingPlaceSearchInfo.value">{{ hunts.huntingPlaceSearchInfo.value }}</small>
         </div>
         <label>Character<input v-model="hunts.importHuntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Tags<input v-model="hunts.importHuntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
@@ -209,24 +232,33 @@ function matchConfidence(match) {
         <h3>Unsaved Hunt Details</h3>
         <span class="status-badge warning"><AlertTriangle :size="15" /> This parsed hunt is not saved yet.</span>
         <label>Name<input v-model="hunts.huntDraftLabel.value" :placeholder="hunts.huntPreview.value?.suggested_label || 'Untitled Hunt'" @input="hunts.markUnsavedHuntChanges" /></label>
-        <label>Location<input v-model="hunts.huntDraftLocation.value" :placeholder="hunts.huntPreview.value?.location?.suggested_name || 'Optional location'" @input="hunts.markUnsavedHuntChanges" /></label>
-        <div v-if="huntingPlaceMatch(hunts.huntPreview.value)?.candidates?.length" class="match-review">
-          <div class="match-review-head">
-            <MapPinned :size="16" />
-            <span>Hunting Place</span>
-            <strong>{{ huntingPlaceMatch(hunts.huntPreview.value).status }} <ConfidenceBadge :confidence="huntingPlaceMatch(hunts.huntPreview.value).confidence_detail ?? huntingPlaceMatch(hunts.huntPreview.value).confidence" /></strong>
-          </div>
-          <select v-model="hunts.huntDraftHuntingPlaceId.value" @change="hunts.markUnsavedHuntChanges">
-            <option value="">No staged place</option>
-            <option
-              v-for="candidate in huntingPlaceMatch(hunts.huntPreview.value).candidates"
-              :key="`new-place-${candidate.id}`"
-              :value="String(candidate.id)"
+        <div class="location-field">
+          <label>
+            Location
+            <input
+              :value="hunts.huntDraftLocation.value"
+              :placeholder="hunts.huntPreview.value?.location?.suggested_name || 'Custom location text'"
+              @input="hunts.updateLocationSearch(hunts.huntDraftLocation, hunts.huntDraftHuntingPlaceId, $event.target.value)"
+            />
+          </label>
+          <label>
+            Hunting spot match
+            <select
+              :value="hunts.huntDraftHuntingPlaceId.value"
+              @change="hunts.selectHuntingPlaceFromOptions($event.target.value, huntingPlaceOptions(huntingPlaceMatch(hunts.huntPreview.value), hunts), hunts.huntDraftLocation, hunts.huntDraftHuntingPlaceId)"
             >
-              {{ candidate.name }} ({{ matchConfidence(candidate) }})
-            </option>
-          </select>
-          <DecisionLabels :reasons="huntingPlaceMatch(hunts.huntPreview.value).explanations" :reason-labels="huntingPlaceMatch(hunts.huntPreview.value).reasons" :limit="3" />
+              <option value="">None</option>
+              <option
+                v-for="candidate in huntingPlaceOptions(huntingPlaceMatch(hunts.huntPreview.value), hunts)"
+                :key="`new-place-${candidate.id}`"
+                :value="String(candidate.id)"
+              >
+                {{ optionLabel(candidate) }}
+              </option>
+            </select>
+          </label>
+          <label class="inline-check"><input v-model="hunts.huntDraftMatchMode.value" true-value="mixed_route" false-value="auto" type="checkbox" @change="hunts.markUnsavedHuntChanges" /> Mixed route/travel hunt</label>
+          <small v-if="hunts.huntingPlaceSearchInfo.value">{{ hunts.huntingPlaceSearchInfo.value }}</small>
         </div>
         <label>Character<input v-model="hunts.huntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Tags<input v-model="hunts.huntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
@@ -242,24 +274,37 @@ function matchConfidence(match) {
       <div v-if="hunts.previousHuntPreview.value" class="drawer-form">
         <h3>Edit Hunt Details</h3>
         <label>Name<input v-model="hunts.previousHuntDraftLabel.value" @input="hunts.markUnsavedHuntChanges" /></label>
-        <label>Location<input v-model="hunts.previousHuntDraftLocation.value" @input="hunts.markUnsavedHuntChanges" /></label>
-        <div v-if="huntingPlaceMatch(hunts.previousHuntPreview.value)?.candidates?.length" class="match-review">
-          <div class="match-review-head">
-            <MapPinned :size="16" />
-            <span>Hunting Place</span>
-            <strong>{{ huntingPlaceMatch(hunts.previousHuntPreview.value).status }} <ConfidenceBadge :confidence="huntingPlaceMatch(hunts.previousHuntPreview.value).confidence_detail ?? huntingPlaceMatch(hunts.previousHuntPreview.value).confidence" /></strong>
-          </div>
-          <select v-model="hunts.previousHuntDraftHuntingPlaceId.value" @change="hunts.markUnsavedHuntChanges">
-            <option value="">No staged place</option>
-            <option
-              v-for="candidate in huntingPlaceMatch(hunts.previousHuntPreview.value).candidates"
-              :key="`previous-place-${candidate.id}`"
-              :value="String(candidate.id)"
+        <div class="location-field">
+          <label>
+            Location
+            <input
+              :value="hunts.previousHuntDraftLocation.value"
+              placeholder="Custom location text"
+              @input="hunts.updateLocationSearch(hunts.previousHuntDraftLocation, hunts.previousHuntDraftHuntingPlaceId, $event.target.value)"
+            />
+          </label>
+          <label>
+            Hunting spot match
+            <select
+              :value="hunts.previousHuntDraftHuntingPlaceId.value"
+              @change="hunts.selectHuntingPlaceFromOptions($event.target.value, huntingPlaceOptions(huntingPlaceMatch(hunts.previousHuntPreview.value), hunts), hunts.previousHuntDraftLocation, hunts.previousHuntDraftHuntingPlaceId)"
             >
-              {{ candidate.name }} ({{ matchConfidence(candidate) }})
-            </option>
-          </select>
-          <DecisionLabels :reasons="huntingPlaceMatch(hunts.previousHuntPreview.value).explanations" :reason-labels="huntingPlaceMatch(hunts.previousHuntPreview.value).reasons" :limit="3" />
+              <option value="">None</option>
+              <option
+                v-for="candidate in huntingPlaceOptions(huntingPlaceMatch(hunts.previousHuntPreview.value), hunts)"
+                :key="`previous-place-${candidate.id}`"
+                :value="String(candidate.id)"
+              >
+                {{ optionLabel(candidate) }}
+              </option>
+            </select>
+          </label>
+          <label class="inline-check"><input v-model="hunts.previousHuntDraftMatchMode.value" true-value="mixed_route" false-value="auto" type="checkbox" @change="hunts.markUnsavedHuntChanges" /> Mixed route/travel hunt</label>
+          <div class="button-row">
+            <button class="ghost-action" @click="hunts.rematchHunt(null, 'suggest_only')">Rematch</button>
+          </div>
+          <small v-if="hunts.huntingPlaceSearchInfo.value">{{ hunts.huntingPlaceSearchInfo.value }}</small>
+          <small v-if="hunts.huntRematchInfo.value">{{ hunts.huntRematchInfo.value }}</small>
         </div>
         <label>Character<input v-model="hunts.previousHuntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Tags<input v-model="hunts.previousHuntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
@@ -269,7 +314,7 @@ function matchConfidence(match) {
             Delete Hunt
           </button>
           <button class="ghost-action" @click="hunts.closePreviousHuntEdit">Cancel</button>
-          <button :disabled="hunts.huntSubmitBusy.value" @click="hunts.savePreviousHuntEdit">Save Changes</button>
+          <button :disabled="hunts.huntSubmitBusy.value" @click="$emit('save-previous-hunt')">Save Changes</button>
         </div>
       </div>
     </aside>

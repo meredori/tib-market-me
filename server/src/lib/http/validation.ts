@@ -103,3 +103,13 @@ export function parseHydrateItemsPayload(value: unknown): { item_names: string[]
     item_names: parseStringArray(body.item_names, "item_names", { maxEntries: 60, maxLength: 120 })
   };
 }
+
+export function parseHuntRematchMode(value: unknown): "suggest_only" | "auto_apply" | "replace_non_manual" {
+  if (value === undefined || value === null || value === "") {
+    return "suggest_only";
+  }
+  if (value === "suggest_only" || value === "auto_apply" || value === "replace_non_manual") {
+    return value;
+  }
+  throw new Error("Invalid hunt rematch mode");
+}

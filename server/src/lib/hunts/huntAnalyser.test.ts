@@ -9,6 +9,7 @@ import {
   updateHuntUpload
 } from "./huntAnalyser";
 import { existingHuntsByImportIdentity } from "./repository";
+import { rematchHuntUpload, rematchHuntUploads } from "./repository";
 import { matchHuntToHuntingPlaces } from "./huntingPlaceMatcher";
 import { resetItemDetailFetchForTests, setItemDetailFetchForTests } from "./itemDetailCache";
 import type { ItemDetailCacheRow, LootLookupRow } from "./types";
@@ -421,6 +422,80 @@ describe("hunt to public hunting-place matching", () => {
     expect(result.selected_hunting_place_id).toBeNull();
     expect(result.status).toBe("unmatched");
   });
+
+  it("blocks matching when hunting places are staged but not enriched", () => {
+    const result = matchHuntToHuntingPlaces(matcherDb([
+      place(701, "Dragon Lair", [])
+    ]), {
+      label: null,
+      duration_minutes: 30,
+      raw_total_xp: 1000,
+      total_xp: 1000,
+      total_loot_gold: 0,
+      total_supply_cost: 0,
+      started_at: null,
+      ended_at: null,
+      hunt_date: null,
+      monsters: [{ name: "dragon", count: 50 }],
+      loot_items: []
+    });
+
+    expect(result).toMatchObject({
+      status: "blocked",
+      readiness: "blocked",
+      readiness_reason: "Run public reference enrichment before matching can compare hunt monsters to hunting places."
+    });
+  });
+
+  it("keeps an explicitly selected hunting spot matched even before enrichment", () => {
+    const result = matchHuntToHuntingPlaces(matcherDb([
+      place(702, "Dragon Lair", [])
+    ]), {
+      label: null,
+      duration_minutes: 30,
+      raw_total_xp: 1000,
+      total_xp: 1000,
+      total_loot_gold: 0,
+      total_supply_cost: 0,
+      started_at: null,
+      ended_at: null,
+      hunt_date: null,
+      monsters: [{ name: "dragon", count: 50 }],
+      loot_items: []
+    }, { manualHuntingPlaceId: 702 });
+
+    expect(result).toMatchObject({
+      selected_hunting_place_id: 702,
+      selected_hunting_place_name: "Dragon Lair",
+      status: "manual",
+      readiness: "manual"
+    });
+  });
+
+  it("can mark a hunt as a mixed route while retaining candidates", () => {
+    const result = matchHuntToHuntingPlaces(matcherDb([
+      place(801, "Dragon Lair", ["dragon"])
+    ]), {
+      label: null,
+      duration_minutes: 30,
+      raw_total_xp: 1000,
+      total_xp: 1000,
+      total_loot_gold: 0,
+      total_supply_cost: 0,
+      started_at: null,
+      ended_at: null,
+      hunt_date: null,
+      monsters: [{ name: "dragon", count: 50 }],
+      loot_items: []
+    }, { mode: "mixed_route" });
+
+    expect(result).toMatchObject({
+      selected_hunting_place_id: null,
+      status: "mixed_route",
+      readiness: "mixed_route"
+    });
+    expect(result.candidates[0]).toMatchObject({ id: 801 });
+  });
 });
 
 describe("hunt repository semantics", () => {
@@ -483,6 +558,146 @@ describe("hunt repository semantics", () => {
     expect(identity.byHash.size).toBe(1);
     expect(identity.bySignature.size).toBe(1);
     expect([...identity.byHash.values()][0]).toMatchObject({ id: 42 });
+  });
+
+  it("preserves manual hunting-place matches during single rematch", () => {
+    const update = vi.fn();
+    const db = createMockDb((sql) => {
+      if (sql.includes("FROM hunt_uploads") && sql.includes("LIMIT 1")) {
+        return {
+          get: vi.fn(() => ({
+            id: 7,
+            raw_text: sampleHunt("  1x gold coin"),
+            location_name: "Manual Place",
+            public_hunting_place_id: 201,
+            hunting_place_match_manual: 1,
+            hunting_place_match_status: "manual"
+          }))
+        };
+      }
+      if (sql.includes("UPDATE hunt_uploads")) {
+        return { run: update };
+      }
+      if (sql.includes("FROM hunt_uploads") && sql.includes("WHERE id = ?")) {
+        return {
+          get: vi.fn(() => ({
+            id: 7,
+            label: "Manual hunt",
+            uploaded_at: "2026-06-10T00:00:00.000Z",
+            duration_minutes: 30,
+            raw_total_xp: 120000,
+            total_xp: 180000,
+            total_loot_gold: 1000,
+            total_supply_cost: 250,
+            tags_json: "[]",
+            excluded_items_json: "[]",
+            location_name: "Manual Place",
+            public_hunting_place_id: 201,
+            hunting_place_match_manual: 1,
+            hunting_place_match_status: "manual"
+          }))
+        };
+      }
+      return {};
+    });
+
+    const result = rematchHuntUpload(db, 7, "auto_apply");
+
+    expect(result).toMatchObject({ skipped: true, reason: "existing match preserved" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("stores suggestions without assigning a place in suggest-only rematch", () => {
+    const updates: unknown[][] = [];
+    const db = createMockDb((sql) => {
+      if (sql.includes("FROM hunt_uploads") && sql.includes("LIMIT 1")) {
+        return {
+          get: vi.fn(() => ({
+            id: 8,
+            raw_text: sampleHunt("  1x gold coin"),
+            location_name: "Dragon Lair",
+            public_hunting_place_id: null,
+            character_level: 120,
+            hunting_place_match_manual: 0,
+            hunting_place_match_status: "unmatched"
+          }))
+        };
+      }
+      if (sql.includes("FROM public_hunting_places")) {
+        return {
+          all: vi.fn(() => [
+            place(201, "Dragon Lair", ["dragon"], { location: "Darashia", minLevel: 80, maxLevel: 180 })
+          ])
+        };
+      }
+      if (sql.includes("UPDATE hunt_uploads")) {
+        return {
+          run: vi.fn((...args: unknown[]) => {
+            updates.push(args);
+            return { changes: 1 };
+          })
+        };
+      }
+      if (sql.includes("FROM hunt_uploads") && sql.includes("WHERE id = ?")) {
+        return { get: vi.fn(() => ({ id: 8, duration_minutes: 30, total_xp: 1, raw_total_xp: 1, total_loot_gold: 0, total_supply_cost: 0 })) };
+      }
+      return {};
+    });
+
+    rematchHuntUpload(db, 8, "suggest_only");
+
+    expect(updates[0][0]).toBeNull();
+    expect(updates[0][2]).toBe("review");
+    expect(updates[0][8]).toBe("suggest_only");
+    expect(updates[0][9]).toBe("review");
+  });
+
+  it("auto-applies high-confidence matches in bulk rematch", () => {
+    const updates: unknown[][] = [];
+    const db = createMockDb((sql) => {
+      if (sql.includes("SELECT id") && sql.includes("hunting_place_match_manual = 0")) {
+        return { all: vi.fn(() => [{ id: 9 }]) };
+      }
+      if (sql.includes("FROM hunt_uploads") && sql.includes("LIMIT 1")) {
+        return {
+          get: vi.fn(() => ({
+            id: 9,
+            raw_text: sampleHunt("  1x gold coin"),
+            location_name: "Dragon Lair",
+            public_hunting_place_id: null,
+            character_level: 120,
+            hunting_place_match_manual: 0,
+            hunting_place_match_status: "unmatched"
+          }))
+        };
+      }
+      if (sql.includes("FROM public_hunting_places")) {
+        return {
+          all: vi.fn(() => [
+            place(201, "Dragon Lair", ["dragon"], { location: "Darashia", minLevel: 80, maxLevel: 180 })
+          ])
+        };
+      }
+      if (sql.includes("UPDATE hunt_uploads")) {
+        return {
+          run: vi.fn((...args: unknown[]) => {
+            updates.push(args);
+            return { changes: 1 };
+          })
+        };
+      }
+      if (sql.includes("FROM hunt_uploads") && sql.includes("WHERE id = ?")) {
+        return { get: vi.fn(() => ({ id: 9, duration_minutes: 30, total_xp: 1, raw_total_xp: 1, total_loot_gold: 0, total_supply_cost: 0 })) };
+      }
+      return {};
+    });
+
+    const result = rematchHuntUploads(db, "auto_apply");
+
+    expect(result).toMatchObject({ summary: { candidates: 1, processed: 1, failed: 0 } });
+    expect(updates[0][0]).toBe(201);
+    expect(updates[0][2]).toBe("auto");
+    expect(updates[0][8]).toBe("auto_apply");
   });
 });
 

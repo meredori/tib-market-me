@@ -16,6 +16,9 @@ import {
   listHuntingAreaSummaries as listRepositoryHuntingAreaSummaries,
   listHuntLogImportCandidates as listRepositoryHuntLogImportCandidates,
   listHuntUploads,
+  rematchHuntUpload,
+  rematchHuntUploads,
+  searchHuntingPlaces,
   suggestLocation,
   updateHuntUpload
 } from "./repository";
@@ -151,6 +154,9 @@ export {
   hydrateHuntItemDetails,
   ignoreHuntLogImport,
   listHuntUploads,
+  rematchHuntUpload,
+  rematchHuntUploads,
+  searchHuntingPlaces,
   updateHuntUpload
 };
 

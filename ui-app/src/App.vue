@@ -75,6 +75,7 @@ const marketDashboardBusy = ref(false)
 const watchlistBusy = ref(false)
 const savedHuntSearch = ref('')
 const savedLocationFilter = ref('')
+const savedLocationKindFilter = ref('')
 const savedHuntSort = ref('date_desc')
 const isNewHuntModalOpen = ref(false)
 const newHuntRawText = ref('')
@@ -85,6 +86,7 @@ const assignItemSearch = ref('')
 const assignItemSearchRows = ref([])
 const assignItemInfo = ref('')
 const assignItemBusy = ref(false)
+const huntEditReturnSection = ref(null)
 
 const hunts = useHunts()
 
@@ -495,9 +497,19 @@ async function generateItemPrices() {
 }
 
 function openPreviousHunt(row) {
+  huntEditReturnSection.value = activeSection.value !== 'hunts' ? activeSection.value : null
   activeSection.value = 'hunts'
   workspaceTab.value = 'overview'
   return hunts.openPreviousHunt(row)
+}
+
+async function savePreviousHuntEditAndReturn() {
+  const saved = await hunts.savePreviousHuntEdit()
+  if (saved && huntEditReturnSection.value) {
+    activeSection.value = huntEditReturnSection.value
+    huntEditReturnSection.value = null
+    hunts.closePreviousHuntEdit()
+  }
 }
 
 function startNewHunt() {
@@ -513,6 +525,7 @@ function closeNewHuntModal() {
 async function parseNewHuntFromModal() {
   hunts.huntForm.raw_text = newHuntRawText.value
   activeSection.value = 'hunts'
+  huntEditReturnSection.value = null
   workspaceTab.value = 'overview'
   hunts.closePreviousHuntEdit()
   hunts.clearHuntLogImportReview()
@@ -526,6 +539,7 @@ async function parseNewHuntFromModal() {
 
 function reviewHuntLogImport(candidate) {
   activeSection.value = 'hunts'
+  huntEditReturnSection.value = null
   workspaceTab.value = 'overview'
   hunts.reviewHuntLogImport(candidate)
 }
@@ -533,6 +547,13 @@ function reviewHuntLogImport(candidate) {
 function openHuntHistory(locationName = '') {
   activeSection.value = 'history'
   savedLocationFilter.value = locationName
+}
+
+function clearHuntHistoryFilters() {
+  savedHuntSearch.value = ''
+  savedLocationFilter.value = ''
+  savedLocationKindFilter.value = ''
+  savedHuntSort.value = 'date_desc'
 }
 
 const hasStatus = computed(() => Boolean(status.server))
@@ -544,6 +565,10 @@ const filteredHuntRows = computed(() => {
   const query = savedHuntSearch.value.trim().toLowerCase()
   const rows = hunts.huntRows.value.filter((row) => {
     const matchesLocation = !savedLocationFilter.value || row.location_name === savedLocationFilter.value
+    const isLinked = Boolean(row.hunting_place_match?.selected_hunting_place_id)
+    const matchesLocationKind = !savedLocationKindFilter.value
+      || (savedLocationKindFilter.value === 'linked' && isLinked)
+      || (savedLocationKindFilter.value === 'custom' && !isLinked)
     const haystack = [
       row.label,
       row.location_name,
@@ -552,7 +577,7 @@ const filteredHuntRows = computed(() => {
       row.character_world,
       ...(row.tags || []),
     ].filter(Boolean).join(' ').toLowerCase()
-    return matchesLocation && (!query || haystack.includes(query))
+    return matchesLocation && matchesLocationKind && (!query || haystack.includes(query))
   })
   return [...rows].sort((a, b) => {
     if (savedHuntSort.value === 'profit_desc') {
@@ -725,12 +750,14 @@ onBeforeUnmount(() => {
         @open-hunt="openPreviousHunt"
         @open-item="openItemDetails"
         @assign-item-id="openAssignItemId"
+        @save-previous-hunt="savePreviousHuntEditAndReturn"
       />
 
       <HuntHistoryView
         v-else-if="activeSection === 'history'"
         v-model:saved-hunt-search="savedHuntSearch"
         v-model:saved-location-filter="savedLocationFilter"
+        v-model:saved-location-kind-filter="savedLocationKindFilter"
         v-model:saved-hunt-sort="savedHuntSort"
         :top-xp-hunts="topXpHunts"
         :top-gp-hunts="topGpHunts"
@@ -742,6 +769,7 @@ onBeforeUnmount(() => {
         :hunts="hunts"
         :format-value="formatValue"
         :format-signed="formatSigned"
+        @clear-filters="clearHuntHistoryFilters"
         @open-hunt="openPreviousHunt"
         @open-history="openHuntHistory"
       />

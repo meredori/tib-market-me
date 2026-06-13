@@ -14,6 +14,9 @@ import {
   listGlobalLootSummary,
   listHuntUploads,
   parseHuntPreview,
+  rematchHuntUpload,
+  rematchHuntUploads,
+  searchHuntingPlaces,
   updateHuntUpload
 } from "./lib/hunts/huntAnalyser";
 import {
@@ -29,6 +32,7 @@ import {
 import {
   objectBody,
   parseHydrateItemsPayload,
+  parseHuntRematchMode,
   parseHuntPayload,
   parseItemOverrideMode,
   parseItemPriceMode,
@@ -303,6 +307,29 @@ export function buildServer(db: Database.Database) {
     }
   });
 
+  app.post("/api/hunts/rematch", async (request, reply) => {
+    try {
+      const mode = parseHuntRematchMode(objectBody(request.body).mode);
+      return rematchHuntUploads(db, mode);
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.get("/api/hunting-places/search", async (request, reply) => {
+    try {
+      const query = typeof request.query === "object" && request.query !== null
+        ? (request.query as Record<string, unknown>)
+        : {};
+      const q = typeof query.q === "string" ? query.q : "";
+      return searchHuntingPlaces(db, q);
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
   app.get("/api/hunts/:id", async (request, reply) => {
     let huntId: number;
     try {
@@ -318,6 +345,22 @@ export function buildServer(db: Database.Database) {
       return { error: "Hunt not found" };
     }
     return preview;
+  });
+
+  app.post("/api/hunts/:id/rematch", async (request, reply) => {
+    try {
+      const huntId = parsePositiveId((request.params as Record<string, string>).id, "hunt id");
+      const mode = parseHuntRematchMode(objectBody(request.body).mode);
+      const result = rematchHuntUpload(db, huntId, mode);
+      if (!result) {
+        reply.code(404);
+        return { ok: false, error: "Hunt not found" };
+      }
+      return result;
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
   });
 
   app.post("/api/hunts/parse", async (request, reply) => {

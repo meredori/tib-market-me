@@ -15,6 +15,7 @@ defineProps({
   savedLocationOptions: { type: Array, default: () => [] },
   savedHuntSearch: { type: String, default: '' },
   savedLocationFilter: { type: String, default: '' },
+  savedLocationKindFilter: { type: String, default: '' },
   savedHuntSort: { type: String, default: 'date_desc' },
   hunts: { type: Object, required: true },
   formatValue: { type: Function, required: true },
@@ -24,10 +25,20 @@ defineProps({
 defineEmits([
   'update:savedHuntSearch',
   'update:savedLocationFilter',
+  'update:savedLocationKindFilter',
   'update:savedHuntSort',
+  'clear-filters',
   'open-hunt',
   'open-history',
 ])
+
+function locationKind(row) {
+  return row?.hunting_place_match?.selected_hunting_place_id ? 'Linked' : 'Custom'
+}
+
+function locationKindClass(row) {
+  return row?.hunting_place_match?.selected_hunting_place_id ? 'location-linked' : 'location-custom'
+}
 </script>
 
 <template>
@@ -112,6 +123,14 @@ defineEmits([
           </select>
         </label>
         <label>
+          Type
+          <select :value="savedLocationKindFilter" @change="$emit('update:savedLocationKindFilter', $event.target.value)">
+            <option value="">All types</option>
+            <option value="custom">Custom</option>
+            <option value="linked">Linked</option>
+          </select>
+        </label>
+        <label>
           Sort
           <select :value="savedHuntSort" @change="$emit('update:savedHuntSort', $event.target.value)">
             <option value="date_desc">Newest</option>
@@ -121,6 +140,7 @@ defineEmits([
             <option value="duration_desc">Duration</option>
           </select>
         </label>
+        <button class="ghost-action filter-clear" @click="$emit('clear-filters')">Clear</button>
       </div>
       <div class="table-wrap">
         <table>
@@ -148,6 +168,9 @@ defineEmits([
                   {{ row.location_name }}
                 </button>
                 <span v-else>n/a</span>
+                <div class="match-marker">
+                  <span class="status-badge" :class="locationKindClass(row)">{{ locationKind(row) }}</span>
+                </div>
               </td>
               <td>{{ row.character_name || 'n/a' }}</td>
               <td>{{ row.duration_minutes }}m</td>

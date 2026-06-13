@@ -23,6 +23,11 @@ export type HuntInput = {
   hunting_place_alternates_json: string;
   hunting_place_match_provenance_json: string;
   hunting_place_match_explanations_json: string;
+  hunting_place_match_attempted_at: string | null;
+  hunting_place_match_mode: string;
+  hunting_place_match_readiness: string;
+  hunting_place_match_readiness_reason: string | null;
+  hunting_place_noise_creatures_json: string;
   hunting_place_match_manual: number;
   tags: string[];
   excluded_item_names: string[];

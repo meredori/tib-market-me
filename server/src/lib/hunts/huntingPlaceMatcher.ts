@@ -28,12 +28,15 @@ export type HuntingPlaceMatchResult = {
   selected_hunting_place_id: number | null;
   selected_hunting_place_name: string | null;
   confidence: number;
-  status: "auto" | "review" | "unmatched" | "manual";
+  status: "auto" | "review" | "unmatched" | "manual" | "mixed_route" | "blocked";
+  readiness: "ready" | "blocked" | "review" | "auto" | "manual" | "mixed_route" | "unmatched";
+  readiness_reason: string | null;
   reasons: string[];
   explanations: InsightExplanation[];
   confidence_detail: Confidence;
   provenance: Provenance[];
   candidates: HuntingPlaceCandidate[];
+  noise_creatures: string[];
 };
 
 type PlaceRow = {
@@ -43,6 +46,7 @@ type PlaceRow = {
   location: string | null;
   min_level: number | null;
   max_level: number | null;
+  detail_status: string | null;
   area_names_json: string;
   creatures_json: string;
 };
@@ -57,6 +61,8 @@ type HuntMonster = {
 const AUTO_CONFIDENCE = 0.72;
 const REVIEW_CONFIDENCE = 0.46;
 const AUTO_MARGIN = 0.12;
+const NOISE_WEIGHT = 0.05;
+const NOISE_COUNT = 5;
 
 function tokenize(value: string): string[] {
   return normalizePublicName(value)
@@ -92,10 +98,10 @@ function parseJsonArray(value: unknown): string[] {
   }
 }
 
-function huntMonsterSignature(monsters: ParsedHuntText["monsters"]): HuntMonster[] {
+function huntMonsterSignature(monsters: ParsedHuntText["monsters"]): { core: HuntMonster[]; noise: HuntMonster[] } {
   const total = monsters.reduce((sum, monster) => sum + Math.max(0, asNumber(monster.count, 0)), 0);
   if (total <= 0) {
-    return [];
+    return { core: [], noise: [] };
   }
   const relevant = monsters
     .map((monster) => ({
@@ -107,8 +113,12 @@ function huntMonsterSignature(monsters: ParsedHuntText["monsters"]): HuntMonster
     .filter((monster) => monster.normalized_name && monster.count > 0)
     .sort((a, b) => b.count - a.count);
 
-  const core = relevant.filter((monster) => monster.weight >= 0.05 || monster.count >= 5);
-  return (core.length ? core : relevant.slice(0, 8)).slice(0, 12);
+  const noise = relevant.filter((monster) => monster.weight < NOISE_WEIGHT && monster.count < NOISE_COUNT);
+  const core = relevant.filter((monster) => monster.weight >= NOISE_WEIGHT || monster.count >= NOISE_COUNT);
+  return {
+    core: (core.length ? core : relevant.slice(0, 8)).slice(0, 12),
+    noise
+  };
 }
 
 function loadPlaceRows(db: Database.Database): PlaceRow[] {
@@ -122,6 +132,7 @@ function loadPlaceRows(db: Database.Database): PlaceRow[] {
         place.location,
         place.min_level,
         place.max_level,
+        place.detail_status,
         COALESCE((
           SELECT json_group_array(area_name)
           FROM public_hunting_place_area_summaries area
@@ -288,6 +299,80 @@ function scorePlace(
   };
 }
 
+function manualPlaceCandidate(row: PlaceRow, confidence = 1): HuntingPlaceCandidate {
+  const placeRef = entityRef("hunting_place", { id: row.id, name: row.name, normalized_name: row.normalized_name });
+  const matchProvenance = [
+    provenance("manual_input", { manual: true, source_ref: placeRef }),
+    provenance("public_tibia_reference", { source_ref: placeRef })
+  ];
+  return {
+    id: asNumber(row.id, 0),
+    name: asText(row.name),
+    location: row.location ?? null,
+    confidence,
+    status: "auto",
+    reasons: ["selected hunting spot"],
+    explanations: [explanation("selected hunting spot", "neutral", "The user selected this hunting spot from imported reference data.", {
+      source_refs: [placeRef],
+      provenance: matchProvenance
+    })],
+    confidence_detail: buildConfidence(confidence, { manual: true }),
+    provenance: matchProvenance,
+    matched_monsters: [],
+    missing_monsters: []
+  };
+}
+
+function manualMatch(
+  row: PlaceRow,
+  candidates: HuntingPlaceCandidate[],
+  noiseCreatures: string[],
+  mode: "auto" | "suggest_only" | "mixed_route" | undefined
+): HuntingPlaceMatchResult {
+  const manual = candidates.find((candidate) => candidate.id === row.id) ?? manualPlaceCandidate(row);
+  return {
+    selected_hunting_place_id: manual.id,
+    selected_hunting_place_name: manual.name,
+    confidence: manual.confidence,
+    status: mode === "mixed_route" ? "mixed_route" : "manual",
+    readiness: mode === "mixed_route" ? "mixed_route" : "manual",
+    readiness_reason: mode === "mixed_route" ? "User marked this hunt as a mixed route or travel hunt." : null,
+    reasons: ["selected hunting spot", ...manual.reasons.filter((reason) => reason !== "selected hunting spot")],
+    explanations: [
+      explanation("selected hunting spot", "neutral", "The user selected this hunting spot from imported reference data.", {
+        source_refs: [entityRef("hunting_place", { id: manual.id, name: manual.name })],
+        provenance: [provenance("manual_input", { manual: true })]
+      }),
+      ...manual.explanations
+    ],
+    confidence_detail: buildConfidence(manual.confidence, { manual: true }),
+    provenance: [provenance("manual_input", { manual: true }), ...manual.provenance],
+    candidates: candidates.some((candidate) => candidate.id === manual.id) ? candidates : [manual, ...candidates].slice(0, 5),
+    noise_creatures: noiseCreatures
+  };
+}
+
+function blockedMatch(reason: string, detail: string): HuntingPlaceMatchResult {
+  const sourceProvenance = [provenance("public_tibia_reference"), provenance("personal_hunt"), provenance("derived_calculation")];
+  return {
+    selected_hunting_place_id: null,
+    selected_hunting_place_name: null,
+    confidence: 0,
+    status: "blocked",
+    readiness: "blocked",
+    readiness_reason: detail,
+    reasons: [reason],
+    explanations: [explanation(reason, "blocked", detail, {
+      missing_data_reason: detail,
+      provenance: sourceProvenance
+    })],
+    confidence_detail: buildConfidence(0, { estimated: true, missingDataReason: detail }),
+    provenance: sourceProvenance,
+    candidates: [],
+    noise_creatures: []
+  };
+}
+
 export function matchHuntToHuntingPlaces(
   db: Database.Database,
   parsed: ParsedHuntText | null,
@@ -295,15 +380,20 @@ export function matchHuntToHuntingPlaces(
     locationName?: string | null;
     characterLevel?: number | null;
     manualHuntingPlaceId?: number | null;
+    mode?: "auto" | "suggest_only" | "mixed_route";
   } = {}
 ): HuntingPlaceMatchResult {
-  const huntMonsters = huntMonsterSignature(parsed?.monsters ?? []);
+  const signature = huntMonsterSignature(parsed?.monsters ?? []);
+  const huntMonsters = signature.core;
+  const noiseCreatures = signature.noise.map((monster) => monster.name);
   if (!huntMonsters.length) {
     return {
       selected_hunting_place_id: null,
       selected_hunting_place_name: null,
       confidence: 0,
       status: "unmatched",
+      readiness: "blocked",
+      readiness_reason: "No parsed monsters were found in the hunt text.",
       reasons: ["no parsed monsters"],
       explanations: [explanation("no parsed monsters", "blocked", "Automatic hunting-place matching needs parsed monster kills.", {
         missing_data_reason: "No parsed monsters were found in the hunt text.",
@@ -311,7 +401,8 @@ export function matchHuntToHuntingPlaces(
       })],
       confidence_detail: buildConfidence(0, { estimated: true, missingDataReason: "No parsed monsters were found." }),
       provenance: [provenance("personal_hunt"), provenance("derived_calculation")],
-      candidates: []
+      candidates: [],
+      noise_creatures: noiseCreatures
     };
   }
 
@@ -319,49 +410,49 @@ export function matchHuntToHuntingPlaces(
   try {
     rows = loadPlaceRows(db);
   } catch {
-    return {
-      selected_hunting_place_id: null,
-      selected_hunting_place_name: null,
-      confidence: 0,
-      status: "unmatched",
-      reasons: ["public hunting-place data is not staged yet"],
-      explanations: [explanation("reference data missing", "blocked", "Public hunting-place data is not staged yet.", {
-        missing_data_reason: "Run public reference sync before matching can rely on hunting-place data.",
-        provenance: [provenance("public_tibia_reference"), provenance("derived_calculation")]
-      })],
-      confidence_detail: buildConfidence(0, { estimated: true, missingDataReason: "Public hunting-place data is not staged yet." }),
-      provenance: [provenance("public_tibia_reference"), provenance("derived_calculation")],
-      candidates: []
-    };
+    return blockedMatch("public hunting-place data is not staged yet", "Run public reference sync before matching can rely on hunting-place data.");
   }
 
-  const candidates = rows
+  if (!rows.length) {
+    return blockedMatch("public hunting-place data is not staged yet", "Run public reference sync before matching can rely on hunting-place data.");
+  }
+
+  const manualId = options.manualHuntingPlaceId && options.manualHuntingPlaceId > 0
+    ? Math.trunc(options.manualHuntingPlaceId)
+    : null;
+  const manualRow = manualId ? rows.find((row) => row.id === manualId) ?? null : null;
+
+  const enrichedRows = rows.filter((row) => parseJsonArray(row.creatures_json).length > 0);
+  if (!enrichedRows.length && !manualRow) {
+    return blockedMatch("missing enriched hunting-place creature data", "Run public reference enrichment before matching can compare hunt monsters to hunting places.");
+  }
+
+  const candidates = enrichedRows
     .map((row) => scorePlace(row, huntMonsters, options.locationName ?? null, options.characterLevel ?? null))
     .filter((candidate) => candidate.confidence >= REVIEW_CONFIDENCE || candidate.matched_monsters.length > 0)
     .sort((a, b) => b.confidence - a.confidence || b.matched_monsters.length - a.matched_monsters.length || a.name.localeCompare(b.name))
     .slice(0, 5);
 
-  const manualId = options.manualHuntingPlaceId && options.manualHuntingPlaceId > 0
-    ? Math.trunc(options.manualHuntingPlaceId)
-    : null;
-  const manual = manualId ? candidates.find((candidate) => candidate.id === manualId) : null;
-  if (manual) {
+  if (manualRow) {
+    return manualMatch(manualRow, candidates, noiseCreatures, options.mode);
+  }
+
+  if (options.mode === "mixed_route") {
     return {
-      selected_hunting_place_id: manual.id,
-      selected_hunting_place_name: manual.name,
-      confidence: manual.confidence,
-      status: "manual",
-      reasons: ["manual hunting-place selection", ...manual.reasons],
-      explanations: [
-        explanation("manual hunting-place selection", "neutral", "The user selected this hunting place manually.", {
-          source_refs: [entityRef("hunting_place", { id: manual.id, name: manual.name })],
-          provenance: [provenance("manual_input", { manual: true })]
-        }),
-        ...manual.explanations
-      ],
-      confidence_detail: buildConfidence(manual.confidence, { manual: true }),
-      provenance: [provenance("manual_input", { manual: true }), ...manual.provenance],
-      candidates
+      selected_hunting_place_id: null,
+      selected_hunting_place_name: null,
+      confidence: candidates[0]?.confidence ?? 0,
+      status: "mixed_route",
+      readiness: "mixed_route",
+      readiness_reason: "User marked this hunt as a mixed route or travel hunt.",
+      reasons: ["mixed route/travel hunt"],
+      explanations: [explanation("mixed route/travel hunt", "neutral", "The user marked this hunt as a mixed route or travel hunt.", {
+        provenance: [provenance("manual_input", { manual: true }), provenance("derived_calculation")]
+      })],
+      confidence_detail: buildConfidence(candidates[0]?.confidence ?? 0, { manual: true }),
+      provenance: [provenance("manual_input", { manual: true }), provenance("derived_calculation")],
+      candidates,
+      noise_creatures: noiseCreatures
     };
   }
 
@@ -374,6 +465,8 @@ export function matchHuntToHuntingPlaces(
     selected_hunting_place_name: auto && best ? best.name : null,
     confidence: best?.confidence ?? 0,
     status: auto ? "auto" : best && best.confidence >= REVIEW_CONFIDENCE ? "review" : "unmatched",
+    readiness: auto ? "auto" : best && best.confidence >= REVIEW_CONFIDENCE ? "review" : "unmatched",
+    readiness_reason: best ? null : "No enriched hunting-place candidate matched the parsed monsters.",
     reasons: best?.reasons.length ? best.reasons : best ? ["candidate needs review"] : ["no staged hunting-place candidate matched"],
     explanations: best?.explanations.length
       ? best.explanations
@@ -386,6 +479,7 @@ export function matchHuntToHuntingPlaces(
       missingDataReason: best ? null : "No staged hunting-place candidate matched the parsed monsters."
     }),
     provenance: best?.provenance ?? [provenance("public_tibia_reference"), provenance("personal_hunt"), provenance("derived_calculation")],
-    candidates
+    candidates,
+    noise_creatures: noiseCreatures
   };
 }
