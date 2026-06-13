@@ -1,6 +1,11 @@
 <script setup>
 import { computed } from 'vue'
 import { Star, X } from '@lucide/vue'
+import AdvancedDisclosure from '../common/AdvancedDisclosure.vue'
+import ConfidenceBadge from '../common/ConfidenceBadge.vue'
+import DecisionLabels from '../common/DecisionLabels.vue'
+import FreshnessBadge from '../common/FreshnessBadge.vue'
+import ProvenanceBadge from '../common/ProvenanceBadge.vue'
 
 const props = defineProps({
   loading: { type: Boolean, default: false },
@@ -20,6 +25,7 @@ const props = defineProps({
 defineEmits(['close', 'update:overrideMode', 'save-override', 'update:showAdvanced', 'toggle-favorite'])
 
 const itemName = computed(() => props.item?.name || props.item?.wiki_name || (props.item?.id ? `Item ${props.item.id}` : 'Item'))
+const bestNpcBuyer = computed(() => props.item?.npc_buy_rows?.[0] || null)
 const lootRelevance = computed(() => {
   const itemId = Number(props.item?.id)
   if (!Number.isFinite(itemId)) {
@@ -28,6 +34,35 @@ const lootRelevance = computed(() => {
   return props.lootRows.find((row) => Number(row.item_id) === itemId) || null
 })
 const itemDetail = computed(() => props.item?.item_detail || {})
+const maxListPrice = computed(() => firstPositive(
+  props.item?.loot_logic?.max_list_price,
+  props.item?.month_highest_sell,
+  props.item?.history?.max_sell_offer,
+  props.item?.month_average_sell,
+  props.item?.suggested_list_price,
+  props.item?.client_value,
+))
+const fairSalePrice = computed(() => firstPositive(
+  props.item?.loot_logic?.fair_sale_price,
+  props.item?.fair_price,
+  props.item?.client_value,
+  props.item?.month_average_sell,
+))
+const minPrice = computed(() => firstPositive(
+  props.item?.loot_logic?.min_list_price,
+  props.item?.final_adjusted_price,
+  props.item?.fair_price,
+  props.item?.npc_buy,
+))
+
+function numericValue(value) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : -1
+}
+
+function firstPositive(...values) {
+  return values.map(numericValue).find((value) => value > 0) ?? -1
+}
 
 function displayText(value, fallback = 'n/a') {
   return value === null || value === undefined || value === '' ? fallback : value
@@ -52,6 +87,14 @@ function displayFlag(value) {
   }
   return 'n/a'
 }
+
+function npcName(row) {
+  return displayText(row?.npc_name || row?.name, 'Unknown NPC')
+}
+
+function npcLocation(row) {
+  return displayText(row?.location, 'Unknown location')
+}
 </script>
 
 <template>
@@ -74,6 +117,11 @@ function displayFlag(value) {
               <span class="pill">{{ item.category || itemDetail.category_name || 'uncategorized' }}</span>
               <span class="pill">Tier {{ item.tier ?? 'n/a' }}</span>
             </div>
+            <div class="pills">
+              <ConfidenceBadge :confidence="item.confidence_detail ?? item.confidence" />
+              <FreshnessBadge :freshness="item.freshness" />
+              <ProvenanceBadge v-for="source in item.provenance || []" :key="`${source.type}-${source.source_id || source.observed_at || source.label}`" :provenance="source" />
+            </div>
           </div>
           <button class="ghost-action item-title-action" :disabled="watchlistBusy" @click="$emit('toggle-favorite', item)">
             <Star :size="16" :fill="isFavorite ? 'currentColor' : 'none'" />
@@ -83,60 +131,34 @@ function displayFlag(value) {
 
         <div class="item-value-grid">
           <div>
-            <span class="muted">Current value</span>
-            <strong>{{ formatValue(item.loot_logic?.price ?? item.client_value) }}</strong>
+            <span class="muted">Max list price</span>
+            <strong>{{ formatValue(maxListPrice) }}</strong>
           </div>
           <div>
-            <span class="muted">Sale strategy</span>
-            <strong>{{ item.loot_logic?.strategy || 'n/a' }}</strong>
+            <span class="muted">Min list price</span>
+            <strong>{{ formatValue(minPrice) }}</strong>
           </div>
           <div>
-            <span class="muted">Sell offer</span>
-            <strong>{{ formatValue(item.sell_offer) }}</strong>
+            <span class="muted">Fair sale price</span>
+            <strong>{{ formatValue(fairSalePrice) }}</strong>
           </div>
           <div>
-            <span class="muted">NPC sale</span>
-            <strong>{{ formatValue(item.npc_buy) }}</strong>
+            <span class="muted">Sold this month</span>
+            <strong>{{ displayNumber(item.month_sold) }}</strong>
           </div>
         </div>
 
         <section class="item-detail-section">
-          <h4>Sale Strategy</h4>
+          <h4>NPC Sale</h4>
           <div class="modal-grid">
-            <div><strong>List price:</strong> {{ formatValue(item.loot_logic?.list_price ?? item.suggested_list_price) }}</div>
-            <div><strong>Minimum:</strong> {{ formatValue(item.loot_logic?.min_price) }}</div>
-            <div><strong>Undercut:</strong> {{ formatValue(item.loot_logic?.undercut_price) }}</div>
-            <div><strong>Trend:</strong> {{ item.loot_logic?.trend_display || item.trend || 'n/a' }}</div>
-          </div>
-          <p class="muted strategy-note">{{ item.loot_logic?.reason || item.adjustment_reason || 'No strategy note available.' }}</p>
-        </section>
-
-        <section class="item-detail-section">
-          <h4>Historical Price Range</h4>
-          <div class="modal-grid">
-            <div><strong>Median sell:</strong> {{ formatValue(item.history?.median_sell_offer) }}</div>
-            <div><strong>Range:</strong> {{ formatValue(item.history?.min_sell_offer) }} - {{ formatValue(item.history?.max_sell_offer) }}</div>
-            <div><strong>Reference:</strong> {{ formatValue(item.historical_reference_price) }}</div>
-            <div><strong>Snapshots:</strong> {{ displayNumber(item.history?.snapshot_count ?? item.source_run_count) }}</div>
-            <div><strong>First seen:</strong> <span class="mono">{{ displayText(item.history?.first_seen_at) }}</span></div>
-            <div><strong>Last seen:</strong> <span class="mono">{{ displayText(item.history?.last_seen_at || item.run_finished_at) }}</span></div>
+            <div><strong>Price:</strong> {{ formatValue(bestNpcBuyer?.price ?? item.npc_buy) }}</div>
+            <div><strong>Buyer:</strong> {{ bestNpcBuyer ? npcName(bestNpcBuyer) : 'n/a' }}</div>
+            <div><strong>Location:</strong> {{ bestNpcBuyer ? npcLocation(bestNpcBuyer) : 'n/a' }}</div>
           </div>
         </section>
 
         <section class="item-detail-section">
-          <h4>Market Activity</h4>
-          <div class="modal-grid">
-            <div><strong>Liquidity:</strong> {{ displayNumber(item.liquidity) }}</div>
-            <div><strong>Confidence:</strong> {{ displayNumber(item.confidence) }}</div>
-            <div><strong>Sold this month:</strong> {{ displayNumber(item.month_sold) }}</div>
-            <div><strong>Sold today:</strong> {{ displayNumber(item.day_sold) }}</div>
-            <div><strong>Month average:</strong> {{ formatValue(item.month_average_sell) }}</div>
-            <div><strong>Day average:</strong> {{ formatValue(item.day_average_sell) }}</div>
-          </div>
-        </section>
-
-        <section class="item-detail-section">
-          <h4>Loot Relevance</h4>
+          <h4>Loot Statistics</h4>
           <div v-if="lootRelevance" class="modal-grid">
             <div><strong>Looted quantity:</strong> {{ displayNumber(lootRelevance.quantity) }}</div>
             <div><strong>Total loot value:</strong> {{ formatValue(lootRelevance.total_value) }}</div>
@@ -148,44 +170,8 @@ function displayFlag(value) {
         </section>
 
         <section class="item-detail-section">
-          <h4>Public Metadata</h4>
-          <div class="modal-grid">
-            <div><strong>Weight:</strong> {{ itemDetail.weight_oz ?? 'n/a' }} oz</div>
-            <div><strong>Category:</strong> {{ itemDetail.category_name || item.category || 'n/a' }}</div>
-            <div><strong>Stackable:</strong> {{ displayFlag(itemDetail.stackable) }}</div>
-            <div><strong>Marketable:</strong> {{ displayFlag(itemDetail.marketable) }}</div>
-            <div><strong>Wiki:</strong> <a v-if="itemDetail.wiki_url" :href="itemDetail.wiki_url" target="_blank" rel="noreferrer">Open</a><span v-else>n/a</span></div>
-            <div><strong>World update:</strong> <span class="mono">{{ displayText(item.world_last_update) }}</span></div>
-          </div>
-          <div class="vendor-grid">
-            <div>
-              <strong>NPC buyers</strong>
-              <ul v-if="item.npc_buy_rows?.length" class="vendor-list">
-                <li v-for="row in item.npc_buy_rows.slice(0, 4)" :key="`${row.npc_name}-${row.location}-${row.price}`">
-                  <span>{{ row.npc_name || 'NPC' }}</span>
-                  <span>{{ formatValue(row.price) }}</span>
-                </li>
-              </ul>
-              <p v-else class="muted">n/a</p>
-            </div>
-            <div>
-              <strong>NPC sellers</strong>
-              <ul v-if="item.npc_sell_rows?.length" class="vendor-list">
-                <li v-for="row in item.npc_sell_rows.slice(0, 4)" :key="`${row.npc_name}-${row.location}-${row.price}`">
-                  <span>{{ row.npc_name || 'NPC' }}</span>
-                  <span>{{ formatValue(row.price) }}</span>
-                </li>
-              </ul>
-              <p v-else class="muted">n/a</p>
-            </div>
-          </div>
-        </section>
-
-        <section class="item-detail-section">
-          <button class="ghost-action" @click="$emit('update:showAdvanced', !showAdvanced)">
-            {{ showAdvanced ? 'Hide Advanced' : 'Show Advanced' }}
-          </button>
-          <div v-if="showAdvanced" class="advanced-stack">
+          <DecisionLabels :reasons="item.reasons" :warnings="item.warnings" />
+          <AdvancedDisclosure :open="showAdvanced" label="Advanced" @update:open="$emit('update:showAdvanced', $event)">
             <div class="override-row">
               <label>
                 Item Mode Override
@@ -200,14 +186,61 @@ function displayFlag(value) {
               <span class="muted">{{ overrideInfo }}</span>
             </div>
             <div class="modal-grid">
+              <div><strong>Strategy:</strong> {{ item.loot_logic?.strategy || 'n/a' }}</div>
+              <div><strong>Max list price:</strong> {{ formatValue(maxListPrice) }}</div>
+              <div><strong>Fair sale price:</strong> {{ formatValue(fairSalePrice) }}</div>
+              <div><strong>Min list price:</strong> {{ formatValue(minPrice) }}</div>
+              <div><strong>Current market offer:</strong> {{ formatValue(item.sell_offer) }}</div>
+              <div><strong>Trend:</strong> {{ item.loot_logic?.trend_display || item.trend || 'n/a' }}</div>
               <div><strong>Trend score:</strong> {{ displayNumber(item.trend_score) }}</div>
               <div><strong>Divergence:</strong> {{ displayPercent(item.divergence_pct) }}</div>
-              <div><strong>Fair price:</strong> {{ formatValue(item.fair_price) }}</div>
-              <div><strong>Client value:</strong> {{ formatValue(item.client_value) }}</div>
-              <div><strong>Final adjusted:</strong> {{ formatValue(item.final_adjusted_price) }}</div>
+              <div><strong>Liquidity:</strong> {{ displayNumber(item.liquidity) }}</div>
+              <div><strong>Confidence:</strong> <ConfidenceBadge :confidence="item.confidence_detail ?? item.confidence" /></div>
+              <div><strong>Month average:</strong> {{ formatValue(item.month_average_sell) }}</div>
+              <div><strong>Historical median:</strong> {{ formatValue(item.history?.median_sell_offer) }}</div>
+              <div><strong>Historical range:</strong> {{ formatValue(item.history?.min_sell_offer) }} - {{ formatValue(item.history?.max_sell_offer) }}</div>
+              <div><strong>Reference:</strong> {{ formatValue(item.historical_reference_price) }}</div>
+              <div><strong>Snapshots:</strong> {{ displayNumber(item.history?.snapshot_count ?? item.source_run_count) }}</div>
+              <div><strong>First seen:</strong> <span class="mono">{{ displayText(item.history?.first_seen_at) }}</span></div>
+              <div><strong>Last seen:</strong> <span class="mono">{{ displayText(item.history?.last_seen_at || item.run_finished_at) }}</span></div>
+              <div><strong>Weight:</strong> {{ itemDetail.weight_oz ?? 'n/a' }} oz</div>
+              <div><strong>Category:</strong> {{ itemDetail.category_name || item.category || 'n/a' }}</div>
               <div><strong>Override:</strong> {{ item.override_mode || 'auto' }}</div>
+              <div><strong>Stackable:</strong> {{ displayFlag(itemDetail.stackable) }}</div>
+              <div><strong>Marketable:</strong> {{ displayFlag(itemDetail.marketable) }}</div>
+              <div><strong>Wiki:</strong> <a v-if="itemDetail.wiki_url" :href="itemDetail.wiki_url" target="_blank" rel="noreferrer">Open</a><span v-else>n/a</span></div>
+              <div><strong>World update:</strong> <span class="mono">{{ displayText(item.world_last_update) }}</span></div>
             </div>
-          </div>
+            <div class="vendor-grid">
+              <div>
+                <strong>NPC buyers</strong>
+                <ul v-if="item.npc_buy_rows?.length" class="vendor-list">
+                  <li v-for="row in item.npc_buy_rows" :key="`${row.npc_name}-${row.location}-${row.price}`">
+                    <span>
+                      {{ npcName(row) }}
+                      <small>{{ npcLocation(row) }}</small>
+                    </span>
+                    <span>{{ formatValue(row.price) }}</span>
+                  </li>
+                </ul>
+                <p v-else class="muted">n/a</p>
+              </div>
+              <div>
+                <strong>NPC sellers</strong>
+                <ul v-if="item.npc_sell_rows?.length" class="vendor-list">
+                  <li v-for="row in item.npc_sell_rows" :key="`${row.npc_name}-${row.location}-${row.price}`">
+                    <span>
+                      {{ npcName(row) }}
+                      <small>{{ npcLocation(row) }}</small>
+                    </span>
+                    <span>{{ formatValue(row.price) }}</span>
+                  </li>
+                </ul>
+                <p v-else class="muted">n/a</p>
+              </div>
+            </div>
+            <p class="muted strategy-note">{{ item.loot_logic?.reason || item.adjustment_reason || 'No strategy note available.' }}</p>
+          </AdvancedDisclosure>
         </section>
       </div>
     </section>

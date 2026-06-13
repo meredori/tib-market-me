@@ -1,5 +1,14 @@
 import type Database from "better-sqlite3";
 import { config } from "../config";
+import {
+  confidence as buildConfidence,
+  entityRef,
+  explanation,
+  freshness as buildFreshness,
+  labelsFromExplanations,
+  provenance
+} from "./intelligence/metadata";
+import type { Confidence, Freshness, InsightExplanation, Provenance } from "./intelligence/types";
 
 const PRICING_MODEL = "conservative_min";
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -70,8 +79,13 @@ type DashboardItem = {
   active_traders: number;
   source_run_count: number;
   last_seen_at: string | null;
+  reasons: InsightExplanation[];
+  warnings: InsightExplanation[];
   reason_labels: string[];
   warning_labels: string[];
+  confidence_detail: Confidence;
+  freshness: Freshness;
+  provenance: Provenance[];
   favorite: boolean;
   note?: string;
   priority?: number;
@@ -121,12 +135,12 @@ function latestRun(db: Database.Database): LatestRun | null {
 
 function freshnessFromRun(run: LatestRun | null): Record<string, unknown> {
   if (!run) {
+    const missing = buildFreshness(null, { missingDataReason: "No local market sync is available yet." });
     return {
+      ...missing,
       server: config.serverName,
       status: "missing",
       label: "no local sync",
-      stale: true,
-      age_hours: null,
       finished_at: null,
       pulled_at: null,
       world_last_update: null,
@@ -136,16 +150,15 @@ function freshnessFromRun(run: LatestRun | null): Record<string, unknown> {
     };
   }
 
-  const age = hoursSince(run.finished_at);
-  const stale = age === null || age > STALE_HOURS;
-  const status = stale ? "stale" : age > AGING_HOURS ? "aging" : "fresh";
-  const label = stale ? "stale snapshot" : status === "aging" ? "aging snapshot" : "latest sync";
+  const baseFreshness = buildFreshness(run.finished_at, {
+    staleAfterHours: STALE_HOURS,
+    agingAfterHours: AGING_HOURS,
+    lastVerified: run.world_queried_at
+  });
   return {
+    ...baseFreshness,
     server: run.server,
-    status,
-    label,
-    stale,
-    age_hours: age === null ? null : Number(age.toFixed(1)),
+    label: baseFreshness.status === "fresh" ? "latest sync" : `${baseFreshness.status} snapshot`,
     finished_at: run.finished_at,
     pulled_at: run.pulled_at,
     world_last_update: run.world_last_update,
@@ -219,42 +232,102 @@ function highBand(row: MarketRow): number | null {
   return Math.max(1, Math.round(row.historical_reference_price * (1 + bandPct)));
 }
 
-function labelsFor(row: MarketRow, runStale: boolean): { reasons: string[]; warnings: string[] } {
-  const reasons: string[] = [];
-  const warnings: string[] = [];
+function explanationsFor(row: MarketRow, runFreshness: Freshness): { reasons: InsightExplanation[]; warnings: InsightExplanation[] } {
+  const reasons: InsightExplanation[] = [];
+  const warnings: InsightExplanation[] = [];
   const price = asPositive(row.client_value);
   const low = lowBand(row);
   const high = highBand(row);
+  const item = entityRef("item", { id: row.item_id, name: row.name || row.wiki_name || `Item ${row.item_id}` });
+  const marketSource = provenance("market_sync", {
+    source_ref: entityRef("market_observation", { id: row.item_id, name: row.name || row.wiki_name || null }),
+    observed_at: row.last_seen_at ?? runFreshness.last_updated
+  });
 
-  if (runStale) {
-    warnings.push("stale snapshot");
+  if (runFreshness.stale) {
+    warnings.push(explanation("stale snapshot", "warning", "Market data is old enough to treat as trend evidence instead of a current listing.", {
+      source_refs: [item],
+      provenance: [marketSource]
+    }));
   }
   if (!row.source_run_count || row.source_run_count < 4 || !row.historical_reference_price) {
-    warnings.push("needs more snapshots");
+    warnings.push(explanation("needs more snapshots", "warning", "Historical-band decisions need more local market snapshots.", {
+      source_refs: [item],
+      provenance: [marketSource],
+      missing_data_reason: "Fewer than four historical snapshots are available."
+    }));
   }
   if (row.confidence < 0.45) {
-    warnings.push("low confidence");
+    warnings.push(explanation("low confidence", "warning", "Market pricing quality is low for this item.", {
+      source_refs: [item],
+      provenance: [marketSource]
+    }));
   }
   if (row.month_sold >= 0 && row.month_sold < 5) {
-    warnings.push("low recent volume");
+    warnings.push(explanation("low recent volume", "warning", "Recent monthly sales volume is thin.", {
+      source_refs: [item],
+      provenance: [marketSource]
+    }));
   }
   if (low !== null && price > 0 && price < low) {
-    reasons.push("below historical band");
+    reasons.push(explanation("below historical band", "positive", "Latest local price is below its historical band.", {
+      source_refs: [item],
+      provenance: [marketSource]
+    }));
   }
   if (high !== null && price > high) {
-    reasons.push("above usual range");
+    reasons.push(explanation("above usual range", "neutral", "Latest local price is above its usual range.", {
+      source_refs: [item],
+      provenance: [marketSource]
+    }));
   }
   if (row.liquidity >= 0.7 || row.month_sold >= 25 || row.day_sold >= 5) {
-    reasons.push("active market");
+    reasons.push(explanation("active market", "positive", "Recent local market activity suggests this item is easier to move.", {
+      source_refs: [item],
+      provenance: [marketSource]
+    }));
   }
   if (row.trend && row.trend !== "unknown") {
-    reasons.push(row.trend.replace(/_/g, " "));
+    reasons.push(explanation(row.trend.replace(/_/g, " "), "neutral", "Local market trend signal is available.", {
+      source_refs: [item],
+      provenance: [marketSource]
+    }));
   }
-  return { reasons: Array.from(new Set(reasons)), warnings: Array.from(new Set(warnings)) };
+  return { reasons: uniqueExplanations(reasons), warnings: uniqueExplanations(warnings) };
 }
 
-function toDashboardItem(row: MarketRow, runStale: boolean, favoriteIds: Set<number>): DashboardItem {
-  const labels = labelsFor(row, runStale);
+function uniqueExplanations(items: InsightExplanation[]): InsightExplanation[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.severity}:${item.label}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function toDashboardItem(row: MarketRow, runFreshness: Freshness, favoriteIds: Set<number>): DashboardItem {
+  const labels = explanationsFor(row, runFreshness);
+  const confidenceDetail = buildConfidence(row.confidence, {
+    estimated: true,
+    missingDataReason: row.confidence < 0.45 ? "Market activity or snapshot history is thin." : null
+  });
+  const itemFreshness = buildFreshness(row.last_seen_at ?? runFreshness.last_updated, {
+    staleAfterHours: STALE_HOURS,
+    agingAfterHours: AGING_HOURS,
+    lastVerified: runFreshness.last_verified
+  });
+  const itemProvenance = [
+    provenance("market_sync", {
+      source_ref: entityRef("market_observation", { id: row.item_id, name: row.name || row.wiki_name || null }),
+      observed_at: row.last_seen_at ?? runFreshness.last_updated
+    }),
+    provenance("derived_calculation", {
+      source_ref: entityRef("item", { id: row.item_id, name: row.name || row.wiki_name || null })
+    })
+  ];
   const item: DashboardItem = {
     item_id: row.item_id,
     id: row.item_id,
@@ -278,8 +351,16 @@ function toDashboardItem(row: MarketRow, runStale: boolean, favoriteIds: Set<num
     active_traders: Number(row.active_traders ?? -1),
     source_run_count: Number(row.source_run_count ?? 0),
     last_seen_at: row.last_seen_at,
-    reason_labels: labels.reasons,
-    warning_labels: labels.warnings,
+    reasons: labels.reasons,
+    warnings: labels.warnings,
+    reason_labels: [
+      ...labelsFromExplanations(labels.reasons, "positive"),
+      ...labelsFromExplanations(labels.reasons, "neutral")
+    ],
+    warning_labels: labelsFromExplanations(labels.warnings, "warning"),
+    confidence_detail: confidenceDetail,
+    freshness: itemFreshness,
+    provenance: itemProvenance,
     favorite: favoriteIds.has(row.item_id)
   };
   if (row.favorite_note) {
@@ -319,7 +400,7 @@ export function getMarketWatchlist(db: Database.Database): { ok: true; items: Da
   if (!run) {
     return { ok: true, items: [] };
   }
-  const runStale = Boolean(freshnessFromRun(run).stale);
+  const runFreshness = freshnessFromRun(run) as Freshness;
   const ids = favoriteIds(db);
   const rows = db
     .prepare(
@@ -369,10 +450,10 @@ export function getMarketWatchlist(db: Database.Database): { ok: true; items: Da
       `
     )
     .all(config.serverName, run.id, PRICING_MODEL) as MarketRow[];
-  return { ok: true, items: rows.map((row) => toDashboardItem(row, runStale, ids)) };
+  return { ok: true, items: rows.map((row) => toDashboardItem(row, runFreshness, ids)) };
 }
 
-function hotLootedItems(db: Database.Database, runId: number, runStale: boolean, ids: Set<number>): DashboardItem[] {
+function hotLootedItems(db: Database.Database, runId: number, runFreshness: Freshness, ids: Set<number>): DashboardItem[] {
   const rows = db
     .prepare("SELECT processed_json FROM hunt_uploads ORDER BY uploaded_at DESC LIMIT 100")
     .all() as Array<{ processed_json: string }>;
@@ -451,10 +532,15 @@ function hotLootedItems(db: Database.Database, runId: number, runStale: boolean,
     if (!row) {
       continue;
     }
-    const item = toDashboardItem(row, runStale, ids);
+    const item = toDashboardItem(row, runFreshness, ids);
     item.looted_quantity = loot.quantity;
     item.looted_value = loot.quantity * Math.max(0, item.latest_price);
-    item.reason_labels = Array.from(new Set([...item.reason_labels, "high looted value"]));
+    const hotLootExplanation = explanation("high looted value", "positive", "This item appears often enough in saved hunts to matter for selling decisions.", {
+      source_refs: [entityRef("item", { id: item.item_id, name: item.name })],
+      provenance: [provenance("personal_hunt"), provenance("derived_calculation")]
+    });
+    item.reasons = uniqueExplanations([...item.reasons, hotLootExplanation]);
+    item.reason_labels = Array.from(new Set([...item.reason_labels, hotLootExplanation.label]));
     ranked.push(item);
   }
 
@@ -467,9 +553,12 @@ function hotLootedItems(db: Database.Database, runId: number, runStale: boolean,
 export function getMarketDashboardSummary(db: Database.Database): Record<string, unknown> {
   const run = latestRun(db);
   const freshness = freshnessFromRun(run);
-  const warnings: string[] = [];
+  const warningExplanations: InsightExplanation[] = [];
   if (!run) {
-    warnings.push("No local market sync is available yet.");
+    warningExplanations.push(explanation("market sync missing", "blocked", "No local market sync is available yet.", {
+      missing_data_reason: "Run market refresh before market decisions are available.",
+      provenance: [provenance("market_sync")]
+    }));
     return {
       ok: true,
       freshness,
@@ -478,13 +567,16 @@ export function getMarketDashboardSummary(db: Database.Database): Record<string,
       notableMovers: [],
       hotLootedItems: [],
       quietItems: [],
-      warnings
+      warnings: warningExplanations.map((item) => item.reason),
+      warning_explanations: warningExplanations
     };
   }
 
-  const runStale = Boolean(freshness.stale);
-  if (runStale) {
-    warnings.push("Market data is a stale snapshot. Treat prices as trend evidence, not live listings.");
+  const runFreshness = freshness as Freshness;
+  if (runFreshness.stale) {
+    warningExplanations.push(explanation("stale snapshot", "warning", "Market data is a stale snapshot. Treat prices as trend evidence, not live listings.", {
+      provenance: [provenance("market_sync")]
+    }));
   }
   const ids = favoriteIds(db);
   const historicallyCheap = marketRows(
@@ -493,21 +585,21 @@ export function getMarketDashboardSummary(db: Database.Database): Record<string,
     "AND mip.historical_reference_price IS NOT NULL AND mip.source_run_count >= 4 AND mip.client_value > 0 AND mip.client_value < mip.historical_reference_price",
     "ORDER BY COALESCE(mip.divergence_pct, -999) ASC, mip.confidence DESC",
     10
-  ).map((row) => toDashboardItem(row, runStale, ids));
+  ).map((row) => toDashboardItem(row, runFreshness, ids));
   const notableMovers = marketRows(
     db,
     run.id,
     "AND mip.historical_reference_price IS NOT NULL AND mip.source_run_count >= 4 AND ABS(COALESCE(mip.divergence_pct, 0)) >= 20",
     "ORDER BY ABS(COALESCE(mip.divergence_pct, 0)) DESC, mip.confidence DESC",
     10
-  ).map((row) => toDashboardItem(row, runStale, ids));
+  ).map((row) => toDashboardItem(row, runFreshness, ids));
   const quietItems = marketRows(
     db,
     run.id,
     "AND (COALESCE(mif.month_sold, -1) BETWEEN 0 AND 4 OR COALESCE(mif.sell_offers, -1) BETWEEN 0 AND 2 OR mip.confidence < 0.45)",
     "ORDER BY mip.confidence ASC, COALESCE(mif.month_sold, 999) ASC",
     10
-  ).map((row) => toDashboardItem(row, runStale, ids));
+  ).map((row) => toDashboardItem(row, runFreshness, ids));
 
   return {
     ok: true,
@@ -515,8 +607,9 @@ export function getMarketDashboardSummary(db: Database.Database): Record<string,
     watchlist: getMarketWatchlist(db).items,
     historicallyCheap,
     notableMovers,
-    hotLootedItems: hotLootedItems(db, run.id, runStale, ids),
+    hotLootedItems: hotLootedItems(db, run.id, runFreshness, ids),
     quietItems,
-    warnings
+    warnings: warningExplanations.map((item) => item.reason),
+    warning_explanations: warningExplanations
   };
 }

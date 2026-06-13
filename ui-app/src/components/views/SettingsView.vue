@@ -6,6 +6,10 @@ import {
   Trash2,
   X,
 } from '@lucide/vue'
+import CompactMetricRow from '../common/CompactMetricRow.vue'
+import DecisionLabels from '../common/DecisionLabels.vue'
+import FreshnessBadge from '../common/FreshnessBadge.vue'
+import JobStatusPanel from '../common/JobStatusPanel.vue'
 import SectionHeader from '../common/SectionHeader.vue'
 
 defineProps({
@@ -13,7 +17,7 @@ defineProps({
   hasStatus: { type: Boolean, default: false },
   isRefreshing: { type: Boolean, default: false },
   refreshInfo: { type: String, default: '' },
-  publicReferenceStatus: { type: Object, default: () => ({ counts: {}, latest_sync_runs: [] }) },
+  publicReferenceStatus: { type: Object, default: () => ({ counts: {}, jobs: {}, data_health: {} }) },
   publicReferenceInfo: { type: String, default: '' },
   publicReferenceBusy: { type: Boolean, default: false },
   itemPriceMode: { type: String, default: 'conservative_min' },
@@ -73,20 +77,14 @@ defineEmits(['update:itemPriceMode', 'refresh', 'sync-public-reference', 'genera
           <span class="pill">Loot {{ publicReferenceStatus.counts?.creature_loot_rows || 0 }}</span>
           <span class="pill">Hunting Places {{ publicReferenceStatus.counts?.hunting_places || 0 }}</span>
         </div>
-        <div class="muted">
-          <strong>Latest sync:</strong>
-          <span class="mono">{{ publicReferenceStatus.latest_sync_runs?.[0]?.finished_at || 'n/a' }}</span>
-        </div>
-        <div class="muted">
-          <strong>Status:</strong>
-          <span>{{ publicReferenceStatus.latest_sync_runs?.[0]?.status || 'not synced' }}</span>
-          <span v-if="publicReferenceStatus.latest_sync_runs?.[0]?.status === 'running'">
-            | {{ publicReferenceStatus.latest_sync_runs?.[0]?.item_count || 0 }} item(s) imported so far
-          </span>
-        </div>
-        <div v-if="publicReferenceStatus.latest_sync_runs?.[0]?.error_message" class="error">
-          {{ publicReferenceStatus.latest_sync_runs?.[0]?.error_message }}
-        </div>
+        <FreshnessBadge :freshness="publicReferenceStatus.data_health?.freshness" />
+        <CompactMetricRow label="Enriched creatures" :value="`${publicReferenceStatus.data_health?.enriched?.creatures || 0} / ${publicReferenceStatus.data_health?.staged?.creatures || 0}`" />
+        <CompactMetricRow label="Enriched hunting places" :value="`${publicReferenceStatus.data_health?.enriched?.hunting_places || 0} / ${publicReferenceStatus.data_health?.staged?.hunting_places || 0}`" />
+        <DecisionLabels
+          :reasons="(publicReferenceStatus.data_health?.explanations || []).filter((item) => item.severity !== 'warning' && item.severity !== 'blocked')"
+          :warnings="(publicReferenceStatus.data_health?.explanations || []).filter((item) => item.severity === 'warning' || item.severity === 'blocked')"
+        />
+        <JobStatusPanel title="Catalog Sync" :jobs="publicReferenceStatus.jobs" />
         <div class="button-row mt-10">
           <button :disabled="publicReferenceBusy" @click="$emit('sync-public-reference')">
             <Database :size="16" />

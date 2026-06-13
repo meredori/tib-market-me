@@ -13,14 +13,40 @@ function createDb(): Database.Database {
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
   db.exec(`
-    CREATE TABLE public_reference_sync_runs (
+    CREATE TABLE intelligence_jobs (
       id INTEGER PRIMARY KEY,
-      resource TEXT NOT NULL,
+      job_type TEXT NOT NULL,
+      entity_type TEXT,
       status TEXT NOT NULL,
+      cursor_json TEXT NOT NULL DEFAULT '{}',
+      total_count INTEGER NOT NULL DEFAULT 0,
+      completed_count INTEGER NOT NULL DEFAULT 0,
+      failed_count INTEGER NOT NULL DEFAULT 0,
+      current_entity_type TEXT,
+      current_entity_id TEXT,
+      current_entity_name TEXT,
+      last_success_at TEXT,
+      last_error TEXT,
+      last_error_at TEXT,
+      failure_count INTEGER NOT NULL DEFAULT 0,
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      backoff_until TEXT,
       started_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
       finished_at TEXT,
-      item_count INTEGER NOT NULL DEFAULT 0,
-      error_message TEXT
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE TABLE intelligence_job_events (
+      id INTEGER PRIMARY KEY,
+      job_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      message TEXT,
+      entity_type TEXT,
+      entity_id TEXT,
+      entity_name TEXT,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (job_id) REFERENCES intelligence_jobs(id) ON DELETE CASCADE
     );
     CREATE TABLE public_creatures (
       id INTEGER PRIMARY KEY,
@@ -225,7 +251,20 @@ describe("public Tibia reference data", () => {
         hunting_place_area_summaries: 1
       }
     });
-    expect(db.prepare("SELECT COUNT(*) AS count FROM public_reference_sync_runs WHERE status = 'success'").get()).toEqual({ count: 2 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM intelligence_jobs WHERE job_type = 'public-reference-catalog' AND status = 'success'").get()).toEqual({ count: 2 });
+    const catalogJobs = ((status.jobs as Record<string, unknown>).by_type as Record<string, unknown>)["public-reference-catalog"] as Array<Record<string, unknown>>;
+    expect(catalogJobs[0]).toMatchObject({
+      status: "success",
+      current_entity: { type: "hunting_place", name: "Dragon Lair" }
+    });
+    expect(status).toMatchObject({
+      data_health: {
+        staged: {
+          creatures: 1,
+          hunting_places: 1
+        }
+      }
+    });
   });
 
   it("can run a catalog-first sync without hydrating details or loot", async () => {

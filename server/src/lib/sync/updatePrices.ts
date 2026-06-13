@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type Database from "better-sqlite3";
 import { config } from "../../config";
+import { confidence as buildConfidence, entityRef, explanation, freshness as buildFreshness, provenance } from "../intelligence/metadata";
 import { applyHistoricalPricingAdjustment, computeSnapshotPricing } from "../pricing/snapshotPricing";
 import { getHistoricalPricingContext, storeSyncSnapshotHistory, summarizeItemHistory } from "../pricing/itemHistory";
 import { TibiaMarketClient, type ItemMetadata, type MarketRow, type WorldDataRow } from "../tibiamarket/client";
@@ -84,8 +85,23 @@ function asText(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function npcDisplayName(row: Record<string, unknown>): string {
+  return asText(row.npc_name)
+    || asText(row.name)
+    || asText(row.npc)
+    || asText(row.vendor_name)
+    || asText(row.display_name);
+}
+
+function npcLocation(row: Record<string, unknown>): string {
+  return asText(row.location)
+    || asText(row.city)
+    || asText(row.town)
+    || asText(row.place);
+}
+
 function npcRowKey(row: Record<string, unknown>): string {
-  return `${asText(row.npc_name).trim().toLowerCase()}|${asText(row.location).trim().toLowerCase()}`;
+  return `${npcDisplayName(row).trim().toLowerCase()}|${npcLocation(row).trim().toLowerCase()}`;
 }
 
 function bestNpcBuyPrice(metaRow: ItemMetadata | undefined): number {
@@ -108,6 +124,113 @@ function bestNpcBuyPrice(metaRow: ItemMetadata | undefined): number {
 
 function withNpcSaleFloor(value: number, npcBuy: number): number {
   return npcBuy > 0 ? Math.max(value, npcBuy) : value;
+}
+
+function normalizeNpcRows(value: unknown, preferHigherPrice: boolean): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const rowsByKey = new Map<string, Record<string, unknown>>();
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const row = entry as Record<string, unknown>;
+    const normalized = {
+      npc_name: npcDisplayName(row),
+      location: npcLocation(row),
+      price: asInt(row.price, 0),
+      currency_object_type_id: asInt(row.currency_object_type_id, 0),
+      currency_quest_flag_display_name: asText(row.currency_quest_flag_display_name)
+    };
+    if (!normalized.npc_name && !normalized.location && normalized.price <= 0) {
+      continue;
+    }
+    const key = npcRowKey(normalized);
+    const existing = rowsByKey.get(key);
+    if (!existing) {
+      rowsByKey.set(key, normalized);
+      continue;
+    }
+    const existingPrice = asInt(existing.price, 0);
+    if (preferHigherPrice ? normalized.price > existingPrice : normalized.price < existingPrice) {
+      rowsByKey.set(key, normalized);
+    }
+  }
+  return Array.from(rowsByKey.values())
+    .sort((a, b) => {
+      const priceDelta = preferHigherPrice
+        ? asInt(b.price, 0) - asInt(a.price, 0)
+        : asInt(a.price, 0) - asInt(b.price, 0);
+      return priceDelta || npcDisplayName(a).localeCompare(npcDisplayName(b));
+    });
+}
+
+function rawMetadataNpcRows(
+  db: Database.Database,
+  itemId: number,
+  field: "npc_buy" | "npc_sell",
+  preferHigherPrice: boolean
+): Array<Record<string, unknown>> {
+  const row = db
+    .prepare("SELECT raw_payload_json FROM item_metadata WHERE item_id = ?")
+    .get(itemId) as { raw_payload_json: string | null } | undefined;
+  if (!row?.raw_payload_json) {
+    return [];
+  }
+  try {
+    const payload = JSON.parse(row.raw_payload_json) as Record<string, unknown>;
+    return normalizeNpcRows(payload[field], preferHigherPrice);
+  } catch {
+    return [];
+  }
+}
+
+function storedNpcRows(
+  db: Database.Database,
+  itemId: number,
+  tableName: "item_npc_buy" | "item_npc_sell",
+  preferHigherPrice: boolean
+): Array<Record<string, unknown>> {
+  const orderDirection = preferHigherPrice ? "DESC" : "ASC";
+  return db
+    .prepare(
+      `
+      SELECT npc_name, location, price, currency_object_type_id, currency_quest_flag_display_name
+      FROM ${tableName}
+      WHERE item_id = ?
+      ORDER BY price ${orderDirection}, npc_name ASC
+    `
+    )
+    .all(itemId) as Array<Record<string, unknown>>;
+}
+
+function itemNpcRows(
+  db: Database.Database,
+  itemId: number,
+  tableName: "item_npc_buy" | "item_npc_sell",
+  rawField: "npc_buy" | "npc_sell",
+  preferHigherPrice: boolean
+): Array<Record<string, unknown>> {
+  const rawRows = rawMetadataNpcRows(db, itemId, rawField, preferHigherPrice);
+  const storedRows = storedNpcRows(db, itemId, tableName, preferHigherPrice);
+  if (!rawRows.length) {
+    return storedRows;
+  }
+  if (!storedRows.length || storedRows.every((row) => !npcDisplayName(row))) {
+    return rawRows;
+  }
+  const rawByLocationPrice = new Map(rawRows.map((row) => [
+    `${npcLocation(row).toLowerCase()}|${asInt(row.price, 0)}`,
+    row
+  ]));
+  return storedRows.map((row) => {
+    if (npcDisplayName(row)) {
+      return row;
+    }
+    const raw = rawByLocationPrice.get(`${npcLocation(row).toLowerCase()}|${asInt(row.price, 0)}`);
+    return raw ? { ...row, npc_name: npcDisplayName(raw) } : row;
+  });
 }
 
 function selectedWorld(worldRows: WorldDataRow[], serverName: string): WorldDataRow | undefined {
@@ -306,8 +429,8 @@ export async function runMarketSync(db: Database.Database, logger: SyncLogger = 
       for (const row of npcBuyByKey.values()) {
         insertNpcBuy.run(
           meta.id,
-          asText(row.npc_name),
-          asText(row.location),
+          npcDisplayName(row),
+          npcLocation(row),
           asInt(row.price, 0),
           asInt(row.currency_object_type_id, 0),
           asText(row.currency_quest_flag_display_name),
@@ -318,8 +441,8 @@ export async function runMarketSync(db: Database.Database, logger: SyncLogger = 
       for (const row of npcSellByKey.values()) {
         insertNpcSell.run(
           meta.id,
-          asText(row.npc_name),
-          asText(row.location),
+          npcDisplayName(row),
+          npcLocation(row),
           asInt(row.price, 0),
           asInt(row.currency_object_type_id, 0),
           asText(row.currency_quest_flag_display_name),
@@ -737,8 +860,8 @@ export function generateItemPricesFile(
     const selectedValue = lootLogic.strategy === "ignore"
       ? Math.max(0, asInt(config.ignoredItemExportValue, 1))
       : mode === "sell_offer"
-        ? (lootLogic.price > 0 ? lootLogic.price : clientValue)
-        : (lootLogic.min_price > 0 ? lootLogic.min_price : (lootLogic.price > 0 ? lootLogic.price : clientValue));
+        ? (lootLogic.fair_sale_price > 0 ? lootLogic.fair_sale_price : clientValue)
+        : (lootLogic.min_list_price > 0 ? lootLogic.min_list_price : (lootLogic.fair_sale_price > 0 ? lootLogic.fair_sale_price : clientValue));
     const exportValue = lootLogic.strategy === "ignore"
       ? selectedValue
       : withNpcSaleFloor(selectedValue, asInt(row.npc_buy, 0));
@@ -855,6 +978,8 @@ export function getItemDetails(db: Database.Database, itemId: number): Record<st
         mif.month_sold AS month_sold,
         mif.day_sold AS day_sold,
         mif.month_average_sell AS month_average_sell,
+        mif.month_highest_sell AS month_highest_sell,
+        mif.month_lowest_sell AS month_lowest_sell,
         mif.day_average_sell AS day_average_sell,
         mif.sell_offer AS sell_offer,
         mif.buy_offer AS buy_offer,
@@ -883,29 +1008,57 @@ export function getItemDetails(db: Database.Database, itemId: number): Record<st
     return null;
   }
 
-  const npcBuyRows = db
-    .prepare(
-      `
-      SELECT npc_name, location, price
-      FROM item_npc_buy
-      WHERE item_id = ?
-      ORDER BY price DESC, npc_name ASC
-    `
-    )
-    .all(itemId) as Array<Record<string, unknown>>;
-
-  const npcSellRows = db
-    .prepare(
-      `
-      SELECT npc_name, location, price
-      FROM item_npc_sell
-      WHERE item_id = ?
-      ORDER BY price ASC, npc_name ASC
-    `
-    )
-    .all(itemId) as Array<Record<string, unknown>>;
+  const npcBuyRows = itemNpcRows(db, itemId, "item_npc_buy", "npc_buy", true);
+  const npcSellRows = itemNpcRows(db, itemId, "item_npc_sell", "npc_sell", false);
 
   const lootLogic = getEffectiveLootLogicPreview(detail);
+  const itemEntity = entityRef("item", {
+    id: asInt(detail.id, itemId),
+    name: asText(detail.name) || asText(detail.wiki_name) || `Item ${itemId}`
+  });
+  const marketProvenance = provenance("market_sync", {
+    source_ref: entityRef("market_observation", { id: latestRun.id, name: config.serverName }),
+    observed_at: asText(detail.run_finished_at) || null
+  });
+  const overrideMode = asText(detail.override_mode) || "auto";
+  const itemFreshness = buildFreshness(asText(detail.run_finished_at) || null, {
+    staleAfterHours: 36,
+    agingAfterHours: 12,
+    lastVerified: asText(detail.world_last_update) || null
+  });
+  const itemConfidence = buildConfidence(Number(detail.confidence), {
+    estimated: true,
+    missingDataReason: Number(detail.confidence) < 0.45 ? "Market activity or historical evidence is thin." : null
+  });
+  const reasons = [
+    explanation(lootLogic.strategy.replace(/_/g, " "), "neutral", lootLogic.reason, {
+      source_refs: [itemEntity],
+      provenance: [
+        marketProvenance,
+        provenance("derived_calculation", { source_ref: itemEntity })
+      ]
+    })
+  ];
+  const warnings = [];
+  if (itemFreshness.stale) {
+    warnings.push(explanation("stale snapshot", "warning", "Item pricing comes from an old local market snapshot.", {
+      source_refs: [itemEntity],
+      provenance: [marketProvenance]
+    }));
+  }
+  if (itemConfidence.level === "low" || itemConfidence.level === "unknown") {
+    warnings.push(explanation(itemConfidence.label, "warning", "Item pricing confidence is limited.", {
+      source_refs: [itemEntity],
+      provenance: [marketProvenance],
+      missing_data_reason: itemConfidence.missing_data_reason
+    }));
+  }
+  if (overrideMode !== "auto") {
+    reasons.push(explanation("manual override", "neutral", `Manual override is set to ${overrideMode}.`, {
+      source_refs: [itemEntity],
+      provenance: [provenance("manual_override", { source_ref: itemEntity, manual: true })]
+    }));
+  }
   const normalizedNames = [
     asText(detail.name).toLowerCase().trim(),
     asText(detail.wiki_name).toLowerCase().trim()
@@ -941,6 +1094,15 @@ export function getItemDetails(db: Database.Database, itemId: number): Record<st
     ...detail,
     trend: lootLogic.trend_display,
     loot_logic: lootLogic,
+    confidence_detail: itemConfidence,
+    freshness: itemFreshness,
+    provenance: [
+      marketProvenance,
+      provenance("derived_calculation", { source_ref: itemEntity }),
+      ...(overrideMode === "auto" ? [] : [provenance("manual_override", { source_ref: itemEntity, manual: true })])
+    ],
+    reasons,
+    warnings,
     history: summarizeItemHistory(db, itemId),
     item_detail: itemDetail ?? null,
     npc_buy_rows: npcBuyRows,

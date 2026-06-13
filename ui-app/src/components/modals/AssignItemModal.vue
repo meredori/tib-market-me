@@ -78,7 +78,7 @@ defineEmits(['update:itemId', 'update:search', 'close', 'search-items', 'save'])
           <img class="loot-item-image" :src="row.image_path || itemImagePath(row.id)" :alt="row.name" loading="lazy" />
           <span>{{ row.name }}</span>
           <strong>#{{ row.id }}</strong>
-          <small>{{ formatValue(row.client_value) }} gp</small>
+          <small>{{ formatValue(row.loot_logic?.fair_sale_price ?? row.client_value) }} gp</small>
         </button>
       </div>
 

@@ -194,7 +194,7 @@ export async function enrichLootItems(
     const hardCoded = HARD_CODED_ITEM_VALUES[item.normalized_name] ?? null;
     const lookup = lookupLootItem(db, item.name);
     const lootLogic = lookup ? getEffectiveLootLogicPreview(lookup as unknown as Record<string, unknown>) : null;
-    const lookupPrice = lootLogic?.price && lootLogic.price > 0 ? lootLogic.price : null;
+    const lookupPrice = lootLogic?.fair_sale_price && lootLogic.fair_sale_price > 0 ? lootLogic.fair_sale_price : null;
     const unitValue = hardCoded?.unit_value ?? (lookupPrice !== null ? Math.round(lookupPrice) : null);
     const excluded = excludedSet.has(item.normalized_name);
     const rawTotalValue = unitValue !== null ? unitValue * item.quantity : 0;

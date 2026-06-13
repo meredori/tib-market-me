@@ -9,6 +9,8 @@ import {
   ShieldQuestion,
   Trash2,
 } from '@lucide/vue'
+import ConfidenceBadge from '../common/ConfidenceBadge.vue'
+import DecisionLabels from '../common/DecisionLabels.vue'
 import HuntSummary from '../HuntSummary.vue'
 
 defineProps({
@@ -177,7 +179,7 @@ function matchConfidence(match) {
           <div class="match-review-head">
             <MapPinned :size="16" />
             <span>Hunting Place</span>
-            <strong>{{ huntingPlaceMatch(hunts.importHuntPreview.value).status }} {{ matchConfidence(huntingPlaceMatch(hunts.importHuntPreview.value)) }}</strong>
+            <strong>{{ huntingPlaceMatch(hunts.importHuntPreview.value).status }} <ConfidenceBadge :confidence="huntingPlaceMatch(hunts.importHuntPreview.value).confidence_detail ?? huntingPlaceMatch(hunts.importHuntPreview.value).confidence" /></strong>
           </div>
           <select v-model="hunts.importHuntDraftHuntingPlaceId.value" @change="hunts.markUnsavedHuntChanges">
             <option value="">No staged place</option>
@@ -189,7 +191,7 @@ function matchConfidence(match) {
               {{ candidate.name }} ({{ matchConfidence(candidate) }})
             </option>
           </select>
-          <small>{{ huntingPlaceMatch(hunts.importHuntPreview.value).reasons?.join(' | ') }}</small>
+          <DecisionLabels :reasons="huntingPlaceMatch(hunts.importHuntPreview.value).explanations" :reason-labels="huntingPlaceMatch(hunts.importHuntPreview.value).reasons" :limit="3" />
         </div>
         <label>Character<input v-model="hunts.importHuntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Tags<input v-model="hunts.importHuntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
@@ -208,7 +210,7 @@ function matchConfidence(match) {
           <div class="match-review-head">
             <MapPinned :size="16" />
             <span>Hunting Place</span>
-            <strong>{{ huntingPlaceMatch(hunts.huntPreview.value).status }} {{ matchConfidence(huntingPlaceMatch(hunts.huntPreview.value)) }}</strong>
+            <strong>{{ huntingPlaceMatch(hunts.huntPreview.value).status }} <ConfidenceBadge :confidence="huntingPlaceMatch(hunts.huntPreview.value).confidence_detail ?? huntingPlaceMatch(hunts.huntPreview.value).confidence" /></strong>
           </div>
           <select v-model="hunts.huntDraftHuntingPlaceId.value" @change="hunts.markUnsavedHuntChanges">
             <option value="">No staged place</option>
@@ -220,7 +222,7 @@ function matchConfidence(match) {
               {{ candidate.name }} ({{ matchConfidence(candidate) }})
             </option>
           </select>
-          <small>{{ huntingPlaceMatch(hunts.huntPreview.value).reasons?.join(' | ') }}</small>
+          <DecisionLabels :reasons="huntingPlaceMatch(hunts.huntPreview.value).explanations" :reason-labels="huntingPlaceMatch(hunts.huntPreview.value).reasons" :limit="3" />
         </div>
         <label>Character<input v-model="hunts.huntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Tags<input v-model="hunts.huntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
@@ -241,7 +243,7 @@ function matchConfidence(match) {
           <div class="match-review-head">
             <MapPinned :size="16" />
             <span>Hunting Place</span>
-            <strong>{{ huntingPlaceMatch(hunts.previousHuntPreview.value).status }} {{ matchConfidence(huntingPlaceMatch(hunts.previousHuntPreview.value)) }}</strong>
+            <strong>{{ huntingPlaceMatch(hunts.previousHuntPreview.value).status }} <ConfidenceBadge :confidence="huntingPlaceMatch(hunts.previousHuntPreview.value).confidence_detail ?? huntingPlaceMatch(hunts.previousHuntPreview.value).confidence" /></strong>
           </div>
           <select v-model="hunts.previousHuntDraftHuntingPlaceId.value" @change="hunts.markUnsavedHuntChanges">
             <option value="">No staged place</option>
@@ -253,7 +255,7 @@ function matchConfidence(match) {
               {{ candidate.name }} ({{ matchConfidence(candidate) }})
             </option>
           </select>
-          <small>{{ huntingPlaceMatch(hunts.previousHuntPreview.value).reasons?.join(' | ') }}</small>
+          <DecisionLabels :reasons="huntingPlaceMatch(hunts.previousHuntPreview.value).explanations" :reason-labels="huntingPlaceMatch(hunts.previousHuntPreview.value).reasons" :limit="3" />
         </div>
         <label>Character<input v-model="hunts.previousHuntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
         <label>Tags<input v-model="hunts.previousHuntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>

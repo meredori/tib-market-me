@@ -3,6 +3,9 @@ import {
   AlertTriangle,
   Star,
 } from '@lucide/vue'
+import ConfidenceBadge from '../common/ConfidenceBadge.vue'
+import DecisionLabels from '../common/DecisionLabels.vue'
+import FreshnessBadge from '../common/FreshnessBadge.vue'
 import SectionHeader from '../common/SectionHeader.vue'
 
 defineProps({
@@ -34,6 +37,7 @@ defineEmits([
           Refresh view
         </button>
       </SectionHeader>
+      <FreshnessBadge :freshness="marketDashboard.freshness" />
       <div class="market-status-grid">
         <div>
           <span class="muted">World</span>
@@ -77,7 +81,7 @@ defineEmits([
             <tr>
               <th></th>
               <th>Name</th>
-              <th>Client Value</th>
+              <th>Fair Sale</th>
               <th>Sell Offer</th>
               <th>Confidence</th>
               <th>Trend</th>
@@ -90,9 +94,9 @@ defineEmits([
                 <img class="item-image" :src="row.image_path || itemImagePath(row.id)" :alt="row.name" loading="lazy" />
               </td>
               <td><button class="item-link" @click="$emit('open-item', row.id)">{{ row.name || row.wiki_name || `Item ${row.id}` }}</button></td>
-              <td>{{ formatValue(row.client_value) }}</td>
+              <td>{{ formatValue(row.loot_logic?.fair_sale_price ?? row.client_value) }}</td>
               <td>{{ formatValue(row.sell_offer) }}</td>
-              <td>{{ row.confidence ?? 'n/a' }}</td>
+              <td><ConfidenceBadge :confidence="row.confidence_detail ?? row.confidence" /></td>
               <td>{{ row.trend || 'n/a' }}</td>
               <td class="action-col">
                 <button class="icon-btn" title="Toggle favorite" :disabled="watchlistBusy" @click="$emit('toggle-favorite', row)">
@@ -118,10 +122,7 @@ defineEmits([
               <span>{{ item.name }}</span>
             </button>
             <strong>{{ formatValue(item.latest_price) }}</strong>
-            <div class="market-labels">
-              <span v-for="label in item.reason_labels" :key="label" class="pill">{{ label }}</span>
-              <span v-for="label in item.warning_labels" :key="label" class="pill warning-pill">{{ label }}</span>
-            </div>
+            <DecisionLabels class="market-labels" :reasons="item.reasons" :warnings="item.warnings" :reason-labels="item.reason_labels" :warning-labels="item.warning_labels" />
             <button class="icon-btn" title="Remove favorite" :disabled="watchlistBusy" @click="$emit('toggle-favorite', item)">
               <Star :size="16" fill="currentColor" />
             </button>
@@ -154,7 +155,7 @@ defineEmits([
                 <td>{{ formatValue(item.latest_price) }}</td>
                 <td>{{ formatValue(item.low_band) }} - {{ formatValue(item.high_band) }}</td>
                 <td>
-                  <span v-for="label in item.reason_labels.slice(0, 2)" :key="label" class="pill">{{ label }}</span>
+                  <DecisionLabels :reasons="item.reasons" :reason-labels="item.reason_labels" :limit="2" />
                 </td>
                 <td class="action-col">
                   <button class="icon-btn" title="Toggle favorite" :disabled="watchlistBusy" @click="$emit('toggle-favorite', item)">
@@ -179,9 +180,7 @@ defineEmits([
               <span>{{ item.name }}</span>
             </button>
             <strong>{{ item.divergence_pct === null ? 'n/a' : `${Number(item.divergence_pct).toFixed(1)}%` }}</strong>
-            <div class="market-labels">
-              <span v-for="label in [...item.reason_labels, ...item.warning_labels].slice(0, 3)" :key="label" class="pill" :class="{ 'warning-pill': item.warning_labels.includes(label) }">{{ label }}</span>
-            </div>
+            <DecisionLabels class="market-labels" :reasons="item.reasons" :warnings="item.warnings" :reason-labels="item.reason_labels" :warning-labels="item.warning_labels" :limit="3" />
             <button class="icon-btn" title="Toggle favorite" :disabled="watchlistBusy" @click="$emit('toggle-favorite', item)">
               <Star :size="16" :fill="item.favorite ? 'currentColor' : 'none'" />
             </button>
@@ -212,7 +211,7 @@ defineEmits([
                 </td>
                 <td>{{ formatValue(item.looted_quantity) }}</td>
                 <td>{{ formatValue(item.looted_value) }}</td>
-                <td><span class="pill">high looted value</span></td>
+                <td><DecisionLabels :reasons="item.reasons" :reason-labels="item.reason_labels" :limit="1" /></td>
               </tr>
               <tr v-if="!marketDashboard.hotLootedItems?.length">
                 <td colspan="4" class="muted">Save hunts with market-known loot to populate listing candidates.</td>
@@ -231,9 +230,7 @@ defineEmits([
               <span>{{ item.name }}</span>
             </button>
             <strong>{{ formatValue(item.month_sold) }} sold/mo</strong>
-            <div class="market-labels">
-              <span v-for="label in item.warning_labels" :key="label" class="pill warning-pill">{{ label }}</span>
-            </div>
+            <DecisionLabels class="market-labels" :warnings="item.warnings" :warning-labels="item.warning_labels" />
             <button class="icon-btn" title="Toggle favorite" :disabled="watchlistBusy" @click="$emit('toggle-favorite', item)">
               <Star :size="16" :fill="item.favorite ? 'currentColor' : 'none'" />
             </button>

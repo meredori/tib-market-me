@@ -1,4 +1,6 @@
 import type Database from "better-sqlite3";
+import { entityRef, explanation, freshness, provenance } from "../intelligence/metadata";
+import { finishJob, recordJobFailure, startJob, summarizeJobs, updateJobProgress } from "../intelligence/jobs";
 import { asNumberOrNull, asRecord, asText, firstNumber, firstText, nowIso } from "../hunts/utils";
 
 const DEFAULT_PUBLIC_DATA_BASE_URL = "https://tibiadata.bytewizards.de";
@@ -382,23 +384,6 @@ export class PublicTibiaDataClient {
   }
 }
 
-function beginSyncRun(db: Database.Database, resource: string, startedAt: string): number {
-  db.prepare(
-    `
-    UPDATE public_reference_sync_runs
-    SET status = 'interrupted',
-      finished_at = ?,
-      error_message = 'Sync was interrupted before completion'
-    WHERE status = 'running'
-  `
-  ).run(startedAt);
-
-  const result = db.prepare(
-    "INSERT INTO public_reference_sync_runs (resource, status, started_at) VALUES (?, 'running', ?)"
-  ).run(resource, startedAt);
-  return Number(result.lastInsertRowid);
-}
-
 function publicReferenceCounts(db: Database.Database): Record<string, number> {
   return {
     creatures: (db.prepare("SELECT COUNT(*) AS count FROM public_creatures").get() as { count: number }).count,
@@ -407,26 +392,6 @@ function publicReferenceCounts(db: Database.Database): Record<string, number> {
     hunting_place_creatures: (db.prepare("SELECT COUNT(*) AS count FROM public_hunting_place_creatures").get() as { count: number }).count,
     hunting_place_area_summaries: (db.prepare("SELECT COUNT(*) AS count FROM public_hunting_place_area_summaries").get() as { count: number }).count
   };
-}
-
-function updateSyncRunProgress(db: Database.Database, id: number, itemCount: number): void {
-  db.prepare(
-    `
-    UPDATE public_reference_sync_runs
-    SET item_count = ?
-    WHERE id = ?
-  `
-  ).run(Math.trunc(itemCount), id);
-}
-
-function finishSyncRun(db: Database.Database, id: number, status: string, finishedAt: string, itemCount: number, error?: unknown): void {
-  db.prepare(
-    `
-    UPDATE public_reference_sync_runs
-    SET status = ?, finished_at = ?, item_count = ?, error_message = ?
-    WHERE id = ?
-  `
-  ).run(status, finishedAt, Math.trunc(itemCount), error ? String(error) : null, id);
 }
 
 export function upsertPublicCreature(db: Database.Database, payload: unknown, fetchedAt = nowIso()): PublicCreature | null {
@@ -622,15 +587,75 @@ export function replacePublicHuntingPlaceChildren(db: Database.Database, hunting
 
 export function getPublicReferenceStatus(db: Database.Database): Record<string, unknown> {
   const counts = publicReferenceCounts(db);
-  const latest = db.prepare(
+  const jobs = summarizeJobs(db, ["public-reference-catalog"]);
+  const enrichedCreatures = (db.prepare(
+    "SELECT COUNT(*) AS count FROM public_creatures WHERE hitpoints IS NOT NULL OR experience IS NOT NULL OR bestiary_class IS NOT NULL"
+  ).get() as { count: number }).count;
+  const enrichedPlaces = (db.prepare(
     `
-    SELECT resource, status, started_at, finished_at, item_count, error_message
-    FROM public_reference_sync_runs
-    ORDER BY started_at DESC
-    LIMIT 5
-  `
-  ).all();
-  return { ok: true, counts, latest_sync_runs: latest };
+    SELECT COUNT(*) AS count
+    FROM public_hunting_places place
+    WHERE EXISTS (
+      SELECT 1
+      FROM public_hunting_place_creatures creature
+      WHERE creature.hunting_place_id = place.id
+    )
+    `
+  ).get() as { count: number }).count;
+  const latestJob = Array.isArray((jobs as Record<string, unknown>).latest)
+    ? ((jobs as Record<string, unknown>).latest as Array<Record<string, unknown>>)[0]
+    : null;
+  const lastFinished = typeof latestJob?.finished_at === "string" ? latestJob.finished_at : null;
+  const dataFreshness = freshness(lastFinished, {
+    staleAfterHours: 24 * 14,
+    agingAfterHours: 24 * 7,
+    missingDataReason: "Public reference catalog has not been synced yet."
+  });
+  const healthExplanations = [
+    counts.creatures > 0
+      ? explanation("catalog staged", "positive", "Creature and hunting-place catalog rows exist locally.", {
+        provenance: [provenance("public_tibia_reference")]
+      })
+      : explanation("catalog missing", "blocked", "Run public reference sync before matching or recommendations can rely on staged data.", {
+        missing_data_reason: "No public reference catalog rows are staged.",
+        provenance: [provenance("public_tibia_reference")]
+      }),
+    enrichedCreatures < counts.creatures || enrichedPlaces < counts.hunting_places
+      ? explanation("details pending", "warning", "Some staged public rows are catalog-only and need later enrichment.", {
+        missing_data_reason: "Detail enrichment is a later roadmap phase.",
+        provenance: [provenance("derived_calculation")]
+      })
+      : explanation("details available", "positive", "Staged public reference rows include detail data where currently supported.", {
+        provenance: [provenance("derived_calculation")]
+      })
+  ];
+  return {
+    ok: true,
+    counts,
+    jobs,
+    data_health: {
+      freshness: dataFreshness,
+      staged: {
+        creatures: counts.creatures,
+        hunting_places: counts.hunting_places,
+        creature_loot_rows: counts.creature_loot_rows,
+        hunting_place_creatures: counts.hunting_place_creatures,
+        hunting_place_area_summaries: counts.hunting_place_area_summaries
+      },
+      enriched: {
+        creatures: enrichedCreatures,
+        hunting_places: enrichedPlaces
+      },
+      pending: {
+        creatures: Math.max(0, counts.creatures - enrichedCreatures),
+        hunting_places: Math.max(0, counts.hunting_places - enrichedPlaces)
+      },
+      failed: {
+        latest_job_failed_count: Number(latestJob?.failed_count ?? 0)
+      },
+      explanations: healthExplanations
+    }
+  };
 }
 
 export async function syncPublicReferenceData(
@@ -644,7 +669,16 @@ export async function syncPublicReferenceData(
 
   publicReferenceSyncInProgress = true;
   const startedAt = nowIso();
-  const syncRunId = beginSyncRun(db, "public-reference-core", startedAt);
+  const job = startJob(db, {
+    jobType: "public-reference-catalog",
+    entityType: "creature",
+    metadata: {
+      started_at: startedAt,
+      hydrate_creature_details: Boolean(options.hydrateCreatureDetails),
+      hydrate_hunting_place_details: Boolean(options.hydrateHuntingPlaceDetails),
+      fetch_creature_loot: Boolean(options.fetchCreatureLoot)
+    }
+  });
   const fetchedAt = nowIso();
   let creatures = 0;
   let creatureLootRows = 0;
@@ -661,13 +695,23 @@ export async function syncPublicReferenceData(
       if (lookup === null || lookup === undefined || lookup === "") {
         continue;
       }
+      const current = entityRef("creature", { id: identity.id, name: identity.name, normalized_name: identity.name ? normalizePublicName(identity.name) : null });
+      updateJobProgress(db, job.id, {
+        completedCount: creatures + huntingPlaces,
+        totalCount: creatureLimit + Math.max(0, Math.trunc(options.huntingPlaceLimit ?? 0)),
+        currentEntity: current,
+        cursor: { phase: "creatures", lookup }
+      });
       const details = options.hydrateCreatureDetails ? await client.getCreature(lookup) : entry;
       const creature = upsertPublicCreature(db, details, fetchedAt);
       if (!creature) {
         continue;
       }
       creatures += 1;
-      updateSyncRunProgress(db, syncRunId, creatures + huntingPlaces);
+      updateJobProgress(db, job.id, {
+        completedCount: creatures + huntingPlaces,
+        currentEntity: entityRef("creature", { id: creature.id, name: creature.name, normalized_name: normalizePublicName(creature.name) })
+      });
       if (options.fetchCreatureLoot === true) {
         const loot = await client.getCreatureLoot(creature.id);
         creatureLootRows += replacePublicCreatureLoot(db, creature.id, loot, fetchedAt);
@@ -682,6 +726,13 @@ export async function syncPublicReferenceData(
       if (lookup === null || lookup === undefined || lookup === "") {
         continue;
       }
+      const current = entityRef("hunting_place", { id: identity.id, name: identity.name, normalized_name: identity.name ? normalizePublicName(identity.name) : null });
+      updateJobProgress(db, job.id, {
+        completedCount: creatures + huntingPlaces,
+        totalCount: creatureLimit + placeLimit,
+        currentEntity: current,
+        cursor: { phase: "hunting_places", lookup }
+      });
       const details = options.hydrateHuntingPlaceDetails ? await client.getHuntingPlace(lookup) : entry;
       const place = upsertPublicHuntingPlace(db, details, fetchedAt);
       if (!place) {
@@ -693,11 +744,25 @@ export async function syncPublicReferenceData(
         huntingPlaceCreatures += children.creatures;
         huntingPlaceAreaSummaries += children.area_summaries;
       }
-      updateSyncRunProgress(db, syncRunId, creatures + huntingPlaces);
+      updateJobProgress(db, job.id, {
+        completedCount: creatures + huntingPlaces,
+        totalCount: creatureLimit + placeLimit,
+        currentEntity: entityRef("hunting_place", { id: place.id, name: place.name, normalized_name: normalizePublicName(place.name) })
+      });
     }
 
     const finishedAt = nowIso();
-    finishSyncRun(db, syncRunId, "success", finishedAt, creatures + huntingPlaces);
+    finishJob(db, job.id, "success", {
+      completedCount: creatures + huntingPlaces,
+      metadata: {
+        finished_at: finishedAt,
+        creatures,
+        creature_loot_rows: creatureLootRows,
+        hunting_places: huntingPlaces,
+        hunting_place_creatures: huntingPlaceCreatures,
+        hunting_place_area_summaries: huntingPlaceAreaSummaries
+      }
+    });
     return {
       ok: true,
       creatures,
@@ -709,7 +774,18 @@ export async function syncPublicReferenceData(
       finished_at: finishedAt
     };
   } catch (error) {
-    finishSyncRun(db, syncRunId, "error", nowIso(), creatures + huntingPlaces, error);
+    recordJobFailure(db, job.id, { error });
+    finishJob(db, job.id, "error", {
+      error,
+      completedCount: creatures + huntingPlaces,
+      metadata: {
+        creatures,
+        creature_loot_rows: creatureLootRows,
+        hunting_places: huntingPlaces,
+        hunting_place_creatures: huntingPlaceCreatures,
+        hunting_place_area_summaries: huntingPlaceAreaSummaries
+      }
+    });
     throw error;
   } finally {
     publicReferenceSyncInProgress = false;

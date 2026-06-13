@@ -1,4 +1,6 @@
 import type Database from "better-sqlite3";
+import { confidence as buildConfidence, entityRef, explanation, provenance } from "../intelligence/metadata";
+import type { Confidence, InsightExplanation, Provenance } from "../intelligence/types";
 import {
   normalizePublicName,
   PublicTibiaDataClient,
@@ -15,6 +17,9 @@ export type HuntingPlaceCandidate = {
   confidence: number;
   status: "auto" | "review" | "unmatched";
   reasons: string[];
+  explanations: InsightExplanation[];
+  confidence_detail: Confidence;
+  provenance: Provenance[];
   matched_monsters: string[];
   missing_monsters: string[];
 };
@@ -25,6 +30,9 @@ export type HuntingPlaceMatchResult = {
   confidence: number;
   status: "auto" | "review" | "unmatched" | "manual";
   reasons: string[];
+  explanations: InsightExplanation[];
+  confidence_detail: Confidence;
+  provenance: Provenance[];
   candidates: HuntingPlaceCandidate[];
 };
 
@@ -248,13 +256,33 @@ function scorePlace(
     reasons.push("partial overlap, possible sub-area/floor variant");
   }
 
+  const status = confidence >= AUTO_CONFIDENCE ? "auto" : confidence >= REVIEW_CONFIDENCE ? "review" : "unmatched";
+  const placeRef = entityRef("hunting_place", { id: row.id, name: row.name, normalized_name: row.normalized_name });
+  const matchProvenance = [
+    provenance("public_tibia_reference", { source_ref: placeRef }),
+    provenance("personal_hunt"),
+    provenance("derived_calculation", { source_ref: placeRef })
+  ];
+  const explanations = reasons.length
+    ? reasons.map((reason) => explanation(reason, status === "unmatched" ? "warning" : "neutral", reason, {
+      source_refs: [placeRef],
+      provenance: matchProvenance
+    }))
+    : [explanation("candidate needs review", "warning", "Candidate exists but needs review before it should be trusted.", {
+      source_refs: [placeRef],
+      provenance: matchProvenance
+    })];
+
   return {
     id: asNumber(row.id, 0),
     name: asText(row.name),
     location: row.location ?? null,
     confidence,
-    status: confidence >= AUTO_CONFIDENCE ? "auto" : confidence >= REVIEW_CONFIDENCE ? "review" : "unmatched",
+    status,
     reasons,
+    explanations,
+    confidence_detail: buildConfidence(confidence, { estimated: true }),
+    provenance: matchProvenance,
     matched_monsters: matched.map((monster) => monster.name),
     missing_monsters: missing.slice(0, 5).map((monster) => monster.name)
   };
@@ -277,6 +305,12 @@ export function matchHuntToHuntingPlaces(
       confidence: 0,
       status: "unmatched",
       reasons: ["no parsed monsters"],
+      explanations: [explanation("no parsed monsters", "blocked", "Automatic hunting-place matching needs parsed monster kills.", {
+        missing_data_reason: "No parsed monsters were found in the hunt text.",
+        provenance: [provenance("personal_hunt"), provenance("derived_calculation")]
+      })],
+      confidence_detail: buildConfidence(0, { estimated: true, missingDataReason: "No parsed monsters were found." }),
+      provenance: [provenance("personal_hunt"), provenance("derived_calculation")],
       candidates: []
     };
   }
@@ -291,6 +325,12 @@ export function matchHuntToHuntingPlaces(
       confidence: 0,
       status: "unmatched",
       reasons: ["public hunting-place data is not staged yet"],
+      explanations: [explanation("reference data missing", "blocked", "Public hunting-place data is not staged yet.", {
+        missing_data_reason: "Run public reference sync before matching can rely on hunting-place data.",
+        provenance: [provenance("public_tibia_reference"), provenance("derived_calculation")]
+      })],
+      confidence_detail: buildConfidence(0, { estimated: true, missingDataReason: "Public hunting-place data is not staged yet." }),
+      provenance: [provenance("public_tibia_reference"), provenance("derived_calculation")],
       candidates: []
     };
   }
@@ -312,6 +352,15 @@ export function matchHuntToHuntingPlaces(
       confidence: manual.confidence,
       status: "manual",
       reasons: ["manual hunting-place selection", ...manual.reasons],
+      explanations: [
+        explanation("manual hunting-place selection", "neutral", "The user selected this hunting place manually.", {
+          source_refs: [entityRef("hunting_place", { id: manual.id, name: manual.name })],
+          provenance: [provenance("manual_input", { manual: true })]
+        }),
+        ...manual.explanations
+      ],
+      confidence_detail: buildConfidence(manual.confidence, { manual: true }),
+      provenance: [provenance("manual_input", { manual: true }), ...manual.provenance],
       candidates
     };
   }
@@ -326,6 +375,17 @@ export function matchHuntToHuntingPlaces(
     confidence: best?.confidence ?? 0,
     status: auto ? "auto" : best && best.confidence >= REVIEW_CONFIDENCE ? "review" : "unmatched",
     reasons: best?.reasons.length ? best.reasons : best ? ["candidate needs review"] : ["no staged hunting-place candidate matched"],
+    explanations: best?.explanations.length
+      ? best.explanations
+      : [explanation(best ? "candidate needs review" : "no match", best ? "warning" : "blocked", best ? "Candidate needs review before it should be trusted." : "No staged hunting-place candidate matched.", {
+        missing_data_reason: best ? null : "No staged hunting-place candidate matched the parsed monsters.",
+        provenance: [provenance("public_tibia_reference"), provenance("personal_hunt"), provenance("derived_calculation")]
+      })],
+    confidence_detail: buildConfidence(best?.confidence ?? 0, {
+      estimated: true,
+      missingDataReason: best ? null : "No staged hunting-place candidate matched the parsed monsters."
+    }),
+    provenance: best?.provenance ?? [provenance("public_tibia_reference"), provenance("personal_hunt"), provenance("derived_calculation")],
     candidates
   };
 }

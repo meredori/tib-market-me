@@ -29,7 +29,8 @@ const status = reactive({
 })
 const publicReferenceStatus = reactive({
   counts: {},
-  latest_sync_runs: [],
+  jobs: {},
+  data_health: {},
 })
 
 const sections = [
@@ -364,7 +365,7 @@ async function saveItemOverride() {
   itemOverrideInfo.value = ''
   try {
     const out = await api(`/api/item/${selectedItem.value.id}/override`, {
-      method: 'POST',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: selectedItemOverrideMode.value }),
     })

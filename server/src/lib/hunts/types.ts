@@ -21,6 +21,8 @@ export type HuntInput = {
   hunting_place_match_status: string;
   hunting_place_match_reasons_json: string;
   hunting_place_alternates_json: string;
+  hunting_place_match_provenance_json: string;
+  hunting_place_match_explanations_json: string;
   hunting_place_match_manual: number;
   tags: string[];
   excluded_item_names: string[];

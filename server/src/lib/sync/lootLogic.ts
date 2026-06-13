@@ -6,12 +6,10 @@ export type LootLogicPreview = {
   trend_display: string;
   reason: string;
   market_allowed: boolean;
-  list_price: number;
+  max_list_price: number;
+  fair_sale_price: number;
   min_list_price: number;
-  price: number;
-  min_price: number;
   market_sell_offer: number;
-  undercut_price: number;
 };
 
 function asInt(value: unknown, fallback: number): number {
@@ -26,12 +24,24 @@ function withNpcSaleFloor(value: number, npcBuy: number): number {
   return npcBuy > 0 ? Math.max(value, npcBuy) : value;
 }
 
+function firstPositive(...values: unknown[]): number {
+  for (const value of values) {
+    const numeric = asInt(value, -1);
+    if (numeric > 0) {
+      return numeric;
+    }
+  }
+  return -1;
+}
+
 export function coerceOverrideMode(value: unknown): ItemValueOverrideMode {
   return value === "ignore" || value === "market" || value === "npc" ? value : "auto";
 }
 
 export function buildLootLogicPreview(row: Record<string, unknown>): LootLogicPreview {
-  const listPrice = asInt(row.suggested_list_price, -1);
+  const suggestedListPrice = asInt(row.suggested_list_price, -1);
+  const fairPrice = asInt(row.fair_price, -1);
+  const maxListEvidence = firstPositive(row.month_highest_sell, row.day_highest_sell, suggestedListPrice);
   const marketSellOffer = asInt(row.sell_offer, -1);
   const trend = asText(row.trend) || "unknown";
   const liquidity = typeof row.liquidity === "number" ? row.liquidity : 0;
@@ -39,13 +49,19 @@ export function buildLootLogicPreview(row: Record<string, unknown>): LootLogicPr
   const monthSold = asInt(row.month_sold, -1);
   const daySold = asInt(row.day_sold, -1);
   const npcBuy = asInt(row.npc_buy, 0);
+  const marketFairSalePrice = firstPositive(fairPrice, row.client_value, suggestedListPrice);
+  const fairSalePrice = withNpcSaleFloor(marketFairSalePrice, npcBuy);
+  const maxListPrice = firstPositive(Math.max(maxListEvidence, fairSalePrice), fairSalePrice);
+  const minListPrice = fairSalePrice > 0
+    ? withNpcSaleFloor(Math.max(1, Math.floor(fairSalePrice * 0.9)), npcBuy)
+    : (npcBuy > 0 ? npcBuy : -1);
 
   const veryLowVolume = monthSold >= 0 && monthSold < 6;
   const staleAndThin = daySold === 0 && monthSold >= 0 && monthSold < 25 && liquidity < 0.2;
   const lowMarketQuality = liquidity < 0.1 || confidence < 0.6 || veryLowVolume || staleAndThin;
   const hasMarketEvidence = marketSellOffer > 0 || monthSold > 0 || daySold > 0;
-  const slowValuableMarket = listPrice >= 10_000 && hasMarketEvidence && confidence >= 0.45;
-  const marketAllowed = listPrice > 0 && (!lowMarketQuality || slowValuableMarket);
+  const slowValuableMarket = fairSalePrice >= 10_000 && hasMarketEvidence && confidence >= 0.45;
+  const marketAllowed = fairSalePrice > 0 && (!lowMarketQuality || slowValuableMarket);
 
   if (!marketAllowed) {
     if (npcBuy > 0) {
@@ -54,12 +70,10 @@ export function buildLootLogicPreview(row: Record<string, unknown>): LootLogicPr
         trend_display: "n/a",
         reason: "Market ignored due to low volume/quality; using NPC sale fallback.",
         market_allowed: false,
-        list_price: listPrice,
-        min_list_price: listPrice,
-        price: npcBuy,
-        min_price: -1,
-        market_sell_offer: marketSellOffer,
-        undercut_price: -1
+        max_list_price: maxListPrice,
+        fair_sale_price: npcBuy,
+        min_list_price: npcBuy,
+        market_sell_offer: marketSellOffer
       };
     }
 
@@ -68,45 +82,26 @@ export function buildLootLogicPreview(row: Record<string, unknown>): LootLogicPr
       trend_display: "n/a",
       reason: "Market ignored due to low volume/quality and no known sell value.",
       market_allowed: false,
-      list_price: listPrice,
-      min_list_price: listPrice,
-      price: -1,
-      min_price: -1,
-      market_sell_offer: marketSellOffer,
-      undercut_price: -1
+      max_list_price: maxListPrice,
+      fair_sale_price: fairSalePrice,
+      min_list_price: minListPrice,
+      market_sell_offer: marketSellOffer
     };
   }
 
-  const minListPrice = Math.max(1, Math.floor(listPrice * 0.9));
-  const flooredListPrice = withNpcSaleFloor(listPrice, npcBuy);
-  const flooredMinListPrice = withNpcSaleFloor(minListPrice, npcBuy);
-
-  let undercutPrice = flooredListPrice;
-  if (marketSellOffer > 0) {
-    if (marketSellOffer >= listPrice) {
-      undercutPrice = flooredListPrice;
-    } else if (marketSellOffer > minListPrice) {
-      undercutPrice = withNpcSaleFloor(marketSellOffer - 1, npcBuy);
-    } else {
-      undercutPrice = flooredMinListPrice;
-    }
-  }
-
   return {
-    strategy: npcBuy > listPrice ? "npc_buy" : "market",
+    strategy: npcBuy > marketFairSalePrice ? "npc_buy" : "market",
     trend_display: trend,
-    reason: npcBuy > listPrice
+    reason: npcBuy > marketFairSalePrice
       ? "NPC sale value is above market; using NPC sale floor."
       : slowValuableMarket && lowMarketQuality
         ? "Slow high-value market with price evidence; keeping calculated market value."
-        : "Market has sufficient volume/quality; list at list price, undercut down to min price, then hold at min.",
+        : "Market has sufficient volume/quality; use max/min listing range and value loot at fair sale price.",
     market_allowed: true,
-    list_price: listPrice,
-    min_list_price: flooredMinListPrice,
-    price: flooredListPrice,
-    min_price: flooredMinListPrice,
-    market_sell_offer: marketSellOffer,
-    undercut_price: undercutPrice
+    max_list_price: maxListPrice,
+    fair_sale_price: fairSalePrice,
+    min_list_price: minListPrice,
+    market_sell_offer: marketSellOffer
   };
 }
 
@@ -123,9 +118,8 @@ function applyLootLogicOverride(
     return { ...base, override_mode: "auto" };
   }
 
-  const listPrice = asInt(row.suggested_list_price, -1);
-  const fairPrice = asInt(row.fair_price, -1);
-  const clientValue = asInt(row.client_value, -1);
+  const listPrice = firstPositive(row.month_highest_sell, row.day_highest_sell, row.suggested_list_price);
+  const fairPrice = firstPositive(row.fair_price, row.client_value, row.suggested_list_price);
   const npcBuy = asInt(row.npc_buy, 0);
   const marketSellOffer = asInt(row.sell_offer, -1);
   const trend = asText(row.trend) || base.trend_display || "unknown";
@@ -138,9 +132,9 @@ function applyLootLogicOverride(
       trend_display: "n/a",
       reason: "Manual override: ignore this item for loot value calculations.",
       market_allowed: false,
-      price: -1,
-      min_price: -1,
-      undercut_price: -1
+      fair_sale_price: -1,
+      max_list_price: -1,
+      min_list_price: -1
     };
   }
 
@@ -154,14 +148,15 @@ function applyLootLogicOverride(
         ? "Manual override: use NPC sale value."
         : "Manual override requested NPC value, but no NPC sale value is known.",
       market_allowed: false,
-      price: npcBuy > 0 ? npcBuy : -1,
-      min_price: npcBuy > 0 ? npcBuy : -1,
-      undercut_price: -1
+      max_list_price: npcBuy > 0 ? npcBuy : -1,
+      fair_sale_price: npcBuy > 0 ? npcBuy : -1,
+      min_list_price: npcBuy > 0 ? npcBuy : -1
     };
   }
 
-  const marketValue = [listPrice, fairPrice, clientValue].find((value) => value > 0) ?? -1;
-  const minMarketValue = marketValue > 0 ? Math.max(1, Math.floor(marketValue * 0.9)) : -1;
+  const marketValue = withNpcSaleFloor(fairPrice, npcBuy);
+  const maxMarketValue = firstPositive(Math.max(listPrice, marketValue), marketValue);
+  const minMarketValue = marketValue > 0 ? withNpcSaleFloor(Math.max(1, Math.floor(marketValue * 0.9)), npcBuy) : -1;
   return {
     ...base,
     override_mode: "market",
@@ -171,11 +166,9 @@ function applyLootLogicOverride(
       ? "Manual override: use market value even if automatic quality rules would choose another mode."
       : "Manual override requested market value, but no market value is known.",
     market_allowed: marketValue > 0,
-    list_price: marketValue,
+    max_list_price: maxMarketValue,
+    fair_sale_price: marketValue,
     min_list_price: minMarketValue,
-    price: marketValue,
-    min_price: minMarketValue,
-    market_sell_offer: marketSellOffer,
-    undercut_price: marketValue
+    market_sell_offer: marketSellOffer
   };
 }
