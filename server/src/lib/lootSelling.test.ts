@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { applyMigrations } from "./db/migrations";
-import { getLootInbox } from "./lootSelling";
+import { getLootInbox, markLootInboxItemState } from "./lootSelling";
 
 let db: Database.Database;
 
@@ -207,5 +207,28 @@ describe("loot selling inbox", () => {
 
     expect(names).toContain("Recent Drop");
     expect(names).not.toContain("Old Drop");
+  });
+
+  it("hides listed and sold items until a newer hunt loots them again", () => {
+    const runId = insertRun(2);
+    insertItem(runId, { id: 500, name: "Repeat Drop", value: 100 });
+    insertHunt("First Hunt", [{ name: "Repeat Drop", quantity: 2 }], [], 24);
+
+    const listed = markLootInboxItemState(db, { normalized_name: "repeat drop", status: "listed" }) as Record<string, unknown>;
+    expect((listed.state as Record<string, unknown>).status).toBe("listed");
+
+    const hiddenInbox = getLootInbox(db, { days: 30 }) as Record<string, unknown>;
+    expect((hiddenInbox.items as Array<Record<string, unknown>>).map((item) => item.name)).not.toContain("Repeat Drop");
+
+    insertHunt("Second Hunt", [{ name: "Repeat Drop", quantity: 1 }], [], 1);
+    const visibleInbox = getLootInbox(db, { days: 30 }) as Record<string, unknown>;
+    const item = (visibleInbox.items as Array<Record<string, unknown>>).find((row) => row.name === "Repeat Drop");
+
+    expect(item?.quantity).toBe(3);
+    expect(item?.inbox_state).toMatchObject({ status: "listed" });
+
+    markLootInboxItemState(db, { normalized_name: "repeat drop", status: "active" });
+    const clearedInbox = getLootInbox(db, { days: 30 }) as Record<string, unknown>;
+    expect((clearedInbox.items as Array<Record<string, unknown>>).find((row) => row.name === "Repeat Drop")?.inbox_state).toBeNull();
   });
 });

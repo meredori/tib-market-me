@@ -24,6 +24,7 @@ defineEmits([
   'refresh-loot-inbox',
   'open-item',
   'open-hunt',
+  'mark-item-state',
 ])
 
 const bucketLabels = {
@@ -37,6 +38,20 @@ const bucketLabels = {
 
 function bucketValue(summary, key) {
   return summary?.buckets?.[key] || 0
+}
+
+function summarizeHunts(item) {
+  const hunts = item?.hunts || []
+  if (!hunts.length) {
+    return 'No hunt links'
+  }
+  const first = hunts[0]
+  const extra = Math.max(0, Number(item?.hunt_count || hunts.length) - 1)
+  return extra > 0 ? `${first.label} +${extra}` : first.label
+}
+
+function huntTitle(item) {
+  return (item?.hunts || []).map((hunt) => `${hunt.label} (${hunt.quantity})`).join('\n')
 }
 </script>
 
@@ -87,11 +102,13 @@ function bucketValue(summary, key) {
               <th>Action</th>
               <th>Item</th>
               <th>Qty</th>
-              <th>Unit</th>
+              <th>Min</th>
+              <th>Max</th>
               <th>Total</th>
               <th>Band / NPC</th>
               <th>Quality</th>
               <th>Reasons</th>
+              <th class="action-col"></th>
             </tr>
           </thead>
           <tbody>
@@ -113,19 +130,18 @@ function bucketValue(summary, key) {
                   <span class="loot-image-placeholder">ID</span>
                   <span>{{ item.name }}</span>
                 </span>
-                <div class="loot-hunt-links">
-                  <button
-                    v-for="hunt in item.hunts || []"
-                    :key="`${item.normalized_name}-${hunt.id}`"
-                    class="inline-link"
-                    @click="$emit('open-hunt', hunt)"
-                  >
-                    {{ hunt.label }}
-                  </button>
-                </div>
+                <button
+                  class="inline-link loot-hunt-summary"
+                  :disabled="!item.hunts?.length"
+                  :title="huntTitle(item)"
+                  @click="$emit('open-hunt', item.hunts?.[0])"
+                >
+                  {{ summarizeHunts(item) }}
+                </button>
               </td>
               <td>{{ formatValue(item.quantity) }}</td>
-              <td>{{ formatValue(item.unit_value) }}</td>
+              <td>{{ formatValue(item.min_list_price) }}</td>
+              <td>{{ formatValue(item.max_list_price) }}</td>
               <td>{{ formatValue(item.total_estimated_value) }}</td>
               <td>
                 <span class="muted">Band</span>
@@ -147,9 +163,13 @@ function bucketValue(summary, key) {
                   :limit="4"
                 />
               </td>
+              <td class="action-col loot-state-actions">
+                <button class="ghost-action" @click="$emit('mark-item-state', item, 'listed')">Listed</button>
+                <button class="ghost-action" @click="$emit('mark-item-state', item, 'sold')">Sold</button>
+              </td>
             </tr>
             <tr v-if="!lootInbox.items?.length">
-              <td colspan="8" class="muted">Save hunts with loot to populate the inbox.</td>
+              <td colspan="9" class="muted">Save hunts with loot to populate the inbox.</td>
             </tr>
           </tbody>
         </table>

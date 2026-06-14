@@ -48,7 +48,7 @@ import {
   getMarketWatchlist,
   removeMarketWatchlistItem
 } from "./lib/marketDashboard";
-import { getLootInbox } from "./lib/lootSelling";
+import { getLootInbox, markLootInboxItemState } from "./lib/lootSelling";
 
 export function buildServer(db: Database.Database) {
   const app = Fastify({ logger: true });
@@ -75,6 +75,15 @@ export function buildServer(db: Database.Database) {
         days: query.days,
         limit: query.limit
       });
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.post("/api/loot-inbox/item-state", async (request, reply) => {
+    try {
+      return markLootInboxItemState(db, objectBody(request.body));
     } catch (error) {
       reply.code(400);
       return { ok: false, error: String(error) };

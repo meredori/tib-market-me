@@ -39,6 +39,17 @@ type LootAggregate = {
   latest_looted_at: string | null;
 };
 
+type LootInboxItemState = {
+  normalized_name: string;
+  item_id: number | null;
+  item_name: string;
+  status: "listed" | "sold";
+  marked_at: string;
+  marked_through_latest_looted_at: string | null;
+  marked_through_hunt_count: number;
+  note: string;
+};
+
 type MarketLootRow = {
   item_id: number;
   name: string | null;
@@ -78,6 +89,8 @@ type LootInboxItem = {
   unit_value: number;
   total_estimated_value: number;
   current_market_value: number;
+  max_list_price: number;
+  min_list_price: number;
   historical_reference_price: number | null;
   low_band: number | null;
   high_band: number | null;
@@ -95,6 +108,7 @@ type LootInboxItem = {
   confidence_detail: Confidence;
   freshness: Freshness;
   provenance: Provenance[];
+  inbox_state: LootInboxItemState | null;
 };
 
 function asNumber(value: unknown, fallback = 0): number {
@@ -323,6 +337,28 @@ function aggregateSavedLoot(db: Database.Database, days: number): { rows: LootAg
   };
 }
 
+function lootInboxItemState(db: Database.Database, normalizedName: string): LootInboxItemState | null {
+  return db
+    .prepare(
+      `
+      SELECT normalized_name, item_id, item_name, status, marked_at,
+             marked_through_latest_looted_at, marked_through_hunt_count, note
+      FROM loot_inbox_item_states
+      WHERE normalized_name = ?
+      LIMIT 1
+      `
+    )
+    .get(normalizedName) as LootInboxItemState | undefined ?? null;
+}
+
+function shouldSuppressAggregate(db: Database.Database, aggregate: LootAggregate): boolean {
+  const state = lootInboxItemState(db, aggregate.normalized_name);
+  if (!state?.marked_through_latest_looted_at || !aggregate.latest_looted_at) {
+    return false;
+  }
+  return aggregate.latest_looted_at <= state.marked_through_latest_looted_at;
+}
+
 function classifyLootItem(input: {
   aggregate: LootAggregate;
   row: MarketLootRow | null;
@@ -505,6 +541,7 @@ function toInboxItem(db: Database.Database, run: LatestRun | null, runFreshness:
   ];
   const low = lowBand(row);
   const high = highBand(row);
+  const inboxState = lootInboxItemState(db, aggregate.normalized_name);
   const classified = classifyLootItem({
     aggregate,
     row,
@@ -531,6 +568,8 @@ function toInboxItem(db: Database.Database, run: LatestRun | null, runFreshness:
     unit_value: unitValue,
     total_estimated_value: totalEstimatedValue,
     current_market_value: Math.max(0, Math.round(row?.client_value ?? lookup?.client_value ?? 0)),
+    max_list_price: Math.round(lootLogic?.max_list_price ?? -1),
+    min_list_price: Math.round(lootLogic?.min_list_price ?? -1),
     historical_reference_price: row?.historical_reference_price ?? null,
     low_band: low,
     high_band: high,
@@ -561,7 +600,8 @@ function toInboxItem(db: Database.Database, run: LatestRun | null, runFreshness:
     ],
     confidence_detail: itemConfidence,
     freshness: itemFreshness,
-    provenance: itemProvenance
+    provenance: itemProvenance,
+    inbox_state: inboxState
   };
 }
 
@@ -582,6 +622,7 @@ export function getLootInbox(db: Database.Database, options: { days?: unknown; l
   const freshness = marketFreshness(run);
   const aggregate = aggregateSavedLoot(db, days);
   const items = aggregate.rows
+    .filter((row) => !shouldSuppressAggregate(db, row))
     .map((row) => toInboxItem(db, run, freshness, row))
     .sort((a, b) => {
       const actionWeight: Record<string, number> = {
@@ -643,5 +684,65 @@ export function getLootInbox(db: Database.Database, options: { days?: unknown; l
     },
     buckets,
     items
+  };
+}
+
+export function markLootInboxItemState(
+  db: Database.Database,
+  payload: { normalized_name?: unknown; status?: unknown; note?: unknown } = {}
+): Record<string, unknown> {
+  const normalizedName = normalizeLootItemName(String(payload.normalized_name ?? ""));
+  if (!normalizedName) {
+    throw new Error("normalized_name is required");
+  }
+
+  const status = String(payload.status ?? "");
+  if (status === "active" || status === "clear") {
+    db.prepare("DELETE FROM loot_inbox_item_states WHERE normalized_name = ?").run(normalizedName);
+    return { ok: true, normalized_name: normalizedName, status: "active" };
+  }
+  if (status !== "listed" && status !== "sold") {
+    throw new Error("status must be listed, sold, or active");
+  }
+
+  const aggregate = aggregateSavedLoot(db, 0).rows.find((row) => row.normalized_name === normalizedName);
+  if (!aggregate) {
+    throw new Error("Loot inbox item not found");
+  }
+
+  const lookup = lookupLootItem(db, aggregate.name);
+  const itemId = lookup?.item_id && lookup.item_id > 0 ? Math.trunc(lookup.item_id) : null;
+  const markedAt = new Date().toISOString();
+  const note = String(payload.note ?? "");
+
+  db.prepare(
+    `
+    INSERT INTO loot_inbox_item_states (
+      normalized_name, item_id, item_name, status, marked_at,
+      marked_through_latest_looted_at, marked_through_hunt_count, note
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(normalized_name) DO UPDATE SET
+      item_id = excluded.item_id,
+      item_name = excluded.item_name,
+      status = excluded.status,
+      marked_at = excluded.marked_at,
+      marked_through_latest_looted_at = excluded.marked_through_latest_looted_at,
+      marked_through_hunt_count = excluded.marked_through_hunt_count,
+      note = excluded.note
+    `
+  ).run(
+    normalizedName,
+    itemId,
+    lookup?.name || lookup?.wiki_name || aggregate.name,
+    status,
+    markedAt,
+    aggregate.latest_looted_at,
+    aggregate.hunt_ids.size,
+    note
+  );
+
+  return {
+    ok: true,
+    state: lootInboxItemState(db, normalizedName)
   };
 }

@@ -230,6 +230,36 @@ async function loadLootInbox() {
   }
 }
 
+async function markLootInboxItemState(item, status) {
+  if (!item?.normalized_name) {
+    return
+  }
+  lootInboxBusy.value = true
+  lootInboxInfo.value = `Marking ${item.name} as ${status}...`
+  try {
+    await api('/api/loot-inbox/item-state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        normalized_name: item.normalized_name,
+        status,
+      }),
+    })
+    await loadLootInbox()
+  } catch (error) {
+    lootInboxInfo.value = `Loot inbox update failed: ${error.message}`
+  } finally {
+    lootInboxBusy.value = false
+  }
+}
+
+function openLootInboxHunt(hunt) {
+  if (!hunt?.id) {
+    return
+  }
+  return openPreviousHunt(hunt)
+}
+
 async function runSearch() {
   const q = searchQuery.value.trim()
   if (!q) {
@@ -795,7 +825,8 @@ onBeforeUnmount(() => {
         :item-image-path="itemImagePath"
         @refresh-loot-inbox="loadLootInbox"
         @open-item="openItemDetails"
-        @open-hunt="openPreviousHunt"
+        @open-hunt="openLootInboxHunt"
+        @mark-item-state="markLootInboxItemState"
       />
 
       <HuntsWorkspaceView
