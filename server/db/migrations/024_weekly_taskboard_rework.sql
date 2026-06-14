@@ -1,3 +1,7 @@
+DROP TABLE IF EXISTS taskboard_task_hunts;
+DROP TABLE IF EXISTS taskboard_task_events;
+DROP TABLE IF EXISTS taskboard_tasks;
+
 CREATE TABLE IF NOT EXISTS taskboard_entries (
   id INTEGER PRIMARY KEY,
   entry_type TEXT NOT NULL CHECK(entry_type IN ('creature', 'item')),

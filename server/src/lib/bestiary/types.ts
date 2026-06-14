@@ -31,7 +31,7 @@ export type BestiarySpawnSummary = {
   kills: number;
   sessions: number;
   duration_minutes: number;
-  kills_per_hour: number;
+  kills_per_hour: number | null;
   confidence: Confidence;
   provenance: Provenance[];
 };

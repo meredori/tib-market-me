@@ -170,6 +170,42 @@ function readHuntingPlaceNames(db: Database.Database): Map<number, string> {
   return new Map(rows.map((row) => [row.id, row.name]));
 }
 
+function readSuggestedSpawns(db: Database.Database): Map<string, BestiarySpawnSummary> {
+  const rows = db.prepare(`
+    SELECT hpc.normalized_creature_name, hp.id, hp.name, hp.location, hp.min_level, hp.max_level, hp.risk_level
+    FROM public_hunting_place_creatures hpc
+    JOIN public_hunting_places hp ON hp.id = hpc.hunting_place_id
+    WHERE hpc.normalized_creature_name IS NOT NULL AND hpc.normalized_creature_name != ''
+    ORDER BY COALESCE(hp.min_level, hp.max_level, 999999), COALESCE(hp.max_level, hp.min_level, 999999), hp.name
+  `).all() as Array<{
+    normalized_creature_name: string;
+    id: number;
+    name: string;
+    location: string | null;
+    min_level: number | null;
+    max_level: number | null;
+    risk_level: string | null;
+  }>;
+
+  const spawns = new Map<string, BestiarySpawnSummary>();
+  for (const row of rows) {
+    if (!spawns.has(row.normalized_creature_name)) {
+      spawns.set(row.normalized_creature_name, {
+        public_hunting_place_id: row.id,
+        hunting_place_name: row.name,
+        location_name: row.location,
+        kills: 0,
+        sessions: 0,
+        duration_minutes: 0,
+        kills_per_hour: null,
+        confidence: confidence(0.62, { estimated: true }),
+        provenance: [provenance("public_tibia_reference", { label: "suggested public hunting place" })]
+      });
+    }
+  }
+  return spawns;
+}
+
 function readManualStates(db: Database.Database, options: Partial<BestiaryScope>): ManualStateRow[] {
   const scope = parseScope(options);
   const clauses = ["scope_type = 'local'"];
@@ -308,6 +344,7 @@ function buildCreatureProgress(input: {
   aggregate: Aggregate | undefined;
   scope: BestiaryScope;
   huntingPlaceNames: Map<number, string>;
+  suggestedSpawns: Map<string, BestiarySpawnSummary>;
 }): BestiaryCreatureProgress {
   const target = input.manualState?.target_kill_count
     ?? input.publicCreature?.total_kills
@@ -377,7 +414,7 @@ function buildCreatureProgress(input: {
     last_progress_at: input.aggregate?.lastProgressAt ?? null,
     estimated_sessions_remaining: estimatedSessions,
     average_kills_per_session: averageKills,
-    best_personal_spawn: bestSpawn(input.aggregate, input.huntingPlaceNames),
+    best_personal_spawn: bestSpawn(input.aggregate, input.huntingPlaceNames) ?? input.suggestedSpawns.get(input.normalizedName) ?? null,
     metadata_available: metadataAvailable,
     confidence: confidence(metadataAvailable ? (sessions > 0 || input.manualState ? 0.86 : 0.68) : 0.36, {
       estimated: !input.manualState,
@@ -389,11 +426,20 @@ function buildCreatureProgress(input: {
   };
 }
 
+function bestiaryDifficultyRank(value: string | null | undefined): number {
+  const text = asText(value).toLowerCase();
+  if (text.includes("easy")) return 0;
+  if (text.includes("medium")) return 1;
+  if (text.includes("hard")) return 2;
+  return 3;
+}
+
 export function listBestiaryProgress(db: Database.Database, options: BestiaryProgressOptions = {}): Record<string, unknown> {
   const scope = parseScope(options);
   const publicCreatures = readPublicCreatures(db);
   const manualStates = selectManualStates(readManualStates(db, scope));
   const huntingPlaceNames = readHuntingPlaceNames(db);
+  const suggestedSpawns = readSuggestedSpawns(db);
   const { aggregates } = aggregateKills(readHuntRows(db, scope), Math.max(1, Math.trunc(options.recent_days ?? 14)));
   const names = new Set<string>([
     ...publicCreatures.keys(),
@@ -408,15 +454,17 @@ export function listBestiaryProgress(db: Database.Database, options: BestiaryPro
       manualState: manualStates.get(normalizedName),
       aggregate: aggregates.get(normalizedName),
       scope,
-      huntingPlaceNames
+      huntingPlaceNames,
+      suggestedSpawns
     }))
     .filter((item) => item.state !== "ignored" || item.effective_kill_count > 0 || item.notes)
     .sort((a, b) => {
-      const aRemaining = a.remaining_kill_count ?? Number.MAX_SAFE_INTEGER;
-      const bRemaining = b.remaining_kill_count ?? Number.MAX_SAFE_INTEGER;
-      const aPct = a.completion_pct ?? -1;
-      const bPct = b.completion_pct ?? -1;
-      return aRemaining - bRemaining || bPct - aPct || b.hunt_kill_count - a.hunt_kill_count || a.creature_name.localeCompare(b.creature_name);
+      const aDone = a.state === "completed" || a.state === "ignored" ? 1 : 0;
+      const bDone = b.state === "completed" || b.state === "ignored" ? 1 : 0;
+      return aDone - bDone
+        || bestiaryDifficultyRank(a.bestiary_difficulty) - bestiaryDifficultyRank(b.bestiary_difficulty)
+        || Number(b.charm_points || 0) - Number(a.charm_points || 0)
+        || a.creature_name.localeCompare(b.creature_name);
     });
 
   const closeToCompletion = items
@@ -447,16 +495,18 @@ export function listBestiaryProgress(db: Database.Database, options: BestiaryPro
       in_progress: items.filter((item) => item.state === "in_progress").length,
       ignored: items.filter((item) => item.state === "ignored").length,
       missing_public_metadata: items.filter((item) => !item.metadata_available).length,
-      close_to_completion: closeToCompletion.length
+      close_to_completion: closeToCompletion.length,
+      checklist: items.filter((item) => item.state !== "completed" && item.state !== "ignored").length
     },
     groups: {
+      checklist: items.filter((item) => item.state !== "completed" && item.state !== "ignored"),
       close_to_completion: closeToCompletion,
       frequent_kills: frequentKills,
       recent_progress: recentProgress,
       high_value_charm_cleanup: highValueCharmCleanup,
       rapid_respawn_candidates: rapidRespawnCandidates,
       missing_public_metadata: items.filter((item) => !item.metadata_available).slice(0, 12),
-      completed: items.filter((item) => item.state === "completed").slice(0, 12),
+      completed: items.filter((item) => item.state === "completed"),
       ignored: items.filter((item) => item.state === "ignored").slice(0, 12),
       taskboard_creatures: []
     },

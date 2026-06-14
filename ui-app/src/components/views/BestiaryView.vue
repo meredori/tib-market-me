@@ -1,59 +1,25 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
-import { MapPin, RefreshCw, Save, ScrollText, Sword } from '@lucide/vue'
+import { onMounted, reactive, ref } from 'vue'
+import { CheckCircle2, MapPin, RefreshCw, RotateCcw } from '@lucide/vue'
 import { api } from '../../lib/api'
-import ConfidenceBadge from '../common/ConfidenceBadge.vue'
-import DecisionLabels from '../common/DecisionLabels.vue'
+import EmptyState from '../common/EmptyState.vue'
 import EntityLinkPill from '../common/EntityLinkPill.vue'
-import FreshnessBadge from '../common/FreshnessBadge.vue'
 import SectionHeader from '../common/SectionHeader.vue'
 
-const emit = defineEmits(['open-hunting-place', 'open-hunt'])
+const emit = defineEmits(['open-hunting-place'])
 
 const loading = ref(false)
 const savingKey = ref('')
 const error = ref('')
 const bestiary = ref({ summary: {}, groups: {}, items: [] })
-const huntRelevance = ref({ items: [] })
 const filters = reactive({
   character_name: '',
   account_name: '',
 })
-const edits = reactive({})
-
-const stateOptions = ['unknown', 'not_started', 'in_progress', 'completed', 'ignored']
-
-const visibleGroups = computed(() => [
-  ['close_to_completion', 'Close To Completion'],
-  ['high_value_charm_cleanup', 'High-Value Charm Cleanup'],
-  ['recent_progress', 'Recent Progress'],
-  ['frequent_kills', 'Frequent Kills'],
-  ['rapid_respawn_candidates', 'Rapid Respawn Candidates'],
-  ['missing_public_metadata', 'Missing Metadata'],
-  ['completed', 'Completed'],
-  ['ignored', 'Ignored'],
-])
 
 function formatNumber(value) {
   const number = Number(value ?? 0)
   return Number.isFinite(number) ? number.toLocaleString() : '0'
-}
-
-function formatPct(value) {
-  return value === null || value === undefined ? 'n/a' : `${Number(value).toFixed(1)}%`
-}
-
-function editFor(item) {
-  const key = item.normalized_creature_name
-  if (!edits[key]) {
-    edits[key] = {
-      state: item.state || 'unknown',
-      current_kill_count: item.manual_current_kill_count ?? item.effective_kill_count ?? 0,
-      target_kill_count: item.target_kill_count ?? '',
-      notes: item.notes || '',
-    }
-  }
-  return edits[key]
 }
 
 function queryString() {
@@ -63,6 +29,16 @@ function queryString() {
   return params.toString()
 }
 
+function spawnName(item) {
+  const spawn = item.best_personal_spawn
+  return spawn?.hunting_place_name || spawn?.location_name || ''
+}
+
+function spawnPace(item) {
+  const pace = Number(item.best_personal_spawn?.kills_per_hour)
+  return Number.isFinite(pace) && pace > 0 ? `${formatNumber(pace)}/h` : ''
+}
+
 async function loadBestiary() {
   loading.value = true
   error.value = ''
@@ -70,8 +46,6 @@ async function loadBestiary() {
     const qs = queryString()
     const suffix = qs ? `?${qs}` : ''
     bestiary.value = await api(`/api/bestiary${suffix}`)
-    huntRelevance.value = await api(`/api/bestiary/hunt-relevance${suffix}`)
-    Object.keys(edits).forEach((key) => delete edits[key])
   } catch (err) {
     error.value = String(err?.message || err)
   } finally {
@@ -79,8 +53,7 @@ async function loadBestiary() {
   }
 }
 
-async function saveState(item) {
-  const edit = editFor(item)
+async function setCompleted(item, completed) {
   savingKey.value = item.normalized_creature_name
   error.value = ''
   try {
@@ -94,10 +67,9 @@ async function saveState(item) {
         scope_type: filters.character_name.trim() ? 'character' : filters.account_name.trim() ? 'account' : 'local',
         character_name: filters.character_name.trim() || null,
         account_name: filters.account_name.trim() || null,
-        state: edit.state,
-        current_kill_count: edit.current_kill_count,
-        target_kill_count: edit.target_kill_count === '' ? null : edit.target_kill_count,
-        notes: edit.notes,
+        state: completed ? 'completed' : 'unknown',
+        current_kill_count: completed ? (item.target_kill_count || item.effective_kill_count || 0) : 0,
+        target_kill_count: item.target_kill_count,
       }),
     })
     await loadBestiary()
@@ -107,12 +79,14 @@ async function saveState(item) {
     savingKey.value = ''
   }
 }
+
+onMounted(loadBestiary)
 </script>
 
 <template>
   <section class="page-stack bestiary-view">
     <article class="panel">
-      <SectionHeader title="Bestiary" :subtitle="`${formatNumber(bestiary.summary?.total_creatures)} tracked creatures`">
+      <SectionHeader title="Bestiary" :subtitle="`${formatNumber(bestiary.summary?.checklist)} left to check off`">
         <button class="ghost-action" :disabled="loading" @click="loadBestiary">
           <RefreshCw :size="16" :class="{ 'spin-icon': loading }" />
           Refresh
@@ -132,197 +106,108 @@ async function saveState(item) {
       </div>
 
       <p v-if="error" class="error">{{ error }}</p>
+
       <div class="metric-strip bestiary-metrics">
         <div class="metric-card blue">
-          <span>In Progress</span>
-          <strong>{{ formatNumber(bestiary.summary?.in_progress) }}</strong>
+          <span>Checklist</span>
+          <strong>{{ formatNumber(bestiary.summary?.checklist) }}</strong>
         </div>
         <div class="metric-card positive">
           <span>Completed</span>
           <strong>{{ formatNumber(bestiary.summary?.completed) }}</strong>
         </div>
         <div class="metric-card loot">
-          <span>Close</span>
-          <strong>{{ formatNumber(bestiary.summary?.close_to_completion) }}</strong>
-        </div>
-        <div class="metric-card danger">
-          <span>Missing Metadata</span>
-          <strong>{{ formatNumber(bestiary.summary?.missing_public_metadata) }}</strong>
+          <span>Creatures</span>
+          <strong>{{ formatNumber(bestiary.summary?.total_creatures) }}</strong>
         </div>
       </div>
     </article>
 
     <article class="panel table-panel">
-      <SectionHeader title="Hunt Charm Relevance" :subtitle="`${huntRelevance.items?.length || 0} saved hunts`" />
+      <SectionHeader title="Checklist" :subtitle="`${bestiary.groups?.checklist?.length || 0} creatures`" />
       <div class="table-wrap">
         <table class="bestiary-table">
           <thead>
             <tr>
-              <th>Hunt</th>
-              <th>Creatures</th>
-              <th>Kills</th>
-              <th>Charm</th>
-              <th>Close</th>
-              <th>Spawn</th>
-              <th>Labels</th>
+              <th>Creature</th>
+              <th>Points</th>
+              <th>Difficulty</th>
+              <th>Suggested spawn</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="hunt in huntRelevance.items || []" :key="hunt.hunt_id">
+            <tr v-for="item in bestiary.groups?.checklist || []" :key="item.normalized_creature_name">
               <td>
-                <button class="inline-link" @click="emit('open-hunt', hunt.hunt_id)">{{ hunt.label }}</button>
+                <EntityLinkPill :entity="{ type: 'creature', id: item.public_creature_id, name: item.creature_name }" />
               </td>
-              <td>{{ formatNumber(hunt.relevant_creature_count) }}</td>
-              <td>{{ formatNumber(hunt.total_relevant_kills) }}</td>
-              <td>{{ formatNumber(hunt.potential_charm_points) }}</td>
-              <td>{{ formatNumber(hunt.close_to_completion_count) }}</td>
+              <td>{{ item.charm_points ?? 'n/a' }}</td>
+              <td>{{ item.bestiary_difficulty || 'Unknown' }}</td>
               <td>
                 <button
-                  v-if="hunt.public_hunting_place_id"
-                  class="inline-link"
-                  @click="emit('open-hunting-place', hunt.public_hunting_place_id)"
+                  v-if="item.best_personal_spawn?.public_hunting_place_id"
+                  class="inline-link spawn-link"
+                  @click="emit('open-hunting-place', item.best_personal_spawn.public_hunting_place_id)"
                 >
-                  {{ hunt.location_name || `Place ${hunt.public_hunting_place_id}` }}
+                  <MapPin :size="14" />
+                  {{ spawnName(item) }}
+                  <small v-if="spawnPace(item)">{{ spawnPace(item) }}</small>
                 </button>
-                <span v-else class="muted">{{ hunt.location_name || 'n/a' }}</span>
+                <span v-else class="muted">{{ spawnName(item) || 'n/a' }}</span>
               </td>
-              <td>
-                <DecisionLabels
-                  :reasons="(hunt.explanations || []).filter((item) => item.severity === 'positive' || item.severity === 'neutral')"
-                  :warnings="(hunt.explanations || []).filter((item) => item.severity === 'warning' || item.severity === 'blocked')"
-                  :limit="3"
-                />
+              <td class="row-action">
+                <button
+                  class="ghost-action"
+                  :disabled="savingKey === item.normalized_creature_name"
+                  @click="setCompleted(item, true)"
+                >
+                  <CheckCircle2 :size="15" />
+                  Done
+                </button>
               </td>
             </tr>
-            <tr v-if="!huntRelevance.items?.length">
-              <td colspan="7" class="muted">Saved hunts with unfinished bestiary creatures will appear here.</td>
+            <tr v-if="!bestiary.groups?.checklist?.length">
+              <td colspan="5">
+                <EmptyState title="Checklist clear" subtitle="Completed creatures stay out of the main list." />
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
     </article>
 
-    <div class="bestiary-grid">
-      <article v-for="[key, title] in visibleGroups" :key="key" class="panel table-panel">
-        <SectionHeader :title="title" :subtitle="`${bestiary.groups?.[key]?.length || 0} creatures`" />
-        <div class="bestiary-card-list">
-          <div v-for="item in bestiary.groups?.[key] || []" :key="`${key}-${item.normalized_creature_name}`" class="bestiary-card">
-            <div class="bestiary-card-head">
-              <EntityLinkPill
-                :entity="{ type: 'creature', id: item.public_creature_id, name: item.creature_name, normalized_name: item.normalized_creature_name }"
-              />
-              <span class="status-badge" :class="`bestiary-state-${item.state}`">{{ item.state.replace(/_/g, ' ') }}</span>
-            </div>
-
-            <div class="bestiary-progress-line">
-              <span :style="{ width: `${Math.min(100, Number(item.completion_pct || 0))}%` }"></span>
-            </div>
-
-            <div class="bestiary-stats">
-              <span>
-                <small>Kills</small>
-                <strong>{{ formatNumber(item.effective_kill_count) }} / {{ item.target_kill_count ? formatNumber(item.target_kill_count) : 'n/a' }}</strong>
-              </span>
-              <span>
-                <small>Progress</small>
-                <strong>{{ formatPct(item.completion_pct) }}</strong>
-              </span>
-              <span>
-                <small>Sessions Left</small>
-                <strong>{{ item.estimated_sessions_remaining ?? 'n/a' }}</strong>
-              </span>
-              <span>
-                <small>Charm</small>
-                <strong>{{ item.charm_points ?? 'n/a' }}</strong>
-              </span>
-            </div>
-
-            <div class="status-row">
-              <ConfidenceBadge :confidence="item.confidence" />
-              <FreshnessBadge :freshness="item.freshness" />
-              <span v-if="item.bestiary_difficulty" class="pill">{{ item.bestiary_difficulty }}</span>
-            </div>
-
-            <button
-              v-if="item.best_personal_spawn"
-              class="saved-row compact"
-              @click="item.best_personal_spawn.public_hunting_place_id ? emit('open-hunting-place', item.best_personal_spawn.public_hunting_place_id) : null"
-            >
-              <MapPin :size="15" />
-              <span>{{ item.best_personal_spawn.hunting_place_name || item.best_personal_spawn.location_name || 'Personal spawn' }}</span>
-              <strong>{{ formatNumber(item.best_personal_spawn.kills_per_hour) }}/h</strong>
-            </button>
-
-            <div class="bestiary-edit-row">
-              <label>
-                State
-                <select v-model="editFor(item).state">
-                  <option v-for="state in stateOptions" :key="state" :value="state">{{ state.replace(/_/g, ' ') }}</option>
-                </select>
-              </label>
-              <label>
-                Current
-                <input v-model.number="editFor(item).current_kill_count" type="number" min="0" />
-              </label>
-              <label>
-                Target
-                <input v-model.number="editFor(item).target_kill_count" type="number" min="0" />
-              </label>
-              <button class="icon-btn" title="Save bestiary state" :disabled="savingKey === item.normalized_creature_name" @click="saveState(item)">
-                <Save :size="16" />
-              </button>
-            </div>
-            <label class="block-label">
-              Notes
-              <input v-model="editFor(item).notes" placeholder="optional notes" />
-            </label>
-          </div>
-          <p v-if="!bestiary.groups?.[key]?.length" class="muted">No creatures in this group.</p>
-        </div>
-      </article>
-    </div>
-
     <article class="panel table-panel">
-      <SectionHeader title="All Progress" :subtitle="`${bestiary.items?.length || 0} rows`" />
+      <SectionHeader title="Completed" :subtitle="`${bestiary.groups?.completed?.length || 0} checked off`" />
       <div class="table-wrap">
-        <table class="bestiary-table">
+        <table class="bestiary-table completed-table">
           <thead>
             <tr>
               <th>Creature</th>
-              <th>State</th>
-              <th>Kills</th>
-              <th>Remaining</th>
-              <th>Best Spawn</th>
-              <th>Signals</th>
+              <th>Points</th>
+              <th>Difficulty</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in bestiary.items || []" :key="item.normalized_creature_name">
+            <tr v-for="item in bestiary.groups?.completed || []" :key="`completed-${item.normalized_creature_name}`">
               <td>
                 <EntityLinkPill :entity="{ type: 'creature', id: item.public_creature_id, name: item.creature_name }" />
               </td>
-              <td>{{ item.state.replace(/_/g, ' ') }}</td>
-              <td>{{ formatNumber(item.effective_kill_count) }}</td>
-              <td>{{ item.remaining_kill_count === null ? 'n/a' : formatNumber(item.remaining_kill_count) }}</td>
-              <td>
+              <td>{{ item.charm_points ?? 'n/a' }}</td>
+              <td>{{ item.bestiary_difficulty || 'Unknown' }}</td>
+              <td class="row-action">
                 <button
-                  v-if="item.best_personal_spawn"
-                  class="inline-link"
-                  @click="item.best_personal_spawn.public_hunting_place_id ? emit('open-hunting-place', item.best_personal_spawn.public_hunting_place_id) : null"
+                  class="ghost-action"
+                  :disabled="savingKey === item.normalized_creature_name"
+                  @click="setCompleted(item, false)"
                 >
-                  {{ item.best_personal_spawn.hunting_place_name || item.best_personal_spawn.location_name || 'Personal spawn' }}
+                  <RotateCcw :size="15" />
+                  Restore
                 </button>
-                <span v-else class="muted">n/a</span>
-              </td>
-              <td>
-                <span class="status-row">
-                  <span v-if="item.recent_kill_count" class="pill"><Sword :size="13" /> {{ formatNumber(item.recent_kill_count) }} recent</span>
-                  <span v-if="item.notes" class="pill"><ScrollText :size="13" /> note</span>
-                </span>
               </td>
             </tr>
-            <tr v-if="!bestiary.items?.length">
-              <td colspan="6" class="muted">Save hunts or add a manual creature state to start tracking bestiary progress.</td>
+            <tr v-if="!bestiary.groups?.completed?.length">
+              <td colspan="4" class="muted">Checked-off creatures will appear here.</td>
             </tr>
           </tbody>
         </table>
@@ -341,112 +226,42 @@ async function saveState(item) {
 }
 
 .bestiary-metrics {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: 12px;
 }
 
-.bestiary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.bestiary-card-list {
-  display: grid;
-  gap: 10px;
-}
-
-.bestiary-card {
-  display: grid;
-  gap: 10px;
-  border-bottom: 1px solid var(--line-soft);
-  padding-bottom: 12px;
-}
-
-.bestiary-card-head,
-.bestiary-edit-row,
-.bestiary-stats {
-  display: grid;
-  gap: 8px;
-}
-
-.bestiary-card-head {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-
-.bestiary-edit-row {
-  grid-template-columns: minmax(120px, 1fr) minmax(92px, 0.7fr) minmax(92px, 0.7fr) 34px;
-  align-items: end;
-}
-
-.bestiary-stats {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.bestiary-stats span {
-  min-width: 0;
-  border: 1px solid var(--line-soft);
-  border-radius: 7px;
-  background: rgba(10, 24, 37, 0.72);
-  padding: 9px;
-}
-
-.bestiary-stats small,
-.bestiary-stats strong {
-  display: block;
-}
-
-.bestiary-stats small {
-  color: var(--muted);
-  font-size: 0.74rem;
-}
-
-.bestiary-stats strong {
-  margin-top: 3px;
-  overflow-wrap: anywhere;
-}
-
-.bestiary-progress-line {
-  height: 8px;
-  overflow: hidden;
-  border: 1px solid var(--line-soft);
-  border-radius: 999px;
-  background: #08131f;
-}
-
-.bestiary-progress-line span {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, var(--cyan), var(--green));
-}
-
-.bestiary-state-completed {
-  border-color: rgba(74, 163, 104, 0.45);
-  color: #7fd19c;
-}
-
-.bestiary-state-ignored {
-  border-color: rgba(120, 146, 176, 0.28);
-  color: var(--muted);
-}
-
 .bestiary-table {
-  min-width: 900px;
+  min-width: 760px;
 }
 
-@media (max-width: 1180px) {
-  .bestiary-grid,
-  .bestiary-metrics {
-    grid-template-columns: 1fr;
-  }
+.bestiary-table th,
+.bestiary-table td {
+  vertical-align: middle;
+}
+
+.spawn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spawn-link small {
+  color: var(--muted);
+}
+
+.row-action {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.completed-table {
+  opacity: 0.86;
 }
 
 @media (max-width: 820px) {
   .bestiary-toolbar,
-  .bestiary-card-head,
-  .bestiary-edit-row,
-  .bestiary-stats {
+  .bestiary-metrics {
     grid-template-columns: 1fr;
   }
 }

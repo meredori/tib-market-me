@@ -834,7 +834,7 @@ function hasTable(db: Database.Database, tableName: string): boolean {
 }
 
 function taskboardRelevance(db: Database.Database, publicHuntingPlaceId: number): IntegrationSection {
-  if (!hasTable(db, "taskboard_tasks")) {
+  if (!hasTable(db, "taskboard_entries")) {
     return placeholder(publicHuntingPlaceId, "Taskboard storage has not been migrated yet.");
   }
   const rows = db.prepare(`
@@ -851,15 +851,14 @@ function taskboardRelevance(db: Database.Database, publicHuntingPlaceId: number)
       WHERE hpc.hunting_place_id = ?
         AND pcl.creature_id = hpc.creature_id
     )
-    SELECT DISTINCT task.id, task.task_type, task.title, task.status, task.desired_quantity, task.completed_quantity,
-           task.character_name, task.normalized_creature_name, task.normalized_item_name, task.item_id, task.updated_at
-    FROM taskboard_tasks task
-    LEFT JOIN place_creatures pc ON pc.normalized_creature_name = task.normalized_creature_name
-    LEFT JOIN place_loot loot ON (task.item_id IS NOT NULL AND loot.item_id = task.item_id)
-      OR (task.normalized_item_name IS NOT NULL AND loot.normalized_item_name = task.normalized_item_name)
-    WHERE task.status NOT IN ('completed', 'skipped', 'rerolled')
-      AND (pc.normalized_creature_name IS NOT NULL OR loot.normalized_item_name IS NOT NULL OR loot.item_id IS NOT NULL)
-    ORDER BY task.status = 'active' DESC, task.updated_at DESC, task.id DESC
+    SELECT DISTINCT entry.id, entry.entry_type, COALESCE(entry.matched_name, entry.offer_text) AS name, entry.required_quantity,
+           entry.normalized_name, entry.item_id, entry.updated_at
+    FROM taskboard_entries entry
+    LEFT JOIN place_creatures pc ON pc.normalized_creature_name = entry.normalized_name
+    LEFT JOIN place_loot loot ON (entry.item_id IS NOT NULL AND loot.item_id = entry.item_id)
+      OR (entry.entry_type = 'item' AND loot.normalized_item_name = entry.normalized_name)
+    WHERE pc.normalized_creature_name IS NOT NULL OR loot.normalized_item_name IS NOT NULL OR loot.item_id IS NOT NULL
+    ORDER BY entry.created_at, entry.id
     LIMIT 8
   `).all(publicHuntingPlaceId, publicHuntingPlaceId) as Array<Record<string, unknown>>;
 
@@ -870,8 +869,8 @@ function taskboardRelevance(db: Database.Database, publicHuntingPlaceId: number)
     public_hunting_place_id: publicHuntingPlaceId,
     summary: {
       matching_tasks: rows.length,
-      creature_tasks: rows.filter((row) => row.task_type === "creature").length,
-      delivery_tasks: rows.filter((row) => row.task_type === "delivery_item").length
+      creature_tasks: rows.filter((row) => row.entry_type === "creature").length,
+      delivery_tasks: rows.filter((row) => row.entry_type === "item").length
     },
     items: rows
   };

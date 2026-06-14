@@ -539,7 +539,7 @@ This should become one of the first major decision workflows because it connects
 
 **Status: Completed.**
 
-Phase 5 is implemented as a first-class Taskboard workflow with local persisted creature and delivery-item tasks, accepted/completed/skipped/rerolled history, optional final cost/reward, linked-hunt support, and guidance from public reference data, market/NPC values, and personal hunt performance. Taskboard now links into item details, hunting-place intelligence, and saved hunts while keeping task data separate from personal hunt totals.
+Phase 5 is implemented as a first-class weekly Taskboard helper for the in-game boosted task offer system. It stores the offered creature names and item quantities for the current week, then uses public reference data, market prices, drop rates, and personal hunt performance to suggest where to hunt creatures, whether to buy or farm item requirements, rough kills needed, break-even price hints, and useful overlap between the weekly offers.
 
 ## Build
 
@@ -597,16 +597,14 @@ Add labels such as:
 - Skip/reroll due to weak reward/value.
 - Unknown due to missing data.
 
-### 5. Task History
+### 5. Weekly Offer Tracking
 
-Track:
+Track only what the weekly system needs:
 
-- Task seen date/week.
-- Accepted/completed/skipped/rerolled.
-- Final cost.
-- Final reward if entered.
-- Linked hunts used to complete it.
-- Notes.
+- Creature names offered by the weekly taskboard.
+- Delivery item names and required quantities.
+- Typed creature/item offer text matched to local public reference data.
+- No slot, manual id, status, history, or notes bookkeeping in the weekly taskboard helper.
 
 ### 6. Integration Points
 
@@ -621,12 +619,12 @@ Taskboard should link to:
 
 ## Acceptance Criteria
 
-- User can enter a creature or delivery item task and receive practical guidance.
+- User can enter weekly creature offers and delivery item offers and receive practical guidance.
 - Buy-vs-farm logic works for delivery items where market and drop data exist.
 - Creature tasks can suggest plausible hunting places.
 - Personal hunt data is used where available but not required.
 - Missing data is clearly labelled.
-- Task history persists.
+- Weekly offers persist locally without affecting personal hunt totals.
 - Backend tests cover task classification, buy-vs-farm, personal KPH use, and missing-data states.
 - UI build passes.
 
@@ -636,69 +634,44 @@ Taskboard should link to:
 
 ## Goal
 
-Use existing hunt analyser data to provide progression insight before building a full account-wide progression planner.
+Provide a practical bestiary checklist based on local public creature reference data.
 
 **Status: Completed.**
 
-Phase 6 is implemented as a Bestiary workflow with local/account/character-scoped manual state, hunt-derived creature kill progress, close-to-completion/frequent/recent/charm-cleanup/rapid-respawn views, estimated sessions remaining, best personal spawn, and hunt charm relevance with missing-data warnings. Taskboard-specific creature relevance is wired as a guarded integration point rather than a separate duplicate task system.
+Phase 6 is implemented as a checklist-first Bestiary workflow. It lists public bestiary creatures sorted by practical completion order, lets the user check off completed creatures, and removes completed creatures from the active list while keeping them restorable. Saved hunt data and public hunting-place data can add context such as a known spawn or observed pace, but the core value is the checklist rather than a full progression planner.
 
 ## Build
 
 ### 1. Manual Bestiary State
 
-Allow user to manually track bestiary state.
+Allow user to manually check off bestiary creatures.
 
-Initial states:
+Core state:
 
-- Unknown
-- Not started
-- In progress
-- Completed
-- Ignored
+- Active / not checked off.
+- Completed / hidden from the active checklist.
+- Character/account scope where useful.
 
-Optional fields:
+### 2. Checklist Ordering
 
-- Current kill count
-- Target kill count
-- Notes
-- Character/account scope
+Sort active entries by:
 
-### 2. Hunt-Derived Kill Progress
+- Difficulty, easy before medium before hard.
+- Charm points, higher before lower inside the same difficulty.
+- Creature name as tie-break.
 
-Use saved hunts to estimate or update:
+### 3. Suggested Spawn Context
 
-- Kills per creature.
-- Sessions where creature appeared.
-- Estimated sessions remaining.
-- Best personal spawn for that creature.
-- Recent progress.
+Show lightweight context where local data exists:
 
-### 3. Bestiary Progress Views
+- Suggested hunting place from public reference data.
+- Personal observed pace only when saved hunt data exists.
+- No fake session or kills/hour estimates when hunt data is absent.
 
-Add views for:
+### 4. Integration Points
 
-- Close to completion.
-- High-value charm point cleanup.
-- Creatures you already kill often.
-- Creatures seen in recent hunts.
-- Creatures related to current taskboard entries.
-- Rapid Respawn candidates.
+Bestiary/charm information may appear on:
 
-### 4. Hunt-Based Charm Suggestions
-
-For a hunt or hunting place, show:
-
-- Main creatures by kill count.
-- Charm relevance.
-- Possible charm candidates.
-- Warnings when resist/HP data is missing.
-- Confidence labels.
-
-### 5. Integration Points
-
-Bestiary/charm information should appear on:
-
-- Hunt detail.
 - Hunting-place detail.
 - Creature detail.
 - Taskboard helper.
@@ -706,11 +679,11 @@ Bestiary/charm information should appear on:
 
 ## Acceptance Criteria
 
-- User can manually track bestiary completion state.
-- Saved hunts contribute visible creature kill progress.
-- App can identify close-to-completion and frequently-killed creatures.
-- Charm suggestions are labelled as estimated when data is incomplete.
-- Backend tests cover progress aggregation and session estimates.
+- User can check off a creature and it leaves the active checklist.
+- Completed creatures are restorable.
+- Active checklist is sorted by difficulty then charm points.
+- Suggested spawns are clickable where reference data exists.
+- Backend tests cover checklist sorting and completed-state hiding.
 - UI build passes.
 
 ---

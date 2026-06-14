@@ -1,14 +1,12 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import {
-  Check,
-  ClipboardList,
-  ExternalLink,
+  MapPin,
   PackageSearch,
   RefreshCw,
   Save,
-  Shield,
   Swords,
+  Trash2,
 } from '@lucide/vue'
 import { api } from '../../lib/api'
 import ConfidenceBadge from '../common/ConfidenceBadge.vue'
@@ -21,7 +19,7 @@ import SectionHeader from '../common/SectionHeader.vue'
 
 const emit = defineEmits(['open-item', 'open-hunting-place', 'open-hunt'])
 
-const tasks = ref([])
+const entries = ref([])
 const summary = ref({})
 const busy = ref(false)
 const saving = ref(false)
@@ -29,22 +27,12 @@ const info = ref('')
 const error = ref('')
 
 const form = reactive({
-  task_type: 'creature',
-  title: '',
-  desired_quantity: 100,
-  difficulty: '',
-  category: '',
-  character_name: '',
-  level_override: '',
-  vocation_override: '',
-  public_creature_id: '',
-  item_id: '',
-  final_cost: '',
-  final_reward: '',
-  notes: '',
+  entry_type: 'creature',
+  name: '',
+  required_quantity: '',
 })
 
-const visibleTasks = computed(() => tasks.value || [])
+const visibleEntries = computed(() => entries.value || [])
 
 function numberOrNull(value) {
   const numeric = Number(value)
@@ -67,39 +55,52 @@ function gold(value) {
   return `${compactNumber(numeric)} gp`
 }
 
-function taskIcon(task) {
-  return task.task_type === 'delivery_item' ? PackageSearch : Swords
-}
-
-function titleForTask(task) {
-  return task.task_type === 'delivery_item'
-    ? task.delivery_item?.item_name || task.title
-    : task.creature?.name || task.title
-}
-
-function progressPct(task) {
-  const total = Math.max(1, Number(task.desired_quantity || 1))
-  return Math.min(100, Math.round((Number(task.completed_quantity || 0) / total) * 100))
-}
-
-function guidanceSubtitle(task) {
-  const guidance = task.guidance || {}
-  if (task.task_type === 'creature') {
-    return guidance.expected_completion?.label || 'Unknown time'
+function levelRange(place) {
+  const min = Number(place?.min_level)
+  const max = Number(place?.max_level)
+  if (Number.isFinite(min) && Number.isFinite(max) && min > 0 && max > 0 && min !== max) {
+    return `${compactNumber(min)}-${compactNumber(max)}`
   }
-  return guidance.market_buy_cost ? gold(guidance.market_buy_cost) : 'Unknown cost'
+  if (Number.isFinite(min) && min > 0) {
+    return compactNumber(min)
+  }
+  if (Number.isFinite(max) && max > 0) {
+    return compactNumber(max)
+  }
+  return '-'
 }
 
-async function loadTasks() {
+function floorLevel(place) {
+  const level = Number(place?.floor_level ?? place?.min_level)
+  return Number.isFinite(level) && level > 0 ? compactNumber(level) : '-'
+}
+
+function placePace(place) {
+  const pace = Number(place?.personal_pace?.kills_per_hour)
+  return Number.isFinite(pace) && pace > 0 ? `${compactNumber(pace)} kills/h` : '-'
+}
+
+function entryIcon(entry) {
+  return entry.entry_type === 'item' ? PackageSearch : Swords
+}
+
+function recommendationTone(entry) {
+  const mode = entry.guidance?.mode
+  if (mode === 'buy') return 'Buy'
+  if (mode === 'farm' || mode === 'hunt') return 'Hunt'
+  return 'Review'
+}
+
+async function loadEntries() {
   busy.value = true
   error.value = ''
   try {
-    const response = await api('/api/taskboard/tasks')
-    tasks.value = response.items || []
+    const response = await api('/api/taskboard/entries')
+    entries.value = response.items || []
     summary.value = response.summary || {}
-    info.value = `${tasks.value.length} task(s) loaded`
+    info.value = `${entries.value.length} weekly offer(s)`
   } catch (err) {
-    error.value = String(err)
+    error.value = err?.message || String(err)
   } finally {
     busy.value = false
   }
@@ -107,258 +108,206 @@ async function loadTasks() {
 
 function resetForm() {
   Object.assign(form, {
-    task_type: 'creature',
-    title: '',
-    desired_quantity: 100,
-    difficulty: '',
-    category: '',
-    character_name: '',
-    level_override: '',
-    vocation_override: '',
-    public_creature_id: '',
-    item_id: '',
-    final_cost: '',
-    final_reward: '',
-    notes: '',
+    entry_type: 'creature',
+    name: '',
+    required_quantity: '',
   })
 }
 
-async function createTask() {
+async function saveEntry() {
   saving.value = true
   error.value = ''
   try {
     const payload = {
-      task_type: form.task_type,
-      title: form.title,
-      desired_quantity: numberOrNull(form.desired_quantity) || 1,
-      difficulty: form.difficulty,
-      category: form.category,
-      character_name: form.character_name,
-      level_override: numberOrNull(form.level_override),
-      vocation_override: form.vocation_override,
-      public_creature_id: form.task_type === 'creature' ? numberOrNull(form.public_creature_id) : null,
-      item_id: form.task_type === 'delivery_item' ? numberOrNull(form.item_id) : null,
-      item_name: form.task_type === 'delivery_item' ? form.title : '',
-      final_cost: numberOrNull(form.final_cost),
-      final_reward: numberOrNull(form.final_reward),
-      notes: form.notes,
+      entry_type: form.entry_type,
+      name: form.name,
+      required_quantity: form.entry_type === 'item' ? numberOrNull(form.required_quantity) : null,
     }
-    await api('/api/taskboard/tasks', {
+    await api('/api/taskboard/entries', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
+    await loadEntries()
     resetForm()
-    await loadTasks()
   } catch (err) {
-    error.value = String(err)
+    error.value = err?.message || String(err)
   } finally {
     saving.value = false
   }
 }
 
-async function updateTask(task, patch) {
+async function deleteEntry(entry) {
   saving.value = true
   error.value = ''
   try {
-    await api(`/api/taskboard/tasks/${task.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...task,
-        creature_name: task.creature?.name || task.title,
-        item_name: task.delivery_item?.item_name || task.title,
-        public_creature_id: task.creature?.public_creature_id,
-        item_id: task.delivery_item?.item_id,
-        ...patch,
-      }),
-    })
-    await loadTasks()
+    await api(`/api/taskboard/entries/${entry.id}`, { method: 'DELETE' })
+    await loadEntries()
   } catch (err) {
-    error.value = String(err)
+    error.value = err?.message || String(err)
   } finally {
     saving.value = false
   }
 }
 
-function bumpProgress(task, amount) {
-  updateTask(task, {
-    completed_quantity: Math.min(Number(task.desired_quantity || 0), Number(task.completed_quantity || 0) + amount),
-    status: task.status === 'planned' ? 'active' : task.status,
-  })
-}
-
-onMounted(loadTasks)
+onMounted(loadEntries)
 </script>
 
 <template>
-  <section class="page-stack taskboard-view">
+  <section class="page-stack weekly-taskboard">
     <article class="panel">
-      <SectionHeader title="Taskboard" :subtitle="info || 'Weekly task helper'">
-        <button class="ghost-action" :disabled="busy" @click="loadTasks">
+      <SectionHeader title="Taskboard" :subtitle="info || 'Weekly boosted task offers'">
+        <button class="ghost-action" :disabled="busy" @click="loadEntries">
           <RefreshCw :size="15" />
           Refresh
         </button>
       </SectionHeader>
 
       <div class="metric-strip taskboard-metrics">
-        <MetricCard label="Total" :value="compactNumber(summary.total)" tone="blue" />
-        <MetricCard label="Active" :value="compactNumber(summary.active)" tone="positive" />
-        <MetricCard label="Planned" :value="compactNumber(summary.planned)" />
-        <MetricCard label="Done" :value="compactNumber(summary.completed)" tone="teal" />
+        <MetricCard label="Offers" :value="compactNumber(summary.total)" tone="blue" />
+        <MetricCard label="Creatures" :value="compactNumber(summary.creatures)" />
+        <MetricCard label="Items" :value="compactNumber(summary.delivery_items)" tone="teal" />
+        <MetricCard label="Combos" :value="compactNumber(summary.combine_hints)" tone="positive" />
       </div>
       <p v-if="error" class="error-text">{{ error }}</p>
     </article>
 
-    <article class="panel taskboard-create">
-      <SectionHeader title="Add Task" subtitle="Creature kill or delivery item">
-        <ClipboardList :size="17" />
-      </SectionHeader>
-
-      <form class="task-form" @submit.prevent="createTask">
+    <article class="panel">
+      <SectionHeader title="Add Weekly Offer" subtitle="Enter what the game offered this week" />
+      <form class="offer-form" @submit.prevent="saveEntry">
         <div class="segmented-control">
-          <button type="button" :class="{ active: form.task_type === 'creature' }" @click="form.task_type = 'creature'">
+          <button type="button" :class="{ active: form.entry_type === 'creature' }" @click="form.entry_type = 'creature'">
             <Swords :size="15" />
             Creature
           </button>
-          <button type="button" :class="{ active: form.task_type === 'delivery_item' }" @click="form.task_type = 'delivery_item'">
+          <button type="button" :class="{ active: form.entry_type === 'item' }" @click="form.entry_type = 'item'">
             <PackageSearch :size="15" />
-            Delivery item
+            Item
           </button>
         </div>
 
         <label>
           Name
-          <input v-model="form.title" required placeholder="Dragon or Medicine Pouch" />
+          <input v-model="form.name" required :placeholder="form.entry_type === 'item' ? 'Medicine Pouch' : 'Dragon'" />
         </label>
-        <label>
+        <label v-if="form.entry_type === 'item'">
           Quantity
-          <input v-model="form.desired_quantity" type="number" min="1" required />
-        </label>
-        <label>
-          Character
-          <input v-model="form.character_name" placeholder="Optional" />
-        </label>
-        <label>
-          Level
-          <input v-model="form.level_override" type="number" min="1" placeholder="Optional" />
-        </label>
-        <label>
-          Vocation
-          <input v-model="form.vocation_override" placeholder="Optional" />
-        </label>
-        <label>
-          Difficulty
-          <input v-model="form.difficulty" placeholder="Optional" />
-        </label>
-        <label>
-          Category
-          <input v-model="form.category" placeholder="Optional" />
-        </label>
-        <label v-if="form.task_type === 'creature'">
-          Creature ID
-          <input v-model="form.public_creature_id" type="number" min="1" placeholder="Optional" />
-        </label>
-        <label v-else>
-          Item ID
-          <input v-model="form.item_id" type="number" min="1" placeholder="Optional" />
-        </label>
-        <label>
-          Final cost
-          <input v-model="form.final_cost" type="number" min="0" placeholder="Optional" />
-        </label>
-        <label>
-          Final reward
-          <input v-model="form.final_reward" type="number" min="0" placeholder="Optional" />
-        </label>
-        <label class="task-form-notes">
-          Notes
-          <textarea v-model="form.notes" rows="2" placeholder="Optional"></textarea>
+          <input v-model="form.required_quantity" type="number" min="1" placeholder="Optional" />
         </label>
         <button class="primary-action" type="submit" :disabled="saving">
           <Save :size="15" />
-          Save
+          Add
         </button>
       </form>
     </article>
 
     <article class="panel">
-      <SectionHeader title="Tasks" :subtitle="`${visibleTasks.length} task(s)`">
-        <Shield :size="17" />
-      </SectionHeader>
+      <SectionHeader title="Weekly Offers" :subtitle="`${visibleEntries.length} entered`" />
+      <EmptyState v-if="!busy && !visibleEntries.length" title="No weekly offers yet" subtitle="Add the creatures and item quantities shown in game." />
 
-      <EmptyState v-if="!busy && !visibleTasks.length" title="No tasks yet" subtitle="Add a creature or delivery task to see local guidance." />
-
-      <div v-else class="task-list">
-        <section v-for="task in visibleTasks" :key="task.id" class="task-row">
-          <header class="task-row-header">
-            <component :is="taskIcon(task)" :size="18" />
+      <div v-else class="offer-list">
+        <section v-for="entry in visibleEntries" :key="entry.id" class="offer-row">
+          <header class="offer-head">
+            <component :is="entryIcon(entry)" :size="18" />
             <div>
-              <h3>{{ titleForTask(task) }}</h3>
-              <p>{{ task.status }} | {{ compactNumber(task.completed_quantity) }} / {{ compactNumber(task.desired_quantity) }} | {{ guidanceSubtitle(task) }}</p>
+              <h3>{{ entry.name }}</h3>
+              <p>
+                {{ entry.entry_type === 'item'
+                  ? `${entry.required_quantity ? compactNumber(entry.required_quantity) : 'Quantity not set'} needed`
+                  : 'Creature offer' }}
+                <span v-if="entry.matched_name"> | matched reference</span>
+                <span v-else> | match unknown</span>
+              </p>
             </div>
-            <span class="status-badge">{{ task.guidance?.practical_labels?.[0] || 'unknown' }}</span>
+            <span class="status-badge">{{ recommendationTone(entry) }}</span>
           </header>
 
-          <div class="task-progress" :style="{ '--progress': `${progressPct(task)}%` }"></div>
+          <div class="recommendation-band">
+            <strong>{{ entry.guidance?.recommendation || 'Need more data' }}</strong>
+            <ConfidenceBadge :confidence="entry.guidance?.confidence" />
+            <FreshnessBadge :freshness="entry.guidance?.freshness" />
+          </div>
 
-          <div class="task-guidance-grid">
-            <div>
-              <span class="muted">Quality</span>
-              <ConfidenceBadge :confidence="task.guidance?.confidence" />
-              <FreshnessBadge :freshness="task.guidance?.freshness" />
+          <div v-if="entry.entry_type === 'creature'" class="place-table-wrap">
+            <table class="place-table">
+              <thead>
+                <tr>
+                  <th>Hunting place</th>
+                  <th>Floor</th>
+                  <th>Level</th>
+                  <th>Risk</th>
+                  <th>Your pace</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="place in entry.guidance?.known_hunting_places || []"
+                  :key="place.id"
+                  :class="{ observed: place.personal_pace }"
+                >
+                  <td>
+                    <button class="inline-link place-name" @click="emit('open-hunting-place', place)">
+                      {{ place.name }}
+                    </button>
+                    <small>{{ place.location || place.occurrence || 'Reference details only' }}</small>
+                  </td>
+                  <td>{{ floorLevel(place) }}</td>
+                  <td>{{ levelRange(place) }}</td>
+                  <td>{{ place.risk_level || '-' }}</td>
+                  <td>
+                    <button
+                      v-if="place.personal_pace?.hunt_id"
+                      class="inline-link"
+                      @click="emit('open-hunt', place.personal_pace)"
+                    >
+                      {{ placePace(place) }}
+                    </button>
+                    <span v-else>-</span>
+                  </td>
+                  <td>
+                    <button class="icon-btn" title="Open hunting place" @click="emit('open-hunting-place', place)">
+                      <MapPin :size="15" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <EmptyState
+              v-if="!entry.guidance?.known_hunting_places?.length"
+              title="No hunting places matched"
+              subtitle="Enrich public hunting-place data or adjust the creature name."
+            />
+          </div>
+
+          <div v-if="entry.entry_type === 'item'" class="guidance-grid">
+            <div v-if="entry.entry_type === 'item'">
+              <span class="muted">Buy cost</span>
+              <strong>{{ gold(entry.guidance?.market_buy_cost) }}</strong>
+              <small>{{ gold(entry.guidance?.unit_market_price) }} each</small>
             </div>
-            <div>
-              <span class="muted">Labels</span>
-              <DecisionLabels
-                :reasons="task.guidance?.reasons || []"
-                :warnings="task.guidance?.warnings || []"
-                :reason-labels="task.guidance?.practical_labels || []"
-                :limit="4"
-              />
+
+            <div v-if="entry.entry_type === 'item'">
+              <span class="muted">Farm estimate</span>
+              <strong>{{ compactNumber(entry.guidance?.estimated_kills_needed) }} kills</strong>
+              <small>{{ entry.guidance?.best_drop_creature?.name || 'drop data missing' }}</small>
             </div>
-            <div v-if="task.task_type === 'delivery_item'">
-              <span class="muted">Cost / Vendor</span>
-              <strong>{{ gold(task.guidance?.market_buy_cost) }}</strong>
-              <small>NPC {{ gold(task.guidance?.npc_vendor_value) }}</small>
-            </div>
-            <div v-else>
-              <span class="muted">Personal pace</span>
-              <strong>{{ compactNumber(task.guidance?.best_personal_place?.kills_per_hour) }} kills/h</strong>
-              <button
-                class="inline-link"
-                :disabled="!task.guidance?.best_personal_place?.hunt_id"
-                @click="emit('open-hunt', task.guidance.best_personal_place)"
-              >
-                {{ task.guidance?.best_personal_place?.label || 'No linked hunt' }}
-              </button>
-            </div>
-            <div v-if="task.task_type === 'creature'">
-              <span class="muted">Safer place</span>
-              <button
-                class="inline-link"
-                :disabled="!task.guidance?.safest_plausible_place?.id"
-                @click="emit('open-hunting-place', task.guidance.safest_plausible_place)"
-              >
-                {{ task.guidance?.safest_plausible_place?.name || 'Unknown' }}
-              </button>
-              <small>{{ task.guidance?.safest_plausible_place?.risk_level || 'risk n/a' }}</small>
-            </div>
-            <div v-if="task.task_type === 'creature'">
-              <span class="muted">Expected XP / Profit</span>
-              <strong>{{ compactNumber(task.guidance?.expected_personal_performance?.xp_per_hour) }} XP/h</strong>
-              <small>{{ gold(task.guidance?.expected_personal_performance?.profit_per_hour) }}/h</small>
-            </div>
-            <div>
-              <span class="muted">Finals</span>
-              <strong>Cost {{ gold(task.final_cost) }}</strong>
-              <small>Reward {{ gold(task.final_reward) }}</small>
+
+            <div v-if="entry.entry_type === 'item'">
+              <span class="muted">Break-even</span>
+              <strong>{{ gold(entry.guidance?.break_even_unit_price) }}</strong>
+              <small>farm above this rough unit price</small>
             </div>
           </div>
 
-          <div v-if="task.guidance?.known_hunting_places?.length || task.guidance?.hunting_places?.length" class="entity-strip">
+          <div v-if="entry.guidance?.combine_hints?.length" class="combo-list">
+            <strong>Combine with</strong>
+            <span v-for="hint in entry.guidance.combine_hints" :key="hint.entry_id" class="pill">{{ hint.reason }}</span>
+          </div>
+
+          <div v-if="entry.entry_type === 'item' && (entry.guidance?.known_hunting_places?.length || entry.guidance?.hunting_places?.length)" class="entity-strip">
             <EntityLinkPill
-              v-for="place in (task.guidance.known_hunting_places || task.guidance.hunting_places || []).slice(0, 5)"
+              v-for="place in (entry.guidance.known_hunting_places || entry.guidance.hunting_places || []).slice(0, 5)"
               :key="place.id"
               :entity="{ type: 'hunting_place', id: place.id, name: place.name }"
               clickable
@@ -366,49 +315,31 @@ onMounted(loadTasks)
             />
           </div>
 
-          <div v-if="task.guidance?.dropping_creatures?.length" class="entity-strip">
-            <span v-for="creature in task.guidance.dropping_creatures.slice(0, 5)" :key="creature.normalized_name" class="pill">
+          <div v-if="entry.guidance?.dropping_creatures?.length" class="entity-strip">
+            <span v-for="creature in entry.guidance.dropping_creatures.slice(0, 5)" :key="creature.normalized_name" class="pill">
               {{ creature.name }}
             </span>
           </div>
 
-          <div class="task-row-actions">
-            <button class="ghost-action" :disabled="saving || task.status === 'accepted'" @click="updateTask(task, { status: 'accepted' })">
-              <Check :size="15" />
-              Accept
-            </button>
-            <button class="ghost-action" :disabled="saving || task.status === 'completed'" @click="bumpProgress(task, 1)">
-              <Check :size="15" />
-              +1
-            </button>
-            <button class="ghost-action" :disabled="saving || task.status === 'completed'" @click="updateTask(task, { status: 'completed', completed_quantity: task.desired_quantity })">
-              <Check :size="15" />
-              Done
-            </button>
-            <button class="ghost-action" :disabled="saving || task.status === 'skipped'" @click="updateTask(task, { status: 'skipped' })">
-              Skip
-            </button>
-            <button class="ghost-action" :disabled="saving || task.status === 'rerolled'" @click="updateTask(task, { status: 'rerolled' })">
-              Reroll
-            </button>
-            <button
-              v-if="task.delivery_item?.item_id"
-              class="ghost-action"
-              @click="emit('open-item', task.delivery_item.item_id)"
-            >
-              <ExternalLink :size="15" />
+          <DecisionLabels
+            :reasons="entry.guidance?.reasons || []"
+            :warnings="entry.guidance?.warnings || []"
+            :limit="4"
+          />
+
+          <div class="offer-actions">
+            <button v-if="entry.item_id" class="ghost-action" @click="emit('open-item', entry.item_id)">
+              <PackageSearch :size="15" />
               Item
             </button>
+            <button v-if="entry.guidance?.best_spawn?.id" class="ghost-action" @click="emit('open-hunting-place', entry.guidance.best_spawn)">
+              <MapPin :size="15" />
+              Top place
+            </button>
+            <button class="icon-btn danger" :disabled="saving" title="Remove offer" @click="deleteEntry(entry)">
+              <Trash2 :size="15" />
+            </button>
           </div>
-          <details v-if="task.events?.length" class="task-history">
-            <summary>History</summary>
-            <ol>
-              <li v-for="event in task.events.slice(0, 5)" :key="event.id">
-                <span>{{ event.event_type }}</span>
-                <small>{{ event.status_from || '-' }} -> {{ event.status_to || '-' }} | {{ event.created_at }}</small>
-              </li>
-            </ol>
-          </details>
         </section>
       </div>
     </article>
@@ -420,34 +351,32 @@ onMounted(loadTasks)
   margin-top: 14px;
 }
 
-.task-form {
+.offer-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
   align-items: end;
 }
 
-.task-form label {
+.offer-form label {
   display: grid;
   gap: 5px;
   color: var(--text-muted);
   font-size: 0.82rem;
 }
 
-.task-form input,
-.task-form textarea,
-.task-form select {
+.offer-form input,
+.offer-form textarea {
   width: 100%;
 }
 
-.task-form-notes {
+.segmented-control {
   grid-column: 1 / -1;
 }
 
 .segmented-control {
   display: flex;
   gap: 6px;
-  grid-column: 1 / -1;
 }
 
 .segmented-control button {
@@ -460,84 +389,113 @@ onMounted(loadTasks)
   background: rgba(39, 130, 246, 0.12);
 }
 
-.task-list {
+.offer-list {
   display: grid;
   gap: 12px;
 }
 
-.task-row {
+.offer-row {
+  display: grid;
+  gap: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 14px;
   background: var(--surface);
 }
 
-.task-row-header {
+.offer-head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
 }
 
-.task-row-header h3 {
+.offer-head h3 {
   margin: 0;
   font-size: 1rem;
 }
 
-.task-row-header p {
+.offer-head p {
   margin: 3px 0 0;
   color: var(--text-muted);
   font-size: 0.85rem;
 }
 
-.task-progress {
-  height: 7px;
-  margin: 12px 0;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent) var(--progress), var(--border) var(--progress));
+.recommendation-band {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.task-guidance-grid {
+.guidance-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
 }
 
-.task-guidance-grid > div {
+.guidance-grid > div {
   display: grid;
   gap: 5px;
 }
 
+.place-table-wrap {
+  overflow-x: auto;
+}
+
+.place-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 680px;
+}
+
+.place-table th,
+.place-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 9px 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.place-table th {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.place-table td {
+  font-size: 0.88rem;
+}
+
+.place-table tr.observed {
+  background: rgba(61, 179, 136, 0.08);
+}
+
+.place-table small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+}
+
+.place-name {
+  font-weight: 650;
+}
+
 .entity-strip,
-.task-row-actions {
+.combo-list,
+.offer-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
+}
+
+.combo-list {
+  align-items: center;
 }
 
 .error-text {
   color: var(--danger);
   margin: 10px 0 0;
-}
-
-.task-history {
-  border-top: 1px solid var(--line-soft);
-  margin-top: 12px;
-  padding-top: 8px;
-}
-
-.task-history ol {
-  margin: 8px 0 0;
-  padding-left: 18px;
-}
-
-.task-history li {
-  margin-bottom: 5px;
-}
-
-.task-history span,
-.task-history small {
-  display: block;
 }
 </style>

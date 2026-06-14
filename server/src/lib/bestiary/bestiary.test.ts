@@ -144,6 +144,22 @@ describe("bestiary progress", () => {
     expect(close[0].remaining_kill_count).toBe(40);
   });
 
+  it("builds a difficulty-sorted checklist and hides completed creatures from it", () => {
+    insertCreature({ id: 10, name: "Dragon", totalKills: 1000, charmPoints: 25, difficulty: "Medium" });
+    insertCreature({ id: 11, name: "Rat", totalKills: 250, charmPoints: 5, difficulty: "Easy" });
+    insertCreature({ id: 12, name: "Demon", totalKills: 2500, charmPoints: 50, difficulty: "Hard" });
+    insertCreature({ id: 13, name: "Water Buffalo", totalKills: 500, charmPoints: 30, difficulty: "Easy" });
+    upsertBestiaryState(db, { creature_name: "Rat", state: "completed", current_kill_count: 250, target_kill_count: 250 });
+
+    const result = listBestiaryProgress(db);
+    const checklist = (result.groups as Record<string, unknown>).checklist as Array<Record<string, unknown>>;
+    const completed = (result.groups as Record<string, unknown>).completed as Array<Record<string, unknown>>;
+
+    expect(checklist.map((item) => item.creature_name)).toEqual(["Water Buffalo", "Dragon", "Demon"]);
+    expect(completed.map((item) => item.creature_name)).toEqual(["Rat"]);
+    expect((result.summary as Record<string, unknown>).checklist).toBe(3);
+  });
+
   it("estimates sessions remaining from personal hunt averages", () => {
     insertCreature({ id: 10, name: "Dragon", totalKills: 1000 });
     upsertBestiaryState(db, { creature_name: "Dragon", current_kill_count: 100, target_kill_count: 1000 });

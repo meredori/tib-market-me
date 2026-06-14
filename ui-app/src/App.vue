@@ -43,13 +43,13 @@ const publicReferenceStatus = reactive({
 
 const sections = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'hunts', label: 'Hunts', icon: Swords },
+  { id: 'history', label: 'Hunt History', icon: AreaChart },
   { id: 'market', label: 'Market', icon: Search },
   { id: 'loot', label: 'Loot Inbox', icon: PackageOpen },
   { id: 'taskboard', label: 'Taskboard', icon: ClipboardList },
   { id: 'bestiary', label: 'Bestiary', icon: BookOpen },
   { id: 'place', label: 'Places', icon: MapPin },
-  { id: 'hunts', label: 'Hunts', icon: Swords },
-  { id: 'history', label: 'Hunt History', icon: AreaChart },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
