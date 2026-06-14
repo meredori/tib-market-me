@@ -537,6 +537,10 @@ Help the user decide whether current Tibia taskboard tasks are worth doing, buyi
 
 This should become one of the first major decision workflows because it connects character context, market prices, creature drops, hunting places, and personal hunt performance.
 
+**Status: Completed.**
+
+Phase 5 is implemented as a first-class Taskboard workflow with local persisted creature and delivery-item tasks, accepted/completed/skipped/rerolled history, optional final cost/reward, linked-hunt support, and guidance from public reference data, market/NPC values, and personal hunt performance. Taskboard now links into item details, hunting-place intelligence, and saved hunts while keeping task data separate from personal hunt totals.
+
 ## Build
 
 ### 1. Manual Task Entry
@@ -634,6 +638,10 @@ Taskboard should link to:
 
 Use existing hunt analyser data to provide progression insight before building a full account-wide progression planner.
 
+**Status: Completed.**
+
+Phase 6 is implemented as a Bestiary workflow with local/account/character-scoped manual state, hunt-derived creature kill progress, close-to-completion/frequent/recent/charm-cleanup/rapid-respawn views, estimated sessions remaining, best personal spawn, and hunt charm relevance with missing-data warnings. Taskboard-specific creature relevance is wired as a guarded integration point rather than a separate duplicate task system.
+
 ## Build
 
 ### 1. Manual Bestiary State
@@ -714,6 +722,10 @@ Bestiary/charm information should appear on:
 Make each hunting place a reusable knowledge object before building broad recommendations.
 
 A hunting-place page should answer: what do we know about this place, how has the user performed here, what is it good for, and how reliable is the data?
+
+**Status: Completed.**
+
+Phase 7 is implemented as canonical hunting-place intelligence pages backed by public hunting-place references, enriched creatures/loot, market-weighted loot estimates, and linked personal hunts. The page separates personal observed performance from public/reference expectations, exposes confidence/freshness/provenance labels, excludes custom and mixed-route hunts from canonical metrics, and includes Bestiary and Taskboard relevance hooks populated from the new Phase 5/6 local data where available.
 
 ## Build
 

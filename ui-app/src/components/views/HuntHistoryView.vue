@@ -30,6 +30,7 @@ defineEmits([
   'clear-filters',
   'open-hunt',
   'open-history',
+  'open-hunting-place',
 ])
 
 function locationKind(row) {
@@ -38,6 +39,10 @@ function locationKind(row) {
 
 function locationKindClass(row) {
   return row?.hunting_place_match?.selected_hunting_place_id ? 'location-linked' : 'location-custom'
+}
+
+function linkedHuntingPlaceId(row) {
+  return row?.hunting_place_match?.selected_hunting_place_id || null
 }
 </script>
 
@@ -164,7 +169,14 @@ function locationKindClass(row) {
                 </button>
               </td>
               <td>
-                <button v-if="row.location_name" class="item-link" @click="$emit('open-history', row.location_name)">
+                <button
+                  v-if="linkedHuntingPlaceId(row)"
+                  class="item-link"
+                  @click="$emit('open-hunting-place', linkedHuntingPlaceId(row))"
+                >
+                  {{ row.location_name || `Place ${linkedHuntingPlaceId(row)}` }}
+                </button>
+                <button v-else-if="row.location_name" class="item-link" @click="$emit('open-history', row.location_name)">
                   {{ row.location_name }}
                 </button>
                 <span v-else>n/a</span>

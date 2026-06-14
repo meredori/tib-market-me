@@ -49,6 +49,9 @@ import {
   removeMarketWatchlistItem
 } from "./lib/marketDashboard";
 import { getLootInbox, markLootInboxItemState } from "./lib/lootSelling";
+import { registerBestiaryRoutes } from "./lib/bestiary/routes";
+import { registerHuntingPlaceRoutes } from "./lib/huntingPlaces/routes";
+import { registerTaskboardRoutes } from "./lib/taskboard/routes";
 
 export function buildServer(db: Database.Database) {
   const app = Fastify({ logger: true });
@@ -63,6 +66,10 @@ export function buildServer(db: Database.Database) {
   });
 
   app.get("/api/status", async () => getStatus(db));
+
+  registerTaskboardRoutes(app, db);
+  registerBestiaryRoutes(app, db);
+  registerHuntingPlaceRoutes(app, db);
 
   app.get("/api/public-reference/status", async () => getPublicReferenceStatus(db));
 

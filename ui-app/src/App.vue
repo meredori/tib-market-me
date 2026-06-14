@@ -2,7 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import {
   AreaChart,
+  BookOpen,
+  ClipboardList,
   LayoutDashboard,
+  MapPin,
   PackageOpen,
   Search,
   Settings,
@@ -12,12 +15,15 @@ import AppShell from './components/AppShell.vue'
 import AssignItemModal from './components/modals/AssignItemModal.vue'
 import ItemDetailsModal from './components/modals/ItemDetailsModal.vue'
 import NewHuntModal from './components/modals/NewHuntModal.vue'
+import BestiaryView from './components/views/BestiaryView.vue'
 import DashboardView from './components/views/DashboardView.vue'
 import HuntHistoryView from './components/views/HuntHistoryView.vue'
+import HuntingPlaceDetailView from './components/views/HuntingPlaceDetailView.vue'
 import HuntsWorkspaceView from './components/views/HuntsWorkspaceView.vue'
 import LootInboxView from './components/views/LootInboxView.vue'
 import MarketView from './components/views/MarketView.vue'
 import SettingsView from './components/views/SettingsView.vue'
+import TaskboardView from './components/views/TaskboardView.vue'
 import { useHunts } from './composables/useHunts'
 import { api } from './lib/api'
 import { formatPercent, formatSigned, formatValue, itemImagePath } from './lib/format'
@@ -39,6 +45,9 @@ const sections = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'market', label: 'Market', icon: Search },
   { id: 'loot', label: 'Loot Inbox', icon: PackageOpen },
+  { id: 'taskboard', label: 'Taskboard', icon: ClipboardList },
+  { id: 'bestiary', label: 'Bestiary', icon: BookOpen },
+  { id: 'place', label: 'Places', icon: MapPin },
   { id: 'hunts', label: 'Hunts', icon: Swords },
   { id: 'history', label: 'Hunt History', icon: AreaChart },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -85,6 +94,10 @@ const lootInbox = ref({
 const lootInboxBusy = ref(false)
 const lootInboxInfo = ref('')
 const lootInboxDays = ref(30)
+const selectedHuntingPlaceId = ref(null)
+const selectedHuntingPlaceDetail = ref(null)
+const huntingPlaceBusy = ref(false)
+const huntingPlaceError = ref('')
 const savedHuntSearch = ref('')
 const savedLocationFilter = ref('')
 const savedLocationKindFilter = ref('')
@@ -251,6 +264,57 @@ async function markLootInboxItemState(item, status) {
   } finally {
     lootInboxBusy.value = false
   }
+}
+
+function huntingPlaceIdFromTarget(target) {
+  const id = Number(
+    typeof target === 'object' && target !== null
+      ? target.public_hunting_place_id || target.hunting_place_id || target.id
+      : target
+  )
+  return Number.isFinite(id) && id > 0 ? Math.trunc(id) : null
+}
+
+async function loadHuntingPlaceDetail(id = selectedHuntingPlaceId.value) {
+  const placeId = huntingPlaceIdFromTarget(id)
+  if (!placeId) {
+    selectedHuntingPlaceDetail.value = null
+    huntingPlaceError.value = ''
+    return
+  }
+  selectedHuntingPlaceId.value = placeId
+  huntingPlaceBusy.value = true
+  huntingPlaceError.value = ''
+  try {
+    const out = await api(`/api/hunting-places/${placeId}`)
+    if (!out.ok) {
+      throw new Error(out.error || 'Hunting place unavailable')
+    }
+    selectedHuntingPlaceDetail.value = out.detail || out || null
+  } catch (error) {
+    selectedHuntingPlaceDetail.value = null
+    huntingPlaceError.value = error.message
+  } finally {
+    huntingPlaceBusy.value = false
+  }
+}
+
+async function openHuntingPlace(target) {
+  const placeId = huntingPlaceIdFromTarget(target)
+  if (!placeId) {
+    activeSection.value = 'place'
+    return
+  }
+  activeSection.value = 'place'
+  await loadHuntingPlaceDetail(placeId)
+}
+
+function openTaskboard() {
+  activeSection.value = 'taskboard'
+}
+
+function openBestiary() {
+  activeSection.value = 'bestiary'
 }
 
 function openLootInboxHunt(hunt) {
@@ -564,10 +628,17 @@ async function generateItemPrices() {
 }
 
 function openPreviousHunt(row) {
+  const huntId = Number(typeof row === 'object' && row !== null ? row.id : row)
+  if (!Number.isFinite(huntId) || huntId <= 0) {
+    return
+  }
+  const huntRow = typeof row === 'object' && row !== null
+    ? row
+    : hunts.huntRows.value.find((entry) => Number(entry.id) === Math.trunc(huntId)) || { id: Math.trunc(huntId), tags: [] }
   huntEditReturnSection.value = activeSection.value !== 'hunts' ? activeSection.value : null
   activeSection.value = 'hunts'
   workspaceTab.value = 'overview'
-  return hunts.openPreviousHunt(row)
+  return hunts.openPreviousHunt(huntRow)
 }
 
 async function savePreviousHuntEditAndReturn() {
@@ -829,6 +900,33 @@ onBeforeUnmount(() => {
         @mark-item-state="markLootInboxItemState"
       />
 
+      <TaskboardView
+        v-else-if="activeSection === 'taskboard'"
+        @open-item="openItemDetails"
+        @open-hunting-place="openHuntingPlace"
+        @open-hunt="openPreviousHunt"
+      />
+
+      <BestiaryView
+        v-else-if="activeSection === 'bestiary'"
+        @open-hunting-place="openHuntingPlace"
+        @open-hunt="openPreviousHunt"
+      />
+
+      <HuntingPlaceDetailView
+        v-else-if="activeSection === 'place'"
+        :detail="selectedHuntingPlaceDetail"
+        :busy="huntingPlaceBusy"
+        :error="huntingPlaceError"
+        :format-value="formatValue"
+        :item-image-path="itemImagePath"
+        @open-item="openItemDetails"
+        @open-hunt="openPreviousHunt"
+        @open-bestiary="openBestiary"
+        @open-taskboard="openTaskboard"
+        @refresh="loadHuntingPlaceDetail"
+      />
+
       <HuntsWorkspaceView
         v-else-if="activeSection === 'hunts'"
         v-model:workspace-tab="workspaceTab"
@@ -866,6 +964,7 @@ onBeforeUnmount(() => {
         @clear-filters="clearHuntHistoryFilters"
         @open-hunt="openPreviousHunt"
         @open-history="openHuntHistory"
+        @open-hunting-place="openHuntingPlace"
       />
 
       <SettingsView
