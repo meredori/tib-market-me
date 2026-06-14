@@ -96,7 +96,7 @@ afterEach(() => {
 });
 
 describe("market dashboard summary", () => {
-  it("labels fresh and stale latest sync snapshots", () => {
+  it("labels weekly market scans as fresh and older snapshots as stale", () => {
     const freshRun = insertRun(2);
     insertItem(freshRun, { id: 100, name: "Fresh Loot", clientValue: 90, reference: 120, divergence: -25, sourceRuns: 6 });
 
@@ -104,12 +104,12 @@ describe("market dashboard summary", () => {
 
     db.close();
     db = createDb();
-    const staleRun = insertRun(50);
+    const staleRun = insertRun(24 * 16);
     insertItem(staleRun, { id: 101, name: "Stale Loot", clientValue: 90, reference: 120, divergence: -25, sourceRuns: 6 });
 
     const summary = getMarketDashboardSummary(db);
     expect((summary.freshness as Record<string, unknown>).status).toBe("stale");
-    expect(summary.warnings as string[]).toContain("Market data is a stale snapshot. Treat prices as trend evidence, not live listings.");
+    expect(summary.warnings as string[]).toContain("Market data is older than the normal scan window. Treat it as price guidance, not a live listing.");
   });
 
   it("surfaces historically cheap items and items that need more snapshots", () => {
@@ -138,7 +138,7 @@ describe("market dashboard summary", () => {
   });
 
   it("includes watchlist context and supports idempotent favorite add/remove", () => {
-    const runId = insertRun(50);
+    const runId = insertRun(24 * 16);
     insertItem(runId, { id: 300, name: "Favorite Loot", clientValue: 80, reference: 120, divergence: -33, sourceRuns: 6 });
 
     addMarketWatchlistItem(db, 300);
@@ -147,7 +147,7 @@ describe("market dashboard summary", () => {
     const watchlist = getMarketWatchlist(db).items;
     expect(watchlist).toHaveLength(1);
     expect(watchlist[0].name).toBe("Favorite Loot");
-    expect(watchlist[0].warning_labels).toContain("stale snapshot");
+    expect(watchlist[0].warning_labels).toContain("older snapshot");
 
     expect(removeMarketWatchlistItem(db, 300)).toBe(true);
     expect(getMarketWatchlist(db).items).toHaveLength(0);

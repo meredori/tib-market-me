@@ -12,8 +12,8 @@ import type { Confidence, Freshness, InsightExplanation, Provenance } from "./in
 
 const PRICING_MODEL = "conservative_min";
 const ONE_HOUR_MS = 60 * 60 * 1000;
-const STALE_HOURS = 36;
-const AGING_HOURS = 12;
+const STALE_HOURS = 24 * 14;
+const AGING_HOURS = 24 * 7;
 
 type LatestRun = {
   id: number;
@@ -245,7 +245,7 @@ function explanationsFor(row: MarketRow, runFreshness: Freshness): { reasons: In
   });
 
   if (runFreshness.stale) {
-    warnings.push(explanation("stale snapshot", "warning", "Market data is old enough to treat as trend evidence instead of a current listing.", {
+    warnings.push(explanation("older snapshot", "warning", "Market data is older than the normal scan window; use it as price guidance rather than a live listing.", {
       source_refs: [item],
       provenance: [marketSource]
     }));
@@ -574,7 +574,7 @@ export function getMarketDashboardSummary(db: Database.Database): Record<string,
 
   const runFreshness = freshness as Freshness;
   if (runFreshness.stale) {
-    warningExplanations.push(explanation("stale snapshot", "warning", "Market data is a stale snapshot. Treat prices as trend evidence, not live listings.", {
+    warningExplanations.push(explanation("older snapshot", "warning", "Market data is older than the normal scan window. Treat it as price guidance, not a live listing.", {
       provenance: [provenance("market_sync")]
     }));
   }

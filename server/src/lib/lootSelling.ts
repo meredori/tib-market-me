@@ -16,8 +16,8 @@ import { buildLootLogicPreview, getEffectiveLootLogicPreview, type LootLogicPrev
 const DEFAULT_DAYS = 30;
 const DEFAULT_LIMIT = 80;
 const MAX_LIMIT = 250;
-const STALE_HOURS = 36;
-const AGING_HOURS = 12;
+const STALE_HOURS = 24 * 14;
+const AGING_HOURS = 24 * 7;
 const OVERRIDE_REVIEW_DAYS = 30;
 const OVERRIDE_DISAGREEMENT_PCT = 0.35;
 
@@ -43,7 +43,7 @@ type LootInboxItemState = {
   normalized_name: string;
   item_id: number | null;
   item_name: string;
-  status: "listed" | "sold";
+  status: "sold";
   marked_at: string;
   marked_through_latest_looted_at: string | null;
   marked_through_hunt_count: number;
@@ -440,7 +440,7 @@ function classifyLootItem(input: {
   }
 
   if (input.freshness.stale) {
-    warnings.push(explanation("stale data", "warning", "Market data is old enough to review before listing.", {
+    warnings.push(explanation("older snapshot", "warning", "Market data is older than the normal scan window; use the listing range instead of treating it as live.", {
       source_refs: [itemRef],
       provenance: input.itemProvenance
     }));
@@ -493,7 +493,7 @@ function classifyLootItem(input: {
     return { action: "sell_now", actionLabel: "Sell now", reasons, warnings };
   }
 
-  if (input.freshness.stale || input.confidence.level === "low" || input.confidence.level === "unknown") {
+  if (input.confidence.level === "low" || input.confidence.level === "unknown") {
     return { action: "review_price", actionLabel: "Review price", reasons, warnings };
   }
 
@@ -658,7 +658,7 @@ export function getLootInbox(db: Database.Database, options: { days?: unknown; l
     if (item.warning_labels.includes("low liquidity")) {
       buckets.low_liquidity.push(item);
     }
-    if (item.warning_labels.includes("stale data")) {
+    if (item.warning_labels.includes("older snapshot")) {
       buckets.stale_data.push(item);
     }
     if (
@@ -701,8 +701,8 @@ export function markLootInboxItemState(
     db.prepare("DELETE FROM loot_inbox_item_states WHERE normalized_name = ?").run(normalizedName);
     return { ok: true, normalized_name: normalizedName, status: "active" };
   }
-  if (status !== "listed" && status !== "sold") {
-    throw new Error("status must be listed, sold, or active");
+  if (status !== "sold") {
+    throw new Error("status must be sold or active");
   }
 
   const aggregate = aggregateSavedLoot(db, 0).rows.find((row) => row.normalized_name === normalizedName);

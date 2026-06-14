@@ -1022,8 +1022,8 @@ export function getItemDetails(db: Database.Database, itemId: number): Record<st
   });
   const overrideMode = asText(detail.override_mode) || "auto";
   const itemFreshness = buildFreshness(asText(detail.run_finished_at) || null, {
-    staleAfterHours: 36,
-    agingAfterHours: 12,
+    staleAfterHours: 24 * 14,
+    agingAfterHours: 24 * 7,
     lastVerified: asText(detail.world_last_update) || null
   });
   const itemConfidence = buildConfidence(Number(detail.confidence), {
@@ -1041,7 +1041,7 @@ export function getItemDetails(db: Database.Database, itemId: number): Record<st
   ];
   const warnings = [];
   if (itemFreshness.stale) {
-    warnings.push(explanation("stale snapshot", "warning", "Item pricing comes from an old local market snapshot.", {
+    warnings.push(explanation("older snapshot", "warning", "Item pricing comes from an older local market snapshot; use listing ranges as guidance.", {
       source_refs: [itemEntity],
       provenance: [marketProvenance]
     }));

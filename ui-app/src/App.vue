@@ -235,7 +235,7 @@ async function markLootInboxItemState(item, status) {
     return
   }
   lootInboxBusy.value = true
-  lootInboxInfo.value = `Marking ${item.name} as ${status}...`
+  lootInboxInfo.value = `Marking ${item.name} as sold...`
   try {
     await api('/api/loot-inbox/item-state', {
       method: 'POST',

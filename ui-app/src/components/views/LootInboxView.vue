@@ -164,7 +164,6 @@ function huntTitle(item) {
                 />
               </td>
               <td class="action-col loot-state-actions">
-                <button class="ghost-action" @click="$emit('mark-item-state', item, 'listed')">Listed</button>
                 <button class="ghost-action" @click="$emit('mark-item-state', item, 'sold')">Sold</button>
               </td>
             </tr>

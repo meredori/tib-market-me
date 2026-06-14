@@ -147,8 +147,8 @@ describe("loot selling inbox", () => {
     expect(items.find((item) => item.name === "Cold Gem")?.reason_labels).toContain("below historical band");
   });
 
-  it("surfaces NPC, stale, unknown, and override review buckets", () => {
-    const runId = insertRun(60);
+  it("surfaces NPC, older-snapshot, unknown, and override review buckets", () => {
+    const runId = insertRun(24 * 16);
     insertItem(runId, { id: 200, name: "Vendor Horn", value: 15, npcBuy: 80, monthSold: 0, liquidity: 0.02, confidence: 0.3 });
     insertItem(runId, { id: 201, name: "Override Relic", value: 30_000, reference: 28_000, overrideMode: "market" });
     insertHunt("Review Hunt", [
@@ -163,7 +163,7 @@ describe("loot selling inbox", () => {
     const buckets = summary.buckets as Record<string, number>;
 
     expect(items.find((item) => item.name === "Vendor Horn")?.action).toBe("npc_vendor");
-    expect(items.find((item) => item.name === "Vendor Horn")?.warning_labels).toContain("stale data");
+    expect(items.find((item) => item.name === "Vendor Horn")?.warning_labels).toContain("older snapshot");
     expect(items.find((item) => item.name === "Mystery Dust")?.action).toBe("unknown_price");
     expect(items.find((item) => item.name === "Override Relic")?.warning_labels).toContain("review override");
     expect(buckets.npc_vendor).toBe(1);
@@ -209,13 +209,13 @@ describe("loot selling inbox", () => {
     expect(names).not.toContain("Old Drop");
   });
 
-  it("hides listed and sold items until a newer hunt loots them again", () => {
+  it("hides sold items until a newer hunt loots them again", () => {
     const runId = insertRun(2);
     insertItem(runId, { id: 500, name: "Repeat Drop", value: 100 });
     insertHunt("First Hunt", [{ name: "Repeat Drop", quantity: 2 }], [], 24);
 
-    const listed = markLootInboxItemState(db, { normalized_name: "repeat drop", status: "listed" }) as Record<string, unknown>;
-    expect((listed.state as Record<string, unknown>).status).toBe("listed");
+    const sold = markLootInboxItemState(db, { normalized_name: "repeat drop", status: "sold" }) as Record<string, unknown>;
+    expect((sold.state as Record<string, unknown>).status).toBe("sold");
 
     const hiddenInbox = getLootInbox(db, { days: 30 }) as Record<string, unknown>;
     expect((hiddenInbox.items as Array<Record<string, unknown>>).map((item) => item.name)).not.toContain("Repeat Drop");
@@ -225,7 +225,7 @@ describe("loot selling inbox", () => {
     const item = (visibleInbox.items as Array<Record<string, unknown>>).find((row) => row.name === "Repeat Drop");
 
     expect(item?.quantity).toBe(3);
-    expect(item?.inbox_state).toMatchObject({ status: "listed" });
+    expect(item?.inbox_state).toMatchObject({ status: "sold" });
 
     markLootInboxItemState(db, { normalized_name: "repeat drop", status: "active" });
     const clearedInbox = getLootInbox(db, { days: 30 }) as Record<string, unknown>;
