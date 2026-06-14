@@ -113,6 +113,26 @@ type HuntRow = {
   processed_json: string;
 };
 
+type PublicHuntSessionRow = {
+  id: number;
+  source_session_id: string;
+  source_url: string;
+  title: string;
+  author_label: string | null;
+  observed_at: string | null;
+  refreshed_at: string;
+  duration_minutes: number | null;
+  party_size: number | null;
+  party_json: string;
+  total_xp: number | null;
+  xp_per_hour: number | null;
+  raw_xp_per_hour: number | null;
+  balance_gold: number | null;
+  profit_per_hour: number | null;
+  parsed_confidence: number;
+  hunting_place_confidence: number;
+};
+
 export type HuntingPlaceCreatureSummary = {
   public_creature_id: number | null;
   normalized_creature_name: string;
@@ -189,6 +209,56 @@ export type PersonalHuntSummary = {
   provenance: Provenance[];
 };
 
+export type PublicHuntSessionSummary = {
+  id: number;
+  source_session_id: string;
+  source_url: string;
+  title: string;
+  observed_at: string | null;
+  duration_minutes: number | null;
+  party_size: number | null;
+  level_min: number | null;
+  level_max: number | null;
+  vocations: string[];
+  xp_per_hour: number | null;
+  raw_xp_per_hour: number | null;
+  profit_per_hour: number | null;
+  balance_gold: number | null;
+  confidence: Confidence;
+  provenance: Provenance[];
+};
+
+export type PublicHuntCreatureSummary = {
+  name: string;
+  normalized_name: string;
+  kills: number;
+  kills_per_hour: number | null;
+  session_count: number;
+};
+
+export type PublicHuntIntelligenceSummary = {
+  sessions: PublicHuntSessionSummary[];
+  summary: {
+    session_count: number;
+    matched_session_count: number;
+    median_xp_per_hour: number | null;
+    min_xp_per_hour: number | null;
+    max_xp_per_hour: number | null;
+    median_raw_xp_per_hour: number | null;
+    median_profit_per_hour: number | null;
+    min_profit_per_hour: number | null;
+    max_profit_per_hour: number | null;
+    median_kills_per_hour: number | null;
+    level_bands: string[];
+    vocations: string[];
+    top_creatures: PublicHuntCreatureSummary[];
+    confidence: Confidence;
+    freshness: Freshness;
+    provenance: Provenance[];
+    explanations: InsightExplanation[];
+  };
+};
+
 export type HuntingPlaceDetail = {
   ok: true;
   public_hunting_place_id: number;
@@ -244,6 +314,7 @@ export type HuntingPlaceDetail = {
       explanations: InsightExplanation[];
     };
   };
+  public_sessions: PublicHuntIntelligenceSummary;
   suitability: {
     level_band: string;
     safety_label: string;
@@ -521,6 +592,71 @@ function fetchPersonalHunts(db: Database.Database, placeId: number): HuntRow[] {
     .all(placeId) as HuntRow[];
 }
 
+function fetchPublicHuntSessions(db: Database.Database, placeId: number): PublicHuntSessionRow[] {
+  return db
+    .prepare(
+      `
+      SELECT
+        id,
+        source_session_id,
+        source_url,
+        title,
+        author_label,
+        observed_at,
+        refreshed_at,
+        duration_minutes,
+        party_size,
+        party_json,
+        total_xp,
+        xp_per_hour,
+        raw_xp_per_hour,
+        balance_gold,
+        profit_per_hour,
+        parsed_confidence,
+        hunting_place_confidence
+      FROM public_hunt_sessions
+      WHERE public_hunting_place_id = ?
+        AND review_status = 'accepted'
+        AND suspicious_status != 'suspicious'
+      ORDER BY COALESCE(observed_at, refreshed_at) DESC, id DESC
+      LIMIT 50
+      `
+    )
+    .all(placeId) as PublicHuntSessionRow[];
+}
+
+function fetchPublicHuntCreatures(db: Database.Database, placeId: number): PublicHuntCreatureSummary[] {
+  const rows = db
+    .prepare(
+      `
+      SELECT
+        monster.monster_name AS name,
+        monster.normalized_monster_name AS normalized_name,
+        SUM(monster.kill_count) AS kills,
+        COUNT(DISTINCT session.id) AS session_count,
+        SUM(CASE WHEN session.duration_minutes > 0 THEN session.duration_minutes ELSE 0 END) AS duration_minutes
+      FROM public_hunt_sessions session
+      JOIN public_hunt_session_monsters monster
+        ON monster.public_hunt_session_id = session.id
+      WHERE session.public_hunting_place_id = ?
+        AND session.review_status = 'accepted'
+        AND session.suspicious_status != 'suspicious'
+      GROUP BY monster.normalized_monster_name, monster.monster_name
+      ORDER BY kills DESC, session_count DESC, monster.monster_name
+      LIMIT 10
+      `
+    )
+    .all(placeId) as Array<{ name: string; normalized_name: string; kills: number; session_count: number; duration_minutes: number | null }>;
+
+  return rows.map((row) => ({
+    name: row.name,
+    normalized_name: row.normalized_name,
+    kills: Number(row.kills || 0),
+    kills_per_hour: row.duration_minutes && row.duration_minutes > 0 ? Math.round(Number(row.kills || 0) * 60 / row.duration_minutes) : null,
+    session_count: Number(row.session_count || 0)
+  }));
+}
+
 function summarizeCreatures(rows: PlaceCreatureRow[]): HuntingPlaceCreatureSummary[] {
   return rows.map((row) => {
     const id = row.public_creature_id ?? row.creature_id ?? null;
@@ -750,6 +886,112 @@ function summarizePersonal(hunts: PersonalHuntSummary[]): HuntingPlaceDetail["pe
   };
 }
 
+function parsePartyRows(raw: string): Array<{ vocation: string; level: number | null }> {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map((entry) => {
+      const record = typeof entry === "object" && entry !== null ? entry as Record<string, unknown> : {};
+      const vocation = typeof record.vocation === "string" ? record.vocation : "";
+      const level = Number(record.level);
+      return { vocation, level: Number.isFinite(level) && level > 0 ? Math.trunc(level) : null };
+    }).filter((entry) => entry.vocation || entry.level !== null);
+  } catch {
+    return [];
+  }
+}
+
+function levelBandForSession(session: PublicHuntSessionSummary): string | null {
+  if (session.level_min === null && session.level_max === null) {
+    return null;
+  }
+  const min = session.level_min ?? session.level_max;
+  const max = session.level_max ?? session.level_min;
+  if (min === null || max === null) {
+    return null;
+  }
+  const floor = Math.floor(min / 100) * 100;
+  const ceil = Math.max(floor + 99, Math.ceil(max / 100) * 100 + 99);
+  return `${floor}-${ceil}`;
+}
+
+function summarizePublicHunt(row: PublicHuntSessionRow): PublicHuntSessionSummary {
+  const party = parsePartyRows(row.party_json);
+  const levels = party.map((entry) => entry.level).filter((level): level is number => level !== null);
+  const vocations = Array.from(new Set(party.map((entry) => entry.vocation).filter(Boolean))).sort();
+  const source = provenance("public_hunt_import", {
+    source_ref: entityRef("hunt", { id: row.source_session_id, name: row.title }),
+    source_id: row.source_session_id,
+    observed_at: row.observed_at,
+    imported_at: row.refreshed_at
+  });
+  return {
+    id: row.id,
+    source_session_id: row.source_session_id,
+    source_url: row.source_url,
+    title: row.title,
+    observed_at: row.observed_at,
+    duration_minutes: row.duration_minutes,
+    party_size: row.party_size,
+    level_min: levels.length ? Math.min(...levels) : null,
+    level_max: levels.length ? Math.max(...levels) : null,
+    vocations,
+    xp_per_hour: row.xp_per_hour,
+    raw_xp_per_hour: row.raw_xp_per_hour,
+    profit_per_hour: row.profit_per_hour,
+    balance_gold: row.balance_gold,
+    confidence: buildConfidence(Math.min(row.parsed_confidence, row.hunting_place_confidence || row.parsed_confidence), { estimated: true }),
+    provenance: [source]
+  };
+}
+
+function summarizePublicSessions(
+  sessions: PublicHuntSessionSummary[],
+  creatures: PublicHuntCreatureSummary[]
+): PublicHuntIntelligenceSummary["summary"] {
+  const xpRates = sessions.map((session) => session.xp_per_hour).filter((value): value is number => value !== null);
+  const rawXpRates = sessions.map((session) => session.raw_xp_per_hour).filter((value): value is number => value !== null);
+  const profitRates = sessions.map((session) => session.profit_per_hour).filter((value): value is number => value !== null);
+  const killRates = creatures.map((creature) => creature.kills_per_hour).filter((value): value is number => value !== null);
+  const latest = sessions[0] ?? null;
+  const explanations: InsightExplanation[] = [];
+  if (!sessions.length) {
+    explanations.push(explanation("no public sessions", "neutral", "No accepted public hunt imports are linked to this hunting place yet.", {
+      missing_data_reason: "Run public hunt import and review matches to populate public ranges."
+    }));
+  }
+  const levelBands = Array.from(new Set(sessions.map(levelBandForSession).filter((value): value is string => Boolean(value)))).slice(0, 6);
+  const vocations = Array.from(new Set(sessions.flatMap((session) => session.vocations))).sort();
+  return {
+    session_count: sessions.length,
+    matched_session_count: sessions.length,
+    median_xp_per_hour: median(xpRates),
+    min_xp_per_hour: xpRates.length ? Math.min(...xpRates) : null,
+    max_xp_per_hour: xpRates.length ? Math.max(...xpRates) : null,
+    median_raw_xp_per_hour: median(rawXpRates),
+    median_profit_per_hour: median(profitRates),
+    min_profit_per_hour: profitRates.length ? Math.min(...profitRates) : null,
+    max_profit_per_hour: profitRates.length ? Math.max(...profitRates) : null,
+    median_kills_per_hour: median(killRates),
+    level_bands: levelBands,
+    vocations,
+    top_creatures: creatures,
+    confidence: buildConfidence(sessions.length >= 10 ? 0.85 : sessions.length >= 3 ? 0.65 : sessions.length === 1 ? 0.45 : null, {
+      estimated: true,
+      missingDataReason: sessions.length ? null : "No accepted public session observations."
+    }),
+    freshness: buildFreshness(latest?.observed_at ?? null, {
+      staleAfterHours: STALE_REFERENCE_HOURS,
+      agingAfterHours: AGING_REFERENCE_HOURS,
+      missingDataReason: sessions.length ? null : "No public hunt import timestamp."
+    }),
+    provenance: sessions.flatMap((session) => session.provenance),
+    explanations
+  };
+}
+
 function suitability(place: HuntingPlaceRow, personal: HuntingPlaceDetail["personal"]["summary"]): HuntingPlaceDetail["suitability"] {
   const signals: InsightExplanation[] = [];
   if (place.risk_level) {
@@ -939,11 +1181,14 @@ export function getHuntingPlaceDetail(db: Database.Database, publicHuntingPlaceI
   const expectedLoot = summarizeLoot(fetchLoot(db, publicHuntingPlaceId));
   const personalHunts = fetchPersonalHunts(db, publicHuntingPlaceId).map(summarizePersonalHunt);
   const personalSummary = summarizePersonal(personalHunts);
+  const publicSessions = fetchPublicHuntSessions(db, publicHuntingPlaceId).map(summarizePublicHunt);
+  const publicSessionSummary = summarizePublicSessions(publicSessions, fetchPublicHuntCreatures(db, publicHuntingPlaceId));
   const marketLoot = marketWeighted(expectedLoot);
   const suitabilitySignals = suitability(place, personalSummary);
   const dataExplanations: InsightExplanation[] = [
     ...marketLoot.explanations,
     ...personalSummary.explanations,
+    ...publicSessionSummary.explanations,
     ...suitabilitySignals.signals
   ];
   if (!creatures.length) {
@@ -989,6 +1234,10 @@ export function getHuntingPlaceDetail(db: Database.Database, publicHuntingPlaceI
       hunts: personalHunts,
       summary: personalSummary
     },
+    public_sessions: {
+      sessions: publicSessions,
+      summary: publicSessionSummary
+    },
     suitability: suitabilitySignals,
     integrations: {
       bestiary: bestiaryRelevance(db, publicHuntingPlaceId),
@@ -996,12 +1245,12 @@ export function getHuntingPlaceDetail(db: Database.Database, publicHuntingPlaceI
     },
     data_quality: {
       confidence: overallConfidence,
-      freshness: buildFreshness(latestIso(placeFreshness.last_updated, marketLoot.freshness.last_updated, personalSummary.freshness.last_updated), {
+      freshness: buildFreshness(latestIso(placeFreshness.last_updated, marketLoot.freshness.last_updated, personalSummary.freshness.last_updated, publicSessionSummary.freshness.last_updated), {
         staleAfterHours: STALE_REFERENCE_HOURS,
         agingAfterHours: AGING_REFERENCE_HOURS
       }),
       explanations: dataExplanations,
-      provenance: [placeSource, ...marketLoot.provenance, ...personalSummary.provenance]
+      provenance: [placeSource, ...marketLoot.provenance, ...personalSummary.provenance, ...publicSessionSummary.provenance]
     }
   };
 }

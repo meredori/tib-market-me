@@ -98,6 +98,10 @@ function dateLabel(value) {
             <span class="muted">Personal Hunts</span>
             <strong>{{ detail.personal?.summary?.hunt_count || 0 }}</strong>
           </div>
+          <div>
+            <span class="muted">Public Hunts</span>
+            <strong>{{ detail.public_sessions?.summary?.session_count || 0 }}</strong>
+          </div>
         </div>
         <DecisionLabels
           :reasons="detail.suitability?.signals || []"
@@ -157,6 +161,57 @@ function dateLabel(value) {
                 </tr>
                 <tr v-if="!detail.personal?.hunts?.length">
                   <td colspan="5" class="muted">No linked personal hunts yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <SectionHeader title="Public Observations" :subtitle="`${detail.public_sessions?.summary?.session_count || 0} accepted imports`">
+            <ConfidenceBadge :confidence="detail.public_sessions?.summary?.confidence" />
+          </SectionHeader>
+          <div class="metric-strip">
+            <div>
+              <span class="muted">Median XP</span>
+              <strong>{{ rate(detail.public_sessions?.summary?.median_xp_per_hour) }}</strong>
+            </div>
+            <div>
+              <span class="muted">XP Range</span>
+              <strong>{{ rate(detail.public_sessions?.summary?.min_xp_per_hour) }} - {{ rate(detail.public_sessions?.summary?.max_xp_per_hour) }}</strong>
+            </div>
+            <div>
+              <span class="muted">Median Profit</span>
+              <strong>{{ signedGp(detail.public_sessions?.summary?.median_profit_per_hour) }}/h</strong>
+            </div>
+            <div>
+              <span class="muted">Kills Pace</span>
+              <strong>{{ rate(detail.public_sessions?.summary?.median_kills_per_hour) }}</strong>
+            </div>
+          </div>
+          <div class="status-row mt-10">
+            <span v-for="band in detail.public_sessions?.summary?.level_bands || []" :key="band" class="status-badge">{{ band }}</span>
+            <span v-for="vocation in detail.public_sessions?.summary?.vocations || []" :key="vocation" class="status-badge">{{ vocation }}</span>
+          </div>
+          <div class="table-wrap mt-10">
+            <table>
+              <thead>
+                <tr>
+                  <th>Creature</th>
+                  <th>Kills</th>
+                  <th>Kills/h</th>
+                  <th>Sessions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="creature in detail.public_sessions?.summary?.top_creatures || []" :key="creature.normalized_name">
+                  <td>{{ creature.name }}</td>
+                  <td>{{ formatValue(creature.kills) }}</td>
+                  <td>{{ rate(creature.kills_per_hour) }}</td>
+                  <td>{{ creature.session_count }}</td>
+                </tr>
+                <tr v-if="!detail.public_sessions?.summary?.top_creatures?.length">
+                  <td colspan="4" class="muted">Public hunt observations will appear after import and review.</td>
                 </tr>
               </tbody>
             </table>

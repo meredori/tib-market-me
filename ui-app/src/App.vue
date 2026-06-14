@@ -40,6 +40,12 @@ const publicReferenceStatus = reactive({
   jobs: {},
   data_health: {},
 })
+const publicHuntStatus = reactive({
+  counts: {},
+  jobs: {},
+  freshness: {},
+  policy: {},
+})
 
 const sections = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -67,6 +73,10 @@ const refreshInfo = ref('')
 const publicReferenceInfo = ref('')
 const publicReferenceBusy = ref(false)
 const repeatPublicReferenceEnrichment = ref(false)
+const publicHuntInfo = ref('')
+const publicHuntBusy = ref(false)
+const publicHuntBatchLimit = ref(20)
+const publicHuntReviewItems = ref([])
 const itemPriceMode = ref('conservative_min')
 const itemPriceInfo = ref('')
 const itemPriceBusy = ref(false)
@@ -164,6 +174,24 @@ async function loadPublicReferenceStatus() {
     }
   } catch (error) {
     publicReferenceInfo.value = `Reference status error: ${error.message}`
+  }
+}
+
+async function loadPublicHuntStatus() {
+  try {
+    const data = await api('/api/public-hunts/status')
+    Object.assign(publicHuntStatus, data)
+  } catch (error) {
+    publicHuntInfo.value = `Public hunt status error: ${error.message}`
+  }
+}
+
+async function loadPublicHuntReviewQueue() {
+  try {
+    const data = await api('/api/public-hunts/review?limit=500')
+    publicHuntReviewItems.value = data.items || []
+  } catch (error) {
+    publicHuntInfo.value = `Public hunt review error: ${error.message}`
   }
 }
 
@@ -484,6 +512,58 @@ async function enrichPublicReferenceData() {
     }
     publicReferencePollMode = null
     publicReferenceBusy.value = false
+  }
+}
+
+async function checkPublicHunts() {
+  publicHuntBusy.value = true
+  publicHuntInfo.value = 'Checking Hunt Analyser public hunts.'
+  try {
+    const out = await api('/api/public-hunts/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ limit: Number(publicHuntBatchLimit.value || 20) }),
+    })
+    publicHuntInfo.value = `Imported ${out.imported || 0} public hunt(s), skipped ${out.skipped || 0}.`
+    await loadPublicHuntStatus()
+    await loadPublicHuntReviewQueue()
+  } catch (error) {
+    publicHuntInfo.value = `Public hunt import failed: ${error.message}`
+  } finally {
+    publicHuntBusy.value = false
+  }
+}
+
+async function reprocessPublicHunts() {
+  publicHuntBusy.value = true
+  publicHuntInfo.value = 'Reprocessing public hunt matches.'
+  try {
+    const out = await api('/api/public-hunts/reprocess', { method: 'POST' })
+    publicHuntInfo.value = `Reprocessed ${out.reprocessed || 0} public hunt(s).`
+    await loadPublicHuntStatus()
+    await loadPublicHuntReviewQueue()
+  } catch (error) {
+    publicHuntInfo.value = `Public hunt reprocess failed: ${error.message}`
+  } finally {
+    publicHuntBusy.value = false
+  }
+}
+
+async function reviewPublicHunt(item, action, payload = {}) {
+  publicHuntBusy.value = true
+  try {
+    await api(`/api/public-hunts/${item.id}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...payload }),
+    })
+    publicHuntInfo.value = 'Updated public hunt review.'
+    await loadPublicHuntStatus()
+    await loadPublicHuntReviewQueue()
+  } catch (error) {
+    publicHuntInfo.value = `Public hunt review failed: ${error.message}`
+  } finally {
+    publicHuntBusy.value = false
   }
 }
 
@@ -819,7 +899,15 @@ const similarHuntGroups = computed(() => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadStatus(), loadPublicReferenceStatus(), loadMarketDashboard(), loadLootInbox(), hunts.refreshHuntCollections()])
+  await Promise.all([
+    loadStatus(),
+    loadPublicReferenceStatus(),
+    loadPublicHuntStatus(),
+    loadPublicHuntReviewQueue(),
+    loadMarketDashboard(),
+    loadLootInbox(),
+    hunts.refreshHuntCollections(),
+  ])
 })
 
 onBeforeUnmount(() => {
@@ -978,12 +1066,20 @@ onBeforeUnmount(() => {
         :public-reference-info="publicReferenceInfo"
         :public-reference-busy="publicReferenceBusy"
         v-model:repeat-public-reference-enrichment="repeatPublicReferenceEnrichment"
+        :public-hunt-status="publicHuntStatus"
+        :public-hunt-info="publicHuntInfo"
+        :public-hunt-busy="publicHuntBusy"
+        v-model:public-hunt-batch-limit="publicHuntBatchLimit"
+        :public-hunt-review-items="publicHuntReviewItems"
         :item-price-info="itemPriceInfo"
         :item-price-busy="itemPriceBusy"
         :hunts="hunts"
         @refresh="refreshData"
         @sync-public-reference="syncPublicReferenceData"
         @enrich-public-reference="enrichPublicReferenceData"
+        @check-public-hunts="checkPublicHunts"
+        @reprocess-public-hunts="reprocessPublicHunts"
+        @review-public-hunt="reviewPublicHunt"
         @generate-prices="generateItemPrices"
         @review-import="reviewHuntLogImport"
       />

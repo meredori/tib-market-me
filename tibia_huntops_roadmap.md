@@ -1095,31 +1095,33 @@ Show:
 
 # Phase 12: External Public Hunt Intelligence
 
+Status: Completed.
+
 ## Goal
 
-Investigate and optionally import public hunt data to improve hunting-place intelligence only.
+Import public Hunt Analyser session data to improve hunting-place intelligence only.
 
 Public imported sessions must remain separate from personal hunt history.
+
+Implemented as a manual, resumable public Hunt Analyser import. The source is server-rendered at `/hunt_sessions?hunt_sessions_by=is_public`, currently paginated at 20 sessions per page and observed with 3,390 public sessions during implementation research. Detail pages expose core summary metrics and monster kills in HTML. `robots.txt` allows `User-agent: *` while marking `ai-train=no`, so the app treats this as a polite, manual, factual import only and not as training data or bulk content republishing.
 
 ## Build
 
 ### 1. Source Research
 
-Research whether public hunt-analyser sessions or other sources can be imported responsibly.
+Hunt Analyser public sessions were imported responsibly as the v1 source.
 
 Document:
 
-- Source URL shape.
-- Available fields.
-- Whether raw hunt data is accessible.
-- Reliability.
-- Rate/crawl limits.
-- Terms/practical concerns.
-- Whether import should be manual, fixture-based, or avoided.
+- Source URL shape: listing at `/hunt_sessions?hunt_sessions_by=is_public`, detail pages at `/hunt_sessions/:id`.
+- Available v1 fields: title, public author label, observed date, duration, party vocations/levels, XP, raw XP rate, XP rate, balance/profit, and monster kill counts.
+- Raw detail pages are stored as raw HTML with a payload fingerprint for audit, dedupe, and future reparse.
+- Import is manual, batch-capped, rate-limited, and resumable through intelligence jobs.
+- Practical concern: `ai-train=no` is respected; imported facts are local app intelligence only.
 
 ### 2. Public Session Storage
 
-If implemented, store imported sessions separately from personal hunts.
+Imported sessions are stored separately from personal hunts.
 
 Required metadata:
 
@@ -1158,6 +1160,32 @@ Add:
 - Review queue if confidence is low.
 - Reprocess action when matching/pricing rules improve.
 
+### 5. Hunting-Place Intelligence
+
+Add a separate public sessions section to hunting-place pages.
+
+Show:
+
+- Accepted public import count.
+- Median and range XP/profit rates.
+- Rough kills-per-hour from imported monster counts.
+- Common level bands and vocations.
+- Top observed creatures.
+
+Suspicious or unreviewed imports are excluded from trusted public aggregates.
+
+### 6. Settings Import Controls
+
+Add Public Hunt Import controls in Settings/Data Health.
+
+Include:
+
+- Manual Check Public Hunts action.
+- Batch size control.
+- Public import job status.
+- Review queue for low-confidence or suspicious sessions.
+- Reprocess action after matching/reference improvements.
+
 ## Acceptance Criteria
 
 - Public import is documented before implementation.
@@ -1166,6 +1194,7 @@ Add:
 - Public sessions only appear in allowed hunting-place intelligence paths.
 - UI labels public/imported data clearly.
 - Server and UI builds pass.
+- Manual import, review, reprocess, and parser tests pass.
 
 ---
 

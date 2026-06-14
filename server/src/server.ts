@@ -51,6 +51,13 @@ import {
 import { getLootInbox, markLootInboxItemState } from "./lib/lootSelling";
 import { registerBestiaryRoutes } from "./lib/bestiary/routes";
 import { registerHuntingPlaceRoutes } from "./lib/huntingPlaces/routes";
+import {
+  checkPublicHunts,
+  getPublicHuntStatus,
+  listPublicHuntReviewQueue,
+  reprocessPublicHunts,
+  reviewPublicHunt
+} from "./lib/publicHunts";
 import { registerTaskboardRoutes } from "./lib/taskboard/routes";
 
 export function buildServer(db: Database.Database) {
@@ -262,6 +269,50 @@ export function buildServer(db: Database.Database) {
       reply.code(String(error).includes("already running") ? 409 : 500);
       return { ok: false, error: String(error) };
     }
+  });
+
+  app.get("/api/public-hunts/status", async () => getPublicHuntStatus(db));
+
+  app.post("/api/public-hunts/check", async (request, reply) => {
+    try {
+      const body = typeof request.body === "object" && request.body !== null
+        ? (request.body as Record<string, unknown>)
+        : {};
+      const limit = Number(body.limit);
+      const result = await checkPublicHunts(db, {
+        limit: Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : undefined
+      });
+      reply.code(202);
+      return result;
+    } catch (error) {
+      reply.code(500);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.post("/api/public-hunts/reprocess", async (request, reply) => {
+    try {
+      return reprocessPublicHunts(db);
+    } catch (error) {
+      reply.code(500);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.get("/api/public-hunts/review", async (request) => {
+    const query = typeof request.query === "object" && request.query !== null
+      ? (request.query as Record<string, unknown>)
+      : {};
+    const limit = Number(query.limit);
+    return listPublicHuntReviewQueue(db, Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : undefined);
+  });
+
+  app.post("/api/public-hunts/:id/review", async (request, reply) => {
+    const result = reviewPublicHunt(db, (request.params as Record<string, string>).id, request.body);
+    if (!result.ok) {
+      reply.code(400);
+    }
+    return result;
   });
 
   app.get("/api/hunts", async () => listHuntUploads(db));

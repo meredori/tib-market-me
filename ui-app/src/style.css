@@ -257,6 +257,12 @@ th {
   height: 36px;
 }
 
+.public-hunt-review-detail {
+  border-top: 1px solid rgba(120, 168, 220, 0.18);
+  border-bottom: 1px solid rgba(120, 168, 220, 0.18);
+  padding: 14px 0;
+}
+
 .page-stack {
   display: grid;
   gap: 12px;

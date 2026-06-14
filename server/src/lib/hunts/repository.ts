@@ -775,14 +775,34 @@ export function searchHuntingPlaces(db: Database.Database, query: string): Recor
       ORDER BY
         CASE WHEN place.normalized_name = ? THEN 0 ELSE 1 END,
         place.name
-      LIMIT 30
+      LIMIT 80
     `
     )
     .all(normalizedQuery, like, like, normalizedQuery) as Array<Record<string, unknown>>;
 
+  const queryTokens = normalizedQuery.split(/\s+/).filter((token) => token.length >= 3);
+  function score(row: Record<string, unknown>): number {
+    const haystack = normalizeLootItemName(`${asText(row.normalized_name)} ${asText(row.location)}`);
+    if (!normalizedQuery) {
+      return 0;
+    }
+    if (asText(row.normalized_name) === normalizedQuery) {
+      return 1;
+    }
+    if (haystack.includes(normalizedQuery)) {
+      return 0.85;
+    }
+    const matched = queryTokens.filter((token) => haystack.includes(token)).length;
+    return queryTokens.length ? Math.min(0.8, matched / queryTokens.length) : 0;
+  }
+
   return {
     ok: true,
-    items: rows.map((row) => ({
+    items: rows
+      .map((row) => ({ row, confidence: score(row) }))
+      .sort((a, b) => b.confidence - a.confidence || asText(a.row.name).localeCompare(asText(b.row.name)))
+      .slice(0, 30)
+      .map(({ row, confidence }) => ({
       id: asNumber(row.id, 0),
       name: asText(row.name),
       normalized_name: asText(row.normalized_name),
@@ -790,7 +810,8 @@ export function searchHuntingPlaces(db: Database.Database, query: string): Recor
       min_level: asNumberOrNull(row.min_level),
       max_level: asNumberOrNull(row.max_level),
       detail_status: asText(row.detail_status) || "pending",
-      creature_count: asNumber(row.creature_count, 0)
+      creature_count: asNumber(row.creature_count, 0),
+      confidence: Number(confidence.toFixed(4))
     }))
   };
 }
