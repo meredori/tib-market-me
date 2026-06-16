@@ -1,13 +1,17 @@
 <script setup>
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   BookOpen,
   ClipboardList,
   Crosshair,
   ExternalLink,
   PackageSearch,
+  RefreshCw,
+  Search,
   ShieldAlert,
   Swords,
 } from '@lucide/vue'
+import { api } from '../../lib/api'
 import ConfidenceBadge from '../common/ConfidenceBadge.vue'
 import DecisionLabels from '../common/DecisionLabels.vue'
 import EntityLinkPill from '../common/EntityLinkPill.vue'
@@ -23,12 +27,39 @@ const props = defineProps({
 })
 
 defineEmits([
+  'open-hunting-place',
+  'open-creature',
   'open-item',
   'open-hunt',
   'open-bestiary',
   'open-taskboard',
   'refresh',
 ])
+
+const placesBusy = ref(false)
+const placesError = ref('')
+const places = ref({ items: [], summary: {} })
+const placeFilters = reactive({
+  q: '',
+  hasPersonalHunts: false,
+  hasPublicHunts: false,
+})
+
+let placeSearchTimer = null
+
+const sortedExpectedLoot = computed(() => {
+  return [...(props.detail?.reference?.expected_loot || [])].sort(compareLootValue)
+})
+
+const sortedCreatures = computed(() => {
+  return [...(props.detail?.reference?.creatures || [])].sort((a, b) => {
+    const valueDiff = creatureLootValue(b) - creatureLootValue(a)
+    if (valueDiff !== 0) return valueDiff
+    const occurrenceDiff = occurrenceRank(a.occurrence) - occurrenceRank(b.occurrence)
+    if (occurrenceDiff !== 0) return occurrenceDiff
+    return String(a.name || '').localeCompare(String(b.name || ''))
+  })
+})
 
 function gp(value) {
   if (value === null || value === undefined) return 'n/a'
@@ -50,6 +81,114 @@ function dateLabel(value) {
   if (!value) return 'n/a'
   return String(value).replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC')
 }
+
+function numericValue(value, fallback = 0) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+
+function lootSortValue(item) {
+  if (item?.estimated_drop_value !== null && item?.estimated_drop_value !== undefined) {
+    return numericValue(item.estimated_drop_value)
+  }
+  if (item?.estimated_unit_value !== null && item?.estimated_unit_value !== undefined) {
+    return numericValue(item.estimated_unit_value)
+  }
+  return 0
+}
+
+function compareLootValue(a, b) {
+  const valueDiff = lootSortValue(b) - lootSortValue(a)
+  if (valueDiff !== 0) return valueDiff
+  const unitDiff = numericValue(b?.estimated_unit_value) - numericValue(a?.estimated_unit_value)
+  if (unitDiff !== 0) return unitDiff
+  const chanceDiff = numericValue(b?.chance_percent) - numericValue(a?.chance_percent)
+  if (chanceDiff !== 0) return chanceDiff
+  return String(a?.name || '').localeCompare(String(b?.name || ''))
+}
+
+function occurrenceRank(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'common') return 0
+  if (normalized === 'uncommon') return 1
+  if (normalized === 'rare') return 2
+  return 3
+}
+
+function levelRange(place) {
+  if (place?.min_level !== null && place?.min_level !== undefined && place?.max_level !== null && place?.max_level !== undefined) {
+    return `${place.min_level}-${place.max_level}`
+  }
+  if (place?.min_level !== null && place?.min_level !== undefined) {
+    return `${place.min_level}+`
+  }
+  if (place?.max_level !== null && place?.max_level !== undefined) {
+    return `up to ${place.max_level}`
+  }
+  return '-'
+}
+
+function cleanText(value) {
+  return String(value || '')
+    .replace(/\{\{\s*Mapper Coords\|[^}]*\}\}/gi, '')
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[,\s]+$/g, '')
+    .trim()
+}
+
+function queryString() {
+  const params = new URLSearchParams()
+  if (placeFilters.q.trim()) params.set('q', placeFilters.q.trim())
+  if (placeFilters.hasPersonalHunts) params.set('has_personal_hunts', 'true')
+  if (placeFilters.hasPublicHunts) params.set('has_public_hunts', 'true')
+  params.set('limit', '300')
+  return params.toString()
+}
+
+async function loadPlaces() {
+  placesBusy.value = true
+  placesError.value = ''
+  try {
+    places.value = await api(`/api/hunting-places?${queryString()}`)
+  } catch (error) {
+    placesError.value = String(error?.message || error)
+  } finally {
+    placesBusy.value = false
+  }
+}
+
+function onPlaceSearchInput() {
+  if (placeSearchTimer) {
+    clearTimeout(placeSearchTimer)
+  }
+  placeSearchTimer = setTimeout(loadPlaces, 180)
+}
+
+function creatureLootItems(creature, limit = null) {
+  const name = String(creature?.name || '').toLowerCase()
+  const items = sortedExpectedLoot.value
+    .filter((item) => (item.creature_names || []).some((creatureName) => String(creatureName || '').toLowerCase() === name))
+  return limit ? items.slice(0, limit) : items
+}
+
+function topCreatureLoot(creature) {
+  return creatureLootItems(creature, 4)
+}
+
+function extraCreatureLootCount(creature) {
+  return Math.max(0, creatureLootItems(creature).length - topCreatureLoot(creature).length)
+}
+
+function creatureLootValue(creature) {
+  return creatureLootItems(creature).reduce((total, item) => total + lootSortValue(item), 0)
+}
+
+onMounted(loadPlaces)
+
+watch(() => [placeFilters.hasPersonalHunts, placeFilters.hasPublicHunts], loadPlaces)
 </script>
 
 <template>
@@ -66,14 +205,81 @@ function dateLabel(value) {
       <p class="muted">{{ error }}</p>
     </article>
 
-    <article v-else-if="!detail" class="panel">
-      <SectionHeader title="Hunting Place" subtitle="select a linked hunting place" />
-      <p class="muted">Open a linked hunting place to inspect reference data and your saved hunts.</p>
+    <article v-else-if="!detail" class="panel table-panel">
+      <SectionHeader title="Places" :subtitle="`${places.summary?.total || 0} hunting spots`">
+        <button class="ghost-action" :disabled="placesBusy" @click="loadPlaces">
+          <RefreshCw :size="16" :class="{ 'spin-icon': placesBusy }" />
+          Refresh
+        </button>
+      </SectionHeader>
+
+      <div class="places-toolbar">
+        <label class="search-field">
+          <Search :size="16" />
+          <input v-model="placeFilters.q" placeholder="Search places or locations" @input="onPlaceSearchInput" />
+        </label>
+        <label class="inline-check">
+          <input v-model="placeFilters.hasPersonalHunts" type="checkbox" />
+          Has personal hunts
+        </label>
+        <label class="inline-check">
+          <input v-model="placeFilters.hasPublicHunts" type="checkbox" />
+          Has public hunts
+        </label>
+      </div>
+
+      <div class="status-row mt-10">
+        <span class="status-badge">{{ places.summary?.with_level_range || 0 }} with level range</span>
+        <span class="status-badge">{{ places.summary?.with_expected_loot || 0 }} with loot</span>
+        <span class="status-badge">{{ places.summary?.with_personal_hunts || 0 }} with personal hunts</span>
+        <span class="status-badge">{{ places.summary?.with_public_hunts || 0 }} with public hunts</span>
+      </div>
+
+      <p v-if="placesError" class="error">{{ placesError }}</p>
+
+      <div class="table-wrap mt-10">
+        <table class="places-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Level</th>
+              <th>Risk</th>
+              <th>Creatures</th>
+              <th>Loot</th>
+              <th>Personal</th>
+              <th>Public</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="place in places.items || []" :key="place.public_hunting_place_id">
+              <td>
+                <button class="inline-link place-name-link" @click="$emit('open-hunting-place', place.public_hunting_place_id)">
+                  {{ place.name }}
+                </button>
+                <div class="muted compact-note">{{ cleanText(place.location) || 'location n/a' }}</div>
+              </td>
+              <td>{{ levelRange(place) }}</td>
+              <td>{{ place.risk_level || '-' }}</td>
+              <td>{{ formatValue(place.creature_count) }}</td>
+              <td>{{ formatValue(place.expected_loot_count) }}</td>
+              <td>{{ formatValue(place.personal_hunt_count) }}</td>
+              <td>{{ formatValue(place.public_hunt_count) }}</td>
+            </tr>
+            <tr v-if="!placesBusy && !places.items?.length">
+              <td colspan="7" class="muted">No hunting spots match the current filters.</td>
+            </tr>
+            <tr v-if="placesBusy">
+              <td colspan="7" class="muted">Loading hunting spots...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </article>
 
     <template v-else>
       <article class="panel hunting-place-hero">
         <SectionHeader :title="detail.place?.name || 'Hunting Place'" :subtitle="detail.place?.location || 'public reference'">
+          <button class="ghost-action" @click="$emit('open-hunting-place', null)">All Places</button>
           <button class="ghost-action" @click="$emit('refresh')">Refresh</button>
         </SectionHeader>
         <div class="detail-status-row">
@@ -220,15 +426,45 @@ function dateLabel(value) {
 
         <article class="panel">
           <SectionHeader title="Known Creatures" :subtitle="`${detail.reference?.creatures?.length || 0} creatures`" />
+          <div v-if="detail.reference?.creatures?.length" class="creature-list-heading">
+            <span>Creature</span>
+            <div class="creature-meta-heading">
+              <span>XP</span>
+              <span>Bestiary</span>
+            </div>
+          </div>
           <div class="creature-list">
-            <div v-for="creature in detail.reference?.creatures || []" :key="creature.normalized_creature_name" class="creature-row">
-              <div>
-                <strong>{{ creature.name }}</strong>
-                <span class="muted">{{ creature.occurrence || 'known' }}</span>
+            <div v-for="creature in sortedCreatures" :key="creature.normalized_creature_name" class="creature-row">
+              <div class="creature-main">
+                <button class="inline-link creature-name-link" @click="$emit('open-creature', creature)">
+                  {{ creature.name }}
+                </button>
+                <div v-if="topCreatureLoot(creature).length" class="creature-loot-strip" :aria-label="`${creature.name} top loot`">
+                  <button
+                    v-for="item in topCreatureLoot(creature)"
+                    :key="`${creature.normalized_creature_name}-${item.item_id || item.normalized_item_name}`"
+                    class="creature-loot-chip"
+                    :disabled="!item.item_id"
+                    :title="`${item.name}: ${gp(lootSortValue(item))} gp`"
+                    @click="$emit('open-item', item.item_id)"
+                  >
+                    <img v-if="item.item_id" class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.name" loading="lazy" />
+                    <span v-else class="loot-image-placeholder">?</span>
+                    <small>{{ gp(lootSortValue(item)) }}</small>
+                  </button>
+                  <button
+                    v-if="extraCreatureLootCount(creature) > 0"
+                    class="creature-loot-chip creature-loot-more"
+                    :title="`${extraCreatureLootCount(creature)} more loot items`"
+                    @click="$emit('open-creature', creature)"
+                  >
+                    +{{ extraCreatureLootCount(creature) }}
+                  </button>
+                </div>
               </div>
               <div class="creature-meta">
-                <span>{{ gp(creature.experience) }} xp</span>
-                <span>{{ creature.bestiary?.difficulty || 'bestiary n/a' }}</span>
+                <span>{{ gp(creature.experience) }}</span>
+                <span>{{ creature.bestiary?.difficulty || 'n/a' }}</span>
               </div>
             </div>
             <p v-if="!detail.reference?.creatures?.length" class="muted">Creature enrichment has not populated this place yet.</p>
@@ -244,14 +480,12 @@ function dateLabel(value) {
               <thead>
                 <tr>
                   <th>Item</th>
-                  <th>Drop</th>
-                  <th>Unit</th>
-                  <th>Weighted</th>
-                  <th>Confidence</th>
+                  <th>Amount</th>
+                  <th>Value</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in detail.reference?.expected_loot || []" :key="`${item.item_id || item.normalized_item_name}`">
+                <tr v-for="item in sortedExpectedLoot" :key="`${item.item_id || item.normalized_item_name}`">
                   <td>
                     <EntityLinkPill
                       :entity="{ type: 'item', id: item.item_id, name: item.name }"
@@ -262,13 +496,11 @@ function dateLabel(value) {
                     />
                     <div class="muted compact-note">{{ item.creature_names?.join(', ') }}</div>
                   </td>
-                  <td>{{ item.chance_percent ?? 'n/a' }}%</td>
+                  <td>{{ item.amount_text || [item.min_count, item.max_count].filter((value) => value !== null && value !== undefined).join('-') || 'n/a' }}</td>
                   <td>{{ gp(item.estimated_unit_value) }}</td>
-                  <td>{{ gp(item.estimated_drop_value) }}</td>
-                  <td><ConfidenceBadge :confidence="item.confidence" /></td>
                 </tr>
                 <tr v-if="!detail.reference?.expected_loot?.length">
-                  <td colspan="5" class="muted">Expected loot will appear after public creature loot enrichment.</td>
+                  <td colspan="3" class="muted">Expected loot will appear after public creature loot enrichment.</td>
                 </tr>
               </tbody>
             </table>
@@ -376,19 +608,72 @@ function dateLabel(value) {
   align-items: start;
 }
 
+.places-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.search-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.places-table {
+  min-width: 820px;
+}
+
+.place-name-link,
+.creature-name-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #d8e5f4;
+  font-weight: 700;
+  justify-self: start;
+  text-align: left;
+}
+
+.place-name-link:hover,
+.creature-name-link:hover {
+  color: #8ab4ff;
+}
+
 .creature-list,
 .integration-hooks {
   display: grid;
   gap: 9px;
 }
 
+.creature-list-heading,
 .creature-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
+}
+
+.creature-list-heading {
+  margin: 2px 0 -1px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.creature-row {
   border-bottom: 1px solid var(--line-soft);
   padding-bottom: 9px;
+}
+
+.creature-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
 
 .creature-row:last-child {
@@ -402,12 +687,69 @@ function dateLabel(value) {
 }
 
 .creature-meta {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: minmax(60px, auto) minmax(72px, auto);
+  gap: 10px;
+  justify-content: end;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.creature-meta-heading {
+  display: grid;
+  grid-template-columns: minmax(60px, auto) minmax(72px, auto);
+  gap: 10px;
+  justify-content: end;
+  text-align: right;
+}
+
+.creature-loot-strip {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 7px;
+}
+
+.creature-loot-chip {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  width: 42px;
+  min-height: 46px;
+  padding: 3px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: rgba(8, 17, 29, 0.42);
+  color: var(--text);
+}
+
+.creature-loot-chip:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.creature-loot-chip:not(:disabled):hover {
+  border-color: rgba(121, 183, 255, 0.55);
+  color: #79b7ff;
+}
+
+.creature-loot-chip small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.67rem;
+  line-height: 1;
+}
+
+.creature-loot-more {
+  align-content: center;
+  min-height: 46px;
+  color: #d8e5f4;
+  font-weight: 800;
 }
 
 .facts-grid {
@@ -431,5 +773,11 @@ function dateLabel(value) {
 .compact-note {
   margin-top: 3px;
   font-size: 0.76rem;
+}
+
+@media (max-width: 820px) {
+  .places-toolbar {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

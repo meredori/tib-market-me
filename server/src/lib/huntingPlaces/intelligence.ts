@@ -358,9 +358,64 @@ export type HuntingPlaceDetailResult = HuntingPlaceDetail | {
   public_hunting_place_id: number;
 };
 
+export type HuntingPlaceListFilters = {
+  q?: string;
+  has_personal_hunts?: boolean;
+  has_public_hunts?: boolean;
+  limit?: number;
+};
+
+export type HuntingPlaceListItem = {
+  public_hunting_place_id: number;
+  name: string;
+  normalized_name: string;
+  location: string | null;
+  min_level: number | null;
+  max_level: number | null;
+  risk_level: string | null;
+  detail_status: string;
+  creature_count: number;
+  expected_loot_count: number;
+  personal_hunt_count: number;
+  public_hunt_count: number;
+};
+
+export type HuntingPlaceListResult = {
+  ok: true;
+  items: HuntingPlaceListItem[];
+  summary: {
+    total: number;
+    with_personal_hunts: number;
+    with_public_hunts: number;
+    with_level_range: number;
+    with_expected_loot: number;
+  };
+  filters: {
+    q: string;
+    has_personal_hunts: boolean;
+    has_public_hunts: boolean;
+    limit: number;
+  };
+};
+
 function asPositiveInteger(value: unknown): number | null {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? Math.trunc(numeric) : null;
+}
+
+function asText(value: unknown): string {
+  return typeof value === "string" ? value : value === null || value === undefined ? "" : String(value);
+}
+
+function cleanDisplayText(value: unknown): string {
+  return asText(value)
+    .replace(/\{\{\s*Mapper Coords\|[^}]*\}\}/gi, "")
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2")
+    .replace(/\[\[([^\]]+)\]\]/g, "$1")
+    .replace(/\s+([,.;:])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .replace(/[,\s]+$/g, "")
+    .trim();
 }
 
 function parseJsonObject(raw: string | null | undefined): Record<string, unknown> {
@@ -409,9 +464,9 @@ function perHour(value: number, durationMinutes: number): number | null {
   return Math.round((value / durationMinutes) * 60);
 }
 
-function chanceWeight(chancePercent: number | null): number {
+function chanceWeight(chancePercent: number | null): number | null {
   if (chancePercent === null || !Number.isFinite(chancePercent) || chancePercent <= 0) {
-    return 0.1;
+    return null;
   }
   return Math.max(0, Math.min(1, chancePercent / 100));
 }
@@ -657,6 +712,117 @@ function fetchPublicHuntCreatures(db: Database.Database, placeId: number): Publi
   }));
 }
 
+function booleanFilter(value: unknown): boolean {
+  return value === true || value === "true" || value === "1" || value === 1;
+}
+
+export function listHuntingPlaces(db: Database.Database, filters: HuntingPlaceListFilters = {}): HuntingPlaceListResult {
+  const q = normalizeLootItemName(asText(filters.q).trim()).replace(/%/g, "");
+  const hasPersonalHunts = booleanFilter(filters.has_personal_hunts);
+  const hasPublicHunts = booleanFilter(filters.has_public_hunts);
+  const limit = Math.min(500, Math.max(1, Math.trunc(Number(filters.limit ?? 250) || 250)));
+  const like = `%${q}%`;
+  const rows = db.prepare(
+    `
+    WITH personal_counts AS (
+      SELECT public_hunting_place_id, COUNT(*) AS hunt_count
+      FROM hunt_uploads
+      WHERE public_hunting_place_id IS NOT NULL
+        AND COALESCE(hunting_place_match_mode, 'auto') != 'mixed_route'
+        AND COALESCE(hunting_place_match_status, '') != 'mixed_route'
+      GROUP BY public_hunting_place_id
+    ),
+    public_counts AS (
+      SELECT public_hunting_place_id, COUNT(*) AS hunt_count
+      FROM public_hunt_sessions
+      WHERE public_hunting_place_id IS NOT NULL
+        AND review_status = 'accepted'
+        AND suspicious_status != 'suspicious'
+      GROUP BY public_hunting_place_id
+    ),
+    creature_counts AS (
+      SELECT hunting_place_id, COUNT(*) AS creature_count
+      FROM public_hunting_place_creatures
+      GROUP BY hunting_place_id
+    ),
+    loot_counts AS (
+      SELECT hpc.hunting_place_id, COUNT(DISTINCT pcl.normalized_item_name) AS expected_loot_count
+      FROM public_hunting_place_creatures hpc
+      JOIN public_creature_loot pcl
+        ON pcl.creature_id = hpc.creature_id
+        OR pcl.creature_id = (
+          SELECT pc.id
+          FROM public_creatures pc
+          WHERE pc.normalized_name = hpc.normalized_creature_name
+          LIMIT 1
+        )
+      GROUP BY hpc.hunting_place_id
+    )
+    SELECT
+      place.id,
+      place.name,
+      place.normalized_name,
+      place.location,
+      place.min_level,
+      place.max_level,
+      place.risk_level,
+      place.detail_status,
+      COALESCE(creature_counts.creature_count, 0) AS creature_count,
+      COALESCE(loot_counts.expected_loot_count, 0) AS expected_loot_count,
+      COALESCE(personal_counts.hunt_count, 0) AS personal_hunt_count,
+      COALESCE(public_counts.hunt_count, 0) AS public_hunt_count
+    FROM public_hunting_places place
+    LEFT JOIN personal_counts ON personal_counts.public_hunting_place_id = place.id
+    LEFT JOIN public_counts ON public_counts.public_hunting_place_id = place.id
+    LEFT JOIN creature_counts ON creature_counts.hunting_place_id = place.id
+    LEFT JOIN loot_counts ON loot_counts.hunting_place_id = place.id
+    WHERE (? = '' OR place.normalized_name LIKE ? OR LOWER(COALESCE(place.location, '')) LIKE ?)
+      AND (? = 0 OR COALESCE(personal_counts.hunt_count, 0) > 0)
+      AND (? = 0 OR COALESCE(public_counts.hunt_count, 0) > 0)
+    ORDER BY
+      CASE WHEN place.normalized_name = ? THEN 0 ELSE 1 END,
+      COALESCE(personal_counts.hunt_count, 0) DESC,
+      COALESCE(public_counts.hunt_count, 0) DESC,
+      COALESCE(place.min_level, place.max_level, 999999),
+      place.name
+    LIMIT ?
+  `
+  ).all(q, like, like, hasPersonalHunts ? 1 : 0, hasPublicHunts ? 1 : 0, q, limit) as Array<Record<string, unknown>>;
+
+  const items = rows.map((row) => ({
+    public_hunting_place_id: Number(row.id || 0),
+    name: cleanDisplayText(row.name),
+    normalized_name: asText(row.normalized_name),
+    location: cleanDisplayText(row.location) || null,
+    min_level: row.min_level === null || row.min_level === undefined ? null : Number(row.min_level),
+    max_level: row.max_level === null || row.max_level === undefined ? null : Number(row.max_level),
+    risk_level: asText(row.risk_level) || null,
+    detail_status: asText(row.detail_status) || "pending",
+    creature_count: Number(row.creature_count || 0),
+    expected_loot_count: Number(row.expected_loot_count || 0),
+    personal_hunt_count: Number(row.personal_hunt_count || 0),
+    public_hunt_count: Number(row.public_hunt_count || 0)
+  }));
+
+  return {
+    ok: true,
+    items,
+    summary: {
+      total: items.length,
+      with_personal_hunts: items.filter((item) => item.personal_hunt_count > 0).length,
+      with_public_hunts: items.filter((item) => item.public_hunt_count > 0).length,
+      with_level_range: items.filter((item) => item.min_level !== null || item.max_level !== null).length,
+      with_expected_loot: items.filter((item) => item.expected_loot_count > 0).length
+    },
+    filters: {
+      q,
+      has_personal_hunts: hasPersonalHunts,
+      has_public_hunts: hasPublicHunts,
+      limit
+    }
+  };
+}
+
 function summarizeCreatures(rows: PlaceCreatureRow[]): HuntingPlaceCreatureSummary[] {
   return rows.map((row) => {
     const id = row.public_creature_id ?? row.creature_id ?? null;
@@ -739,8 +905,9 @@ function summarizeLoot(rows: LootRow[]): HuntingPlaceLootSummary[] {
     const averageChance = median(itemRows
       .map((row) => row.chance_percent)
       .filter((value): value is number => typeof value === "number" && Number.isFinite(value)));
-    const expectedDrops = chanceWeight(averageChance) * averageCount(first.min_count, first.max_count);
-    const estimatedDropValue = unitValue === null ? null : Math.round(unitValue * expectedDrops);
+    const chance = chanceWeight(averageChance);
+    const expectedDrops = chance === null ? null : chance * averageCount(first.min_count, first.max_count);
+    const estimatedDropValue = unitValue === null || expectedDrops === null ? null : Math.round(unitValue * expectedDrops);
     const itemSource = entityRef("item", { id: itemId, name, normalized_name: first.normalized_item_name });
     const publicSource = provenance("public_tibia_reference", {
       source_ref: itemSource,

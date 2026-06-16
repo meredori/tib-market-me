@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { config } from "../../config";
 import { applyMigrations } from "../db/migrations";
-import { getHuntingPlaceDetail } from "./intelligence";
+import { getHuntingPlaceDetail, listHuntingPlaces } from "./intelligence";
 
 let db: Database.Database;
 
@@ -80,6 +80,31 @@ function seedMarket(itemId = 300): number {
   return runId;
 }
 
+function seedMarketItem(runId: number, itemId: number, name: string, price: number): void {
+  db.prepare(
+    `
+    INSERT INTO item_metadata (item_id, name, wiki_name, category, raw_payload_json, fetched_at)
+    VALUES (?, ?, ?, 'loot', '{}', ?)
+    `
+  ).run(itemId, name, name, isoHoursAgo(4));
+  db.prepare(
+    `
+    INSERT INTO market_item_features (
+      run_id, item_id, upstream_time, sell_offer, buy_offer, month_sold, day_sold,
+      month_highest_sell, day_highest_sell, sell_offers, active_traders
+    ) VALUES (?, ?, 1, ?, ?, 30, 2, ?, ?, 10, 4)
+    `
+  ).run(runId, itemId, price, Math.max(1, price - 10), price, price);
+  db.prepare(
+    `
+    INSERT INTO market_item_prices (
+      run_id, item_id, pricing_model, pricing_model_version, fair_price, suggested_list_price,
+      client_value, trend, trend_score, liquidity, confidence
+    ) VALUES (?, ?, ?, 'test', ?, ?, ?, 'stable', 0, 0.8, 0.9)
+    `
+  ).run(runId, itemId, config.pricingModel, price, price, price);
+}
+
 function seedLoot(itemId = 300): void {
   db.prepare(
     `
@@ -89,6 +114,38 @@ function seedLoot(itemId = 300): void {
     ) VALUES (200, ?, 'Dragon Ham', 'dragon ham', 50, 1, 2, 'common', '1-2', ?, '{}')
     `
   ).run(itemId, isoHoursAgo(5));
+}
+
+function seedLootItem(input: {
+  creatureId?: number;
+  itemId: number;
+  name: string;
+  normalizedName: string;
+  chancePercent: number;
+  minCount?: number;
+  maxCount?: number;
+  rarity?: string;
+  amountText?: string;
+}): void {
+  db.prepare(
+    `
+    INSERT INTO public_creature_loot (
+      creature_id, item_id, item_name, normalized_item_name, chance_percent, min_count, max_count,
+      rarity, amount_text, fetched_at, payload_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}')
+    `
+  ).run(
+    input.creatureId ?? 200,
+    input.itemId,
+    input.name,
+    input.normalizedName,
+    input.chancePercent,
+    input.minCount ?? 1,
+    input.maxCount ?? 1,
+    input.rarity ?? "rare",
+    input.amountText ?? "1",
+    isoHoursAgo(5)
+  );
 }
 
 function seedHunt(input: Partial<{
@@ -130,6 +187,25 @@ function seedHunt(input: Partial<{
     input.status ?? "matched",
     input.mode ?? "auto"
   );
+}
+
+function seedPublicHunt(placeId = 100): void {
+  db.prepare(
+    `
+    INSERT INTO public_hunt_sessions (
+      source, source_session_id, source_url, title, imported_at, refreshed_at, raw_html,
+      payload_fingerprint, parse_status, review_status, suspicious_status, parsed_confidence,
+      duration_minutes, party_size, party_json, total_xp, raw_total_xp, xp_per_hour,
+      raw_xp_per_hour, balance_gold, profit_per_hour, public_hunting_place_id,
+      hunting_place_confidence, hunting_place_match_status, hunting_place_match_readiness
+    ) VALUES (
+      'hunt-analyser', 'session-1', 'https://example.test/session-1', 'Public Dragon Hunt',
+      ?, ?, '<html></html>', 'fingerprint-1', 'parsed', 'accepted', 'clear', 0.9,
+      60, 1, '[{"vocation":"Knight","level":120}]', 100000, 100000, 100000,
+      100000, 50000, 50000, ?, 0.9, 'auto', 'auto'
+    )
+    `
+  ).run(isoHoursAgo(2), isoHoursAgo(2), placeId);
 }
 
 beforeEach(() => {
@@ -211,6 +287,32 @@ describe("hunting place intelligence", () => {
     expect(detail.reference.expected_loot[0].confidence).toMatchObject({ level: "high" });
   });
 
+  it("sorts expected loot by market-weighted value", () => {
+    seedPlace();
+    seedCreature();
+    const runId = seedMarket();
+    seedMarketItem(runId, 301, "Dragon Shield", 2000);
+    seedLoot();
+    seedLootItem({
+      itemId: 301,
+      name: "Dragon Shield",
+      normalizedName: "dragon shield",
+      chancePercent: 5
+    });
+
+    const detail = getHuntingPlaceDetail(db, 100);
+
+    expect(detail.ok).toBe(true);
+    if (!detail.ok) {
+      return;
+    }
+    expect(detail.reference.expected_loot.map((item) => item.normalized_item_name)).toEqual([
+      "dragon shield",
+      "dragon ham"
+    ]);
+    expect(detail.reference.expected_loot.map((item) => item.estimated_drop_value)).toEqual([100, 75]);
+  });
+
   it("excludes custom and mixed-route hunts from personal place metrics", () => {
     seedPlace();
     seedCreature();
@@ -264,5 +366,30 @@ describe("hunting place intelligence", () => {
       "no personal hunts",
       "creatures missing"
     ]));
+  });
+
+  it("lists hunting places with personal and public hunt filters", () => {
+    seedPlace();
+    seedCreature();
+    seedLoot();
+    seedHunt();
+    seedPublicHunt();
+
+    const all = listHuntingPlaces(db);
+    expect(all.items[0]).toMatchObject({
+      public_hunting_place_id: 100,
+      name: "Dragon Lair",
+      min_level: 80,
+      max_level: 160,
+      risk_level: "medium",
+      personal_hunt_count: 1,
+      public_hunt_count: 1,
+      creature_count: 1,
+      expected_loot_count: 1
+    });
+
+    expect(listHuntingPlaces(db, { q: "dragon", has_personal_hunts: true }).items).toHaveLength(1);
+    expect(listHuntingPlaces(db, { q: "dragon", has_public_hunts: true }).items).toHaveLength(1);
+    expect(listHuntingPlaces(db, { q: "missing", has_public_hunts: true }).items).toHaveLength(0);
   });
 });

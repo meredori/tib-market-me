@@ -21,7 +21,7 @@ defineProps({
   itemImagePath: { type: Function, required: true },
 })
 
-defineEmits(['open-item', 'assign-item-id', 'hide-loot', 'restore-loot', 'toggle-hidden', 'open-loot-inbox'])
+defineEmits(['open-item', 'open-creature', 'assign-item-id', 'hide-loot', 'restore-loot', 'toggle-hidden', 'open-loot-inbox'])
 </script>
 
 <template>
@@ -36,6 +36,7 @@ defineEmits(['open-item', 'assign-item-id', 'hide-loot', 'restore-loot', 'toggle
       v-if="showMonsters"
       :monsters="preview.monsters || []"
       :format-value="formatValue"
+      @open-creature="$emit('open-creature', $event)"
     />
 
     <HuntLootTable

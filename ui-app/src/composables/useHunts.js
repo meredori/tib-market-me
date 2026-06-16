@@ -1,6 +1,17 @@
 import { computed, reactive, ref } from 'vue'
 import { api } from '../lib/api'
 
+function cleanDisplayText(value) {
+  return String(value || '')
+    .replace(/\{\{\s*Mapper Coords\|[^}]*\}\}/gi, '')
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[,\s]+$/g, '')
+    .trim()
+}
+
 function tagsFromDraft(value) {
   return value
     .split(',')
@@ -10,6 +21,7 @@ function tagsFromDraft(value) {
 
 function buildHuntPayload(preview, draft, rawText, source = null) {
   const huntingPlaceId = Number(draft.huntingPlaceId?.value || 0)
+  const locationName = cleanDisplayText(draft.location.value) || cleanDisplayText(preview.location?.suggested_name) || null
   const payload = {
     label: draft.label.value.trim() || preview.suggested_label || 'Untitled Hunt',
     tags: tagsFromDraft(draft.tags.value),
@@ -21,10 +33,10 @@ function buildHuntPayload(preview, draft, rawText, source = null) {
     started_at: preview.parsed?.started_at || null,
     ended_at: preview.parsed?.ended_at || null,
     excluded_item_names: draft.excluded.value,
-    location_name: draft.location.value.trim() || preview.location?.suggested_name || null,
+    location_name: locationName,
     character_name: draft.character.value.trim() || null,
     public_hunting_place_id: huntingPlaceId > 0 ? huntingPlaceId : null,
-    hunting_place_match_mode: draft.matchMode?.value || 'auto',
+    hunting_place_match_mode: huntingPlaceId > 0 ? 'auto' : (draft.matchMode?.value || 'auto'),
     raw_text: rawText,
   }
   if (source) {
@@ -69,6 +81,8 @@ export function useHunts() {
   const huntingPlaceSearch = ref('')
   const huntingPlaceSearchResults = ref([])
   const huntingPlaceSearchInfo = ref('')
+  const huntingPlaceSearchBusy = ref(false)
+  const activeHuntingPlacePicker = ref('')
   const huntRematchInfo = ref('')
   const huntingAreas = ref([])
   const huntingAreaInfo = ref('')
@@ -84,6 +98,7 @@ export function useHunts() {
   const historyLoadingByItemId = reactive({})
   const huntForm = reactive({ raw_text: '' })
   const hasUnsavedHuntChanges = ref(false)
+  let huntingPlaceSearchToken = 0
 
   function markUnsavedHuntChanges() {
     if (activeHuntPreview.value) {
@@ -112,21 +127,37 @@ export function useHunts() {
   }
 
   function updateLocationSearch(locationRef, huntingPlaceIdRef, value) {
-    locationRef.value = value
+    const nextValue = cleanDisplayText(value)
+    locationRef.value = nextValue
     huntingPlaceIdRef.value = ''
     markUnsavedHuntChanges()
-    searchHuntingPlaces(value)
+    searchHuntingPlaces(nextValue)
+  }
+
+  function openHuntingPlacePicker(key, locationRef) {
+    activeHuntingPlacePicker.value = key
+    const query = cleanDisplayText(locationRef?.value || '')
+    if (!query) {
+      searchHuntingPlaces('', { force: true })
+    } else if (query.length >= 3) {
+      searchHuntingPlaces(query)
+    }
+  }
+
+  function closeHuntingPlacePicker() {
+    activeHuntingPlacePicker.value = ''
   }
 
   function selectHuntingPlace(place, locationRef, huntingPlaceIdRef) {
     if (!place?.id) {
       return
     }
-    locationRef.value = place.name || ''
+    locationRef.value = cleanDisplayText(place.name) || ''
     huntingPlaceIdRef.value = String(place.id)
-    huntingPlaceSearch.value = place.name || ''
+    huntingPlaceSearch.value = cleanDisplayText(place.name) || ''
     huntingPlaceSearchResults.value = []
     huntingPlaceSearchInfo.value = ''
+    activeHuntingPlacePicker.value = ''
     markUnsavedHuntChanges()
   }
 
@@ -147,6 +178,8 @@ export function useHunts() {
     huntingPlaceSearch.value = ''
     huntingPlaceSearchResults.value = []
     huntingPlaceSearchInfo.value = ''
+    huntingPlaceSearchBusy.value = false
+    activeHuntingPlacePicker.value = ''
   }
 
   async function loadHunts() {
@@ -270,7 +303,7 @@ export function useHunts() {
       excludedHuntItems.value = out.loot_summary?.excluded_item_names || excludedItems
       huntDraftLabel.value = hadPreview && huntDraftLabel.value ? huntDraftLabel.value : out.suggested_label || ''
       huntDraftTags.value = hadPreview ? huntDraftTags.value : ''
-      huntDraftLocation.value = hadPreview ? huntDraftLocation.value : (out.location?.suggested_name || '')
+      huntDraftLocation.value = hadPreview ? cleanDisplayText(huntDraftLocation.value) : cleanDisplayText(out.location?.suggested_name || '')
       huntDraftCharacter.value = hadPreview ? huntDraftCharacter.value : ''
       huntDraftHuntingPlaceId.value = hadPreview ? huntDraftHuntingPlaceId.value : ''
       huntDraftMatchMode.value = hadPreview ? huntDraftMatchMode.value : 'auto'
@@ -505,7 +538,7 @@ export function useHunts() {
     importHuntPreview.value = candidate.preview
     importHuntDraftLabel.value = candidate.preview.suggested_label || ''
     importHuntDraftTags.value = ''
-    importHuntDraftLocation.value = candidate.preview.location?.suggested_name || ''
+    importHuntDraftLocation.value = cleanDisplayText(candidate.preview.location?.suggested_name || '')
     importHuntDraftCharacter.value = ''
     importHuntDraftHuntingPlaceId.value = ''
     importHuntDraftMatchMode.value = candidate.preview.location?.hunting_place_match?.status === 'mixed_route' ? 'mixed_route' : 'auto'
@@ -644,7 +677,7 @@ export function useHunts() {
       editingHuntId.value = row.id
       previousHuntDraftLabel.value = out.saved_hunt?.label || out.suggested_label || ''
       previousHuntDraftTags.value = (row.tags || []).join(',')
-      previousHuntDraftLocation.value = row.location_name || selectedHuntingPlaceName(out) || out.location?.selected_name || out.location?.suggested_name || ''
+      previousHuntDraftLocation.value = cleanDisplayText(row.location_name || selectedHuntingPlaceName(out) || out.location?.selected_name || out.location?.suggested_name || '')
       previousHuntDraftCharacter.value = row.character_name || out.saved_hunt?.character_name || ''
       previousHuntDraftHuntingPlaceId.value = String(
         out.saved_hunt?.hunting_place_match?.selected_hunting_place_id
@@ -656,7 +689,7 @@ export function useHunts() {
       excludedHuntItems.value = out.loot_summary?.excluded_item_names || []
       showHiddenLoot.value = false
       clearUnsavedHuntChanges()
-      huntInfo.value = `Loaded previous hunt: ${previousHuntDraftLabel.value || `Hunt ${row.id}`}`
+      huntInfo.value = ''
       loadHistoryForPreview(out)
       hydratePreviewItemDetails(out)
     } catch (error) {
@@ -737,22 +770,41 @@ export function useHunts() {
     }
   }
 
-  async function searchHuntingPlaces(query = huntingPlaceSearch.value) {
-    huntingPlaceSearch.value = query
-    const q = String(query || '').trim()
-    if (q.length < 2) {
+  async function searchHuntingPlaces(query = huntingPlaceSearch.value, options = {}) {
+    const q = cleanDisplayText(query)
+    huntingPlaceSearch.value = q
+    const force = Boolean(options.force)
+    if (!force && q.length < 3) {
       huntingPlaceSearchResults.value = []
-      huntingPlaceSearchInfo.value = ''
+      huntingPlaceSearchInfo.value = q ? 'Type 3 or more characters to search hunting spots.' : ''
+      huntingPlaceSearchBusy.value = false
       return
     }
+    huntingPlaceSearchBusy.value = true
+    huntingPlaceSearchInfo.value = q ? 'Searching hunting spots...' : 'Loading hunting spots...'
+    huntingPlaceSearchToken += 1
+    const token = huntingPlaceSearchToken
     try {
       const out = await api(`/api/hunting-places/search?q=${encodeURIComponent(q)}`)
-      huntingPlaceSearchResults.value = out.items || []
+      if (token !== huntingPlaceSearchToken) {
+        return
+      }
+      huntingPlaceSearchResults.value = (out.items || []).map((item) => ({
+        ...item,
+        name: cleanDisplayText(item.name),
+        location: cleanDisplayText(item.location),
+      }))
       huntingPlaceSearchInfo.value = huntingPlaceSearchResults.value.length
         ? `${huntingPlaceSearchResults.value.length} hunting spot(s)`
         : 'No hunting spots found.'
     } catch (error) {
-      huntingPlaceSearchInfo.value = `Place search failed: ${error.message}`
+      if (token === huntingPlaceSearchToken) {
+        huntingPlaceSearchInfo.value = `Place search failed: ${error.message}`
+      }
+    } finally {
+      if (token === huntingPlaceSearchToken) {
+        huntingPlaceSearchBusy.value = false
+      }
     }
   }
 
@@ -838,6 +890,8 @@ export function useHunts() {
     huntingPlaceSearch,
     huntingPlaceSearchResults,
     huntingPlaceSearchInfo,
+    huntingPlaceSearchBusy,
+    activeHuntingPlacePicker,
     huntRematchInfo,
     huntingAreas,
     huntingAreaInfo,
@@ -880,6 +934,9 @@ export function useHunts() {
     selectHuntingPlace,
     selectHuntingPlaceFromOptions,
     updateLocationSearch,
+    openHuntingPlacePicker,
+    closeHuntingPlacePicker,
+    cleanDisplayText,
     rematchHunt,
     hideLootItem,
     restoreLootItem,

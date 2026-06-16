@@ -49,6 +49,17 @@ function monsterSignature(monsters: Array<{ name: string; count: number }>): Arr
     .slice(0, 12);
 }
 
+function cleanDisplayText(value: unknown): string {
+  return asText(value)
+    .replace(/\{\{\s*Mapper Coords\|[^}]*\}\}/gi, "")
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2")
+    .replace(/\[\[([^\]]+)\]\]/g, "$1")
+    .replace(/\s+([,.;:])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .replace(/[,\s]+$/g, "")
+    .trim();
+}
+
 function signatureSimilarity(
   a: Array<{ name: string; pct: number }>,
   b: Array<{ name: string; pct: number }>
@@ -804,9 +815,9 @@ export function searchHuntingPlaces(db: Database.Database, query: string): Recor
       .slice(0, 30)
       .map(({ row, confidence }) => ({
       id: asNumber(row.id, 0),
-      name: asText(row.name),
+      name: cleanDisplayText(row.name),
       normalized_name: asText(row.normalized_name),
-      location: row.location ?? null,
+      location: cleanDisplayText(row.location) || null,
       min_level: asNumberOrNull(row.min_level),
       max_level: asNumberOrNull(row.max_level),
       detail_status: asText(row.detail_status) || "pending",

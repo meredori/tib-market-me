@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type Database from "better-sqlite3";
 import { objectBody } from "../http/validation";
-import { listBestiaryProgress, listHuntCharmRelevance, upsertBestiaryState } from "./index";
+import { getBestiaryCreatureDetail, listBestiaryProgress, listHuntCharmRelevance, upsertBestiaryState } from "./index";
 
 function queryObject(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
@@ -29,6 +29,23 @@ export function registerBestiaryRoutes(app: FastifyInstance, db: Database.Databa
   app.get("/api/bestiary/hunt-relevance", async (request, reply) => {
     try {
       return listHuntCharmRelevance(db, queryObject(request.query));
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.get("/api/bestiary/creatures/:lookup", async (request, reply) => {
+    try {
+      const params = typeof request.params === "object" && request.params !== null
+        ? request.params as Record<string, unknown>
+        : {};
+      const detail = getBestiaryCreatureDetail(db, String(params.lookup || ""));
+      if (!detail) {
+        reply.code(404);
+        return { ok: false, error: "Creature not found" };
+      }
+      return detail;
     } catch (error) {
       reply.code(400);
       return { ok: false, error: String(error) };

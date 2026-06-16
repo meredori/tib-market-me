@@ -1,6 +1,8 @@
 import type Database from "better-sqlite3";
+import { config } from "../../config";
 import { confidence, entityRef, explanation, freshness, provenance } from "../intelligence/metadata";
 import { asNumber, asNumberOrNull, asRecord, asText, normalizeLootItemName, nowIso } from "../hunts/utils";
+import { getEffectiveLootLogicPreview } from "../sync/lootLogic";
 import type {
   BestiaryCreatureProgress,
   BestiaryProgressOptions,
@@ -13,6 +15,7 @@ import type {
 } from "./types";
 
 const VALID_STATES = new Set<BestiaryState>(["unknown", "not_started", "in_progress", "completed", "ignored"]);
+const PRICING_MODEL = config.pricingModel;
 
 type PublicCreatureRow = {
   id: number;
@@ -616,5 +619,214 @@ export function listHuntCharmRelevance(db: Database.Database, options: BestiaryP
   return {
     ok: true,
     items: relevance.sort((a, b) => b.close_to_completion_count - a.close_to_completion_count || b.potential_charm_points - a.potential_charm_points || b.total_relevant_kills - a.total_relevant_kills)
+  };
+}
+
+export function getBestiaryCreatureDetail(db: Database.Database, lookup: string): Record<string, unknown> | null {
+  const trimmed = asText(lookup).trim();
+  if (!trimmed) {
+    throw new Error("Creature lookup is required.");
+  }
+  const numericId = Number(trimmed);
+  const normalizedName = normalizeCreatureName(trimmed);
+  const creature = db.prepare(
+    `
+    SELECT
+      id,
+      name,
+      normalized_name,
+      hitpoints,
+      experience,
+      bestiary_class,
+      bestiary_category,
+      bestiary_difficulty,
+      charm_points,
+      total_kills,
+      last_updated,
+      last_seen,
+      fetched_at,
+      detail_status,
+      detail_enriched_at,
+      detail_last_error
+    FROM public_creatures
+    WHERE (? > 0 AND id = ?) OR normalized_name = ?
+    LIMIT 1
+  `
+  ).get(Number.isFinite(numericId) ? Math.trunc(numericId) : 0, Number.isFinite(numericId) ? Math.trunc(numericId) : 0, normalizedName) as Record<string, unknown> | undefined;
+
+  if (!creature) {
+    return null;
+  }
+
+  const creatureId = asNumber(creature.id, 0);
+  const loot = db.prepare(
+    `
+    WITH latest_run AS (
+      SELECT id
+      FROM market_runs
+      WHERE status = 'success'
+      ORDER BY id DESC
+      LIMIT 1
+    ),
+    npc_buy AS (
+      SELECT item_id, MAX(price) AS npc_buy
+      FROM item_npc_buy
+      GROUP BY item_id
+    )
+    SELECT
+      pcl.item_id,
+      pcl.item_name,
+      pcl.normalized_item_name,
+      pcl.chance_percent,
+      pcl.min_count,
+      pcl.max_count,
+      pcl.rarity,
+      pcl.amount_text,
+      COALESCE(pcl.item_id, im.item_id) AS market_item_id,
+      mip.client_value,
+      mip.suggested_list_price,
+      mip.fair_price,
+      mip.trend,
+      mip.liquidity,
+      mip.confidence AS market_confidence,
+      mif.sell_offer,
+      mif.month_sold,
+      mif.day_sold,
+      mif.month_highest_sell,
+      mif.day_highest_sell,
+      COALESCE(nb.npc_buy, 0) AS npc_buy,
+      COALESCE(ivo.override_mode, 'auto') AS override_mode
+    FROM public_creature_loot pcl
+    LEFT JOIN item_metadata im
+      ON im.item_id = pcl.item_id
+      OR LOWER(COALESCE(im.name, '')) = pcl.normalized_item_name
+      OR LOWER(COALESCE(im.wiki_name, '')) = pcl.normalized_item_name
+    LEFT JOIN latest_run ON 1 = 1
+    LEFT JOIN market_item_prices mip
+      ON mip.run_id = latest_run.id
+     AND mip.item_id = COALESCE(pcl.item_id, im.item_id)
+     AND mip.pricing_model = ?
+    LEFT JOIN market_item_features mif
+      ON mif.run_id = latest_run.id
+     AND mif.item_id = COALESCE(pcl.item_id, im.item_id)
+    LEFT JOIN npc_buy nb
+      ON nb.item_id = COALESCE(pcl.item_id, im.item_id)
+    LEFT JOIN item_value_overrides ivo
+      ON ivo.item_id = COALESCE(pcl.item_id, im.item_id)
+    WHERE pcl.creature_id = ?
+    ORDER BY COALESCE(pcl.chance_percent, -1) DESC, pcl.item_name
+    LIMIT 80
+  `
+  ).all(PRICING_MODEL, creatureId) as Array<Record<string, unknown>>;
+
+  const places = db.prepare(
+    `
+    SELECT
+      place.id,
+      place.name,
+      place.location,
+      place.min_level,
+      place.max_level,
+      hpc.occurrence
+    FROM public_hunting_place_creatures hpc
+    JOIN public_hunting_places place ON place.id = hpc.hunting_place_id
+    WHERE hpc.creature_id = ? OR hpc.normalized_creature_name = ?
+    ORDER BY place.name
+    LIMIT 30
+  `
+  ).all(creatureId, asText(creature.normalized_name)) as Array<Record<string, unknown>>;
+
+  const states = db.prepare(
+    `
+    SELECT
+      scope_type,
+      account_name,
+      character_name,
+      state,
+      current_kill_count,
+      target_kill_count,
+      notes,
+      updated_at
+    FROM bestiary_states
+    WHERE public_creature_id = ? OR normalized_creature_name = ?
+    ORDER BY updated_at DESC
+    LIMIT 10
+  `
+  ).all(creatureId, asText(creature.normalized_name)) as Array<Record<string, unknown>>;
+
+  return {
+    ok: true,
+    creature: {
+      id: creatureId,
+      name: asText(creature.name),
+      normalized_name: asText(creature.normalized_name),
+      hitpoints: asNumberOrNull(creature.hitpoints),
+      experience: asNumberOrNull(creature.experience),
+      bestiary_class: asText(creature.bestiary_class) || null,
+      bestiary_category: asText(creature.bestiary_category) || null,
+      bestiary_difficulty: asText(creature.bestiary_difficulty) || null,
+      charm_points: asNumberOrNull(creature.charm_points),
+      total_kills: asNumberOrNull(creature.total_kills),
+      last_updated: creature.last_updated ?? null,
+      last_seen: creature.last_seen ?? null,
+      fetched_at: asText(creature.fetched_at),
+      detail_status: asText(creature.detail_status) || "pending",
+      detail_enriched_at: creature.detail_enriched_at ?? null,
+      detail_last_error: creature.detail_last_error ?? null
+    },
+    loot: loot.map((row) => {
+      const itemId = asNumberOrNull(row.market_item_id) ?? asNumberOrNull(row.item_id);
+      let unitValue: number | null = null;
+      let valueStrategy = "unknown";
+      if (itemId) {
+        const logic = getEffectiveLootLogicPreview({
+          client_value: asNumber(row.client_value, 0),
+          suggested_list_price: asNumber(row.suggested_list_price, 0),
+          fair_price: asNumber(row.fair_price, 0),
+          trend: asText(row.trend) || "unknown",
+          liquidity: asNumber(row.liquidity, 0),
+          confidence: asNumber(row.market_confidence, 0),
+          month_sold: asNumber(row.month_sold, -1),
+          day_sold: asNumber(row.day_sold, -1),
+          sell_offer: asNumber(row.sell_offer, -1),
+          month_highest_sell: asNumber(row.month_highest_sell, -1),
+          day_highest_sell: asNumber(row.day_highest_sell, -1),
+          npc_buy: asNumber(row.npc_buy, 0),
+          override_mode: asText(row.override_mode) || "auto"
+        });
+        unitValue = logic.fair_sale_price > 0 ? Math.round(logic.fair_sale_price) : null;
+        valueStrategy = logic.strategy;
+      }
+      return {
+        item_id: itemId,
+        item_name: asText(row.item_name),
+        normalized_item_name: asText(row.normalized_item_name),
+        chance_percent: asNumberOrNull(row.chance_percent),
+        min_count: asNumberOrNull(row.min_count),
+        max_count: asNumberOrNull(row.max_count),
+        rarity: asText(row.rarity) || null,
+        amount_text: asText(row.amount_text) || null,
+        estimated_unit_value: unitValue,
+        value_strategy: valueStrategy
+      };
+    }),
+    hunting_places: places.map((row) => ({
+      id: asNumber(row.id, 0),
+      name: asText(row.name),
+      location: asText(row.location) || null,
+      min_level: asNumberOrNull(row.min_level),
+      max_level: asNumberOrNull(row.max_level),
+      occurrence: asText(row.occurrence) || null
+    })),
+    states: states.map((row) => ({
+      scope_type: asText(row.scope_type),
+      account_name: row.account_name ?? null,
+      character_name: row.character_name ?? null,
+      state: asText(row.state) || "unknown",
+      current_kill_count: asNumber(row.current_kill_count, 0),
+      target_kill_count: asNumberOrNull(row.target_kill_count),
+      notes: asText(row.notes),
+      updated_at: asText(row.updated_at)
+    }))
   };
 }

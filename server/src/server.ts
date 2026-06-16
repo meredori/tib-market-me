@@ -41,7 +41,7 @@ import {
 import { ensureItemHistory, summarizeItemHistory } from "./lib/pricing/itemHistory";
 import { setItemAlias } from "./lib/hunts/itemAliases";
 import { lookupTibiaCharacter, searchKnownCharacters } from "./lib/tibiadata/characters";
-import { getPublicReferenceStatus, startPublicReferenceEnrichment, syncPublicReferenceData } from "./lib/tibiadata/publicReference";
+import { getPublicReferenceStatus, queuePublicReferenceMissingCreatureLoot, startPublicReferenceEnrichment, syncPublicReferenceData } from "./lib/tibiadata/publicReference";
 import {
   addMarketWatchlistItem,
   getMarketDashboardSummary,
@@ -265,6 +265,15 @@ export function buildServer(db: Database.Database) {
         job,
         message: "Public reference enrichment started."
       };
+    } catch (error) {
+      reply.code(String(error).includes("already running") ? 409 : 500);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.post("/api/public-reference/queue-missing-loot", async (_request, reply) => {
+    try {
+      return queuePublicReferenceMissingCreatureLoot(db);
     } catch (error) {
       reply.code(String(error).includes("already running") ? 409 : 500);
       return { ok: false, error: String(error) };

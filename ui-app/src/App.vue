@@ -13,6 +13,7 @@ import {
 } from '@lucide/vue'
 import AppShell from './components/AppShell.vue'
 import AssignItemModal from './components/modals/AssignItemModal.vue'
+import CreatureDetailsModal from './components/modals/CreatureDetailsModal.vue'
 import ItemDetailsModal from './components/modals/ItemDetailsModal.vue'
 import NewHuntModal from './components/modals/NewHuntModal.vue'
 import BestiaryView from './components/views/BestiaryView.vue'
@@ -49,13 +50,13 @@ const publicHuntStatus = reactive({
 
 const sections = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'hunts', label: 'Hunts', icon: Swords },
-  { id: 'history', label: 'Hunt History', icon: AreaChart },
-  { id: 'market', label: 'Market', icon: Search },
-  { id: 'loot', label: 'Loot Inbox', icon: PackageOpen },
-  { id: 'taskboard', label: 'Taskboard', icon: ClipboardList },
-  { id: 'bestiary', label: 'Bestiary', icon: BookOpen },
-  { id: 'place', label: 'Places', icon: MapPin },
+  { id: 'hunts', label: 'Hunt Details', icon: Swords, group: 'hunts' },
+  { id: 'history', label: 'Hunt History', icon: AreaChart, group: 'hunts' },
+  { id: 'place', label: 'Places', icon: MapPin, group: 'hunts' },
+  { id: 'market', label: 'Market', icon: Search, group: 'items' },
+  { id: 'loot', label: 'Loot Inbox', icon: PackageOpen, group: 'items' },
+  { id: 'taskboard', label: 'Taskboard', icon: ClipboardList, group: 'tools' },
+  { id: 'bestiary', label: 'Bestiary', icon: BookOpen, group: 'tools' },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
@@ -68,11 +69,14 @@ const selectedItem = ref(null)
 const isItemModalOpen = ref(false)
 const isItemDetailsLoading = ref(false)
 const itemDetailsError = ref('')
+const selectedCreature = ref(null)
+const isCreatureModalOpen = ref(false)
+const isCreatureDetailsLoading = ref(false)
+const creatureDetailsError = ref('')
 const isRefreshing = ref(false)
 const refreshInfo = ref('')
 const publicReferenceInfo = ref('')
 const publicReferenceBusy = ref(false)
-const repeatPublicReferenceEnrichment = ref(false)
 const publicHuntInfo = ref('')
 const publicHuntBusy = ref(false)
 const publicHuntBatchLimit = ref(20)
@@ -131,8 +135,6 @@ let searchAbortController = null
 let publicReferencePoll = null
 let publicReferencePollMode = null
 
-const PUBLIC_REFERENCE_ENRICH_BATCH_SIZE = 100
-
 async function loadStatus() {
   try {
     const data = await api('/api/status')
@@ -147,28 +149,14 @@ async function loadPublicReferenceStatus() {
     const data = await api('/api/public-reference/status')
     Object.assign(publicReferenceStatus, data)
     if (publicReferencePoll && !hasActivePublicReferenceJob(data)) {
-      const nextBatch = publicReferencePollMode === 'enrichment' && shouldRepeatPublicReferenceEnrichment(data)
-      if (nextBatch) {
-        publicReferenceInfo.value = `Completed a clean enrichment batch. Starting the next ${PUBLIC_REFERENCE_ENRICH_BATCH_SIZE}.`
-        try {
-          await startPublicReferenceEnrichmentBatch()
-        } catch (error) {
-          clearInterval(publicReferencePoll)
-          publicReferencePoll = null
-          publicReferencePollMode = null
-          publicReferenceBusy.value = false
-          publicReferenceInfo.value = `Reference enrichment failed: ${error.message}`
-        }
-        return
-      }
       const completedPollMode = publicReferencePollMode
       clearInterval(publicReferencePoll)
       publicReferencePoll = null
       publicReferencePollMode = null
       publicReferenceBusy.value = false
-      if (completedPollMode === 'enrichment' && repeatPublicReferenceEnrichment.value && publicReferencePendingDetails(data) === 0) {
+      if (completedPollMode === 'enrichment' && publicReferencePendingDetails(data) === 0) {
         publicReferenceInfo.value = 'Public reference enrichment completed all pending details.'
-      } else if (completedPollMode === 'enrichment' && repeatPublicReferenceEnrichment.value) {
+      } else if (completedPollMode === 'enrichment') {
         publicReferenceInfo.value = 'Public reference enrichment stopped after an issue. Review Data Health before retrying.'
       }
     }
@@ -206,22 +194,6 @@ function latestPublicReferenceEnrichmentJob(data = publicReferenceStatus) {
 
 function publicReferencePendingDetails(data = publicReferenceStatus) {
   return Number(data.data_health?.pending?.creatures || 0) + Number(data.data_health?.pending?.hunting_places || 0)
-}
-
-function latestEnrichmentBatchHadIssue(data = publicReferenceStatus) {
-  const latest = latestPublicReferenceEnrichmentJob(data)
-  return Boolean(
-    data.data_health?.backoff
-    || latest?.status === 'error'
-    || latest?.status === 'backoff'
-    || Number(latest?.failed_count || 0) > 0
-  )
-}
-
-function shouldRepeatPublicReferenceEnrichment(data = publicReferenceStatus) {
-  return repeatPublicReferenceEnrichment.value
-    && publicReferencePendingDetails(data) > 0
-    && !latestEnrichmentBatchHadIssue(data)
 }
 
 async function loadMarketDashboard() {
@@ -331,6 +303,9 @@ async function openHuntingPlace(target) {
   const placeId = huntingPlaceIdFromTarget(target)
   if (!placeId) {
     activeSection.value = 'place'
+    selectedHuntingPlaceId.value = null
+    selectedHuntingPlaceDetail.value = null
+    huntingPlaceError.value = ''
     return
   }
   activeSection.value = 'place'
@@ -482,19 +457,13 @@ async function startPublicReferenceEnrichmentBatch() {
   return api('/api/public-reference/enrich', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      creature_limit: PUBLIC_REFERENCE_ENRICH_BATCH_SIZE,
-      hunting_place_limit: PUBLIC_REFERENCE_ENRICH_BATCH_SIZE,
-      include_stale: false,
-    }),
+    body: JSON.stringify({ include_stale: false }),
   })
 }
 
 async function enrichPublicReferenceData() {
   publicReferenceBusy.value = true
-  publicReferenceInfo.value = repeatPublicReferenceEnrichment.value
-    ? `Starting public reference detail enrichment. Repeat will continue in ${PUBLIC_REFERENCE_ENRICH_BATCH_SIZE}-row batches until pending details are done or an issue appears.`
-    : 'Starting public reference detail enrichment.'
+  publicReferenceInfo.value = 'Starting public reference detail enrichment.'
   if (publicReferencePoll) {
     clearInterval(publicReferencePoll)
   }
@@ -511,6 +480,22 @@ async function enrichPublicReferenceData() {
       publicReferencePoll = null
     }
     publicReferencePollMode = null
+    publicReferenceBusy.value = false
+  }
+}
+
+async function queuePublicReferenceMissingLoot() {
+  publicReferenceBusy.value = true
+  publicReferenceInfo.value = 'Queuing enriched creatures that are missing loot.'
+  try {
+    const out = await api('/api/public-reference/queue-missing-loot', {
+      method: 'POST',
+    })
+    await loadPublicReferenceStatus()
+    publicReferenceInfo.value = `Queued ${out.creatures || 0} creature(s) for loot enrichment. Run Enrich Details to fetch loot.`
+  } catch (error) {
+    publicReferenceInfo.value = `Missing loot queue failed: ${error.message}`
+  } finally {
     publicReferenceBusy.value = false
   }
 }
@@ -601,6 +586,48 @@ function closeItemDetails() {
   itemOverrideInfo.value = ''
   itemOverrideBusy.value = false
   showAdvancedItemDetails.value = false
+}
+
+async function openCreatureDetails(creature) {
+  const lookup = typeof creature === 'object' && creature !== null
+    ? creature.public_creature_id || creature.id || creature.name
+    : creature
+  if (!lookup) {
+    return
+  }
+
+  isCreatureModalOpen.value = true
+  isCreatureDetailsLoading.value = true
+  creatureDetailsError.value = ''
+  selectedCreature.value = null
+
+  try {
+    selectedCreature.value = await api(`/api/bestiary/creatures/${encodeURIComponent(String(lookup))}`)
+  } catch (error) {
+    creatureDetailsError.value = `Failed to load creature details: ${error.message}`
+  } finally {
+    isCreatureDetailsLoading.value = false
+  }
+}
+
+function closeCreatureDetails() {
+  isCreatureModalOpen.value = false
+  selectedCreature.value = null
+  creatureDetailsError.value = ''
+  isCreatureDetailsLoading.value = false
+}
+
+function openCreatureHuntingPlace(placeId) {
+  closeCreatureDetails()
+  openHuntingPlace(placeId)
+}
+
+function openCreatureLootItem(itemId) {
+  if (!itemId) {
+    return
+  }
+  closeCreatureDetails()
+  openItemDetails(itemId)
 }
 
 function openAssignItemId(item) {
@@ -1008,6 +1035,8 @@ onBeforeUnmount(() => {
         :error="huntingPlaceError"
         :format-value="formatValue"
         :item-image-path="itemImagePath"
+        @open-hunting-place="openHuntingPlace"
+        @open-creature="openCreatureDetails"
         @open-item="openItemDetails"
         @open-hunt="openPreviousHunt"
         @open-bestiary="openBestiary"
@@ -1028,6 +1057,7 @@ onBeforeUnmount(() => {
         @open-history="openHuntHistory"
         @open-hunt="openPreviousHunt"
         @open-item="openItemDetails"
+        @open-creature="openCreatureDetails"
         @open-loot-inbox="openLootInbox"
         @assign-item-id="openAssignItemId"
         @save-previous-hunt="savePreviousHuntEditAndReturn"
@@ -1065,7 +1095,6 @@ onBeforeUnmount(() => {
         :public-reference-status="publicReferenceStatus"
         :public-reference-info="publicReferenceInfo"
         :public-reference-busy="publicReferenceBusy"
-        v-model:repeat-public-reference-enrichment="repeatPublicReferenceEnrichment"
         :public-hunt-status="publicHuntStatus"
         :public-hunt-info="publicHuntInfo"
         :public-hunt-busy="publicHuntBusy"
@@ -1077,6 +1106,7 @@ onBeforeUnmount(() => {
         @refresh="refreshData"
         @sync-public-reference="syncPublicReferenceData"
         @enrich-public-reference="enrichPublicReferenceData"
+        @queue-public-reference-missing-loot="queuePublicReferenceMissingLoot"
         @check-public-hunts="checkPublicHunts"
         @reprocess-public-hunts="reprocessPublicHunts"
         @review-public-hunt="reviewPublicHunt"
@@ -1125,6 +1155,18 @@ onBeforeUnmount(() => {
       @save-override="saveItemOverride"
       @toggle-favorite="toggleFavoriteItem"
       @open-loot-inbox="openLootInboxFromItemDetails"
+    />
+
+    <CreatureDetailsModal
+      v-if="isCreatureModalOpen"
+      :loading="isCreatureDetailsLoading"
+      :error="creatureDetailsError"
+      :detail="selectedCreature"
+      :format-value="formatValue"
+      :item-image-path="itemImagePath"
+      @close="closeCreatureDetails"
+      @open-item="openCreatureLootItem"
+      @open-hunting-place="openCreatureHuntingPlace"
     />
   </AppShell>
 </template>

@@ -3,13 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   enrichPublicReferenceData,
   getPublicReferenceStatus,
+  queuePublicReferenceMissingCreatureLoot,
   resetPublicReferenceFetchForTests,
+  replacePublicCreatureLoot,
   replacePublicHuntingPlaceChildren,
+  repairPublicCreatureLootRows,
   setPublicReferenceFetchForTests,
   syncPublicReferenceData,
   upsertPublicCreature,
   upsertPublicHuntingPlace
 } from "./publicReference";
+import { resetItemDetailFetchForTests, setItemDetailFetchForTests } from "../hunts/itemDetailCache";
 
 function createDb(): Database.Database {
   const db = new Database(":memory:");
@@ -136,6 +140,43 @@ function createDb(): Database.Database {
       PRIMARY KEY (hunting_place_id, area_name),
       FOREIGN KEY (hunting_place_id) REFERENCES public_hunting_places(id) ON DELETE CASCADE
     );
+    CREATE TABLE item_detail_cache (
+      normalized_name TEXT PRIMARY KEY,
+      requested_name TEXT NOT NULL,
+      actual_name TEXT,
+      plural TEXT,
+      category_slug TEXT,
+      category_name TEXT,
+      stackable INTEGER,
+      marketable INTEGER,
+      npc_price INTEGER,
+      npc_value INTEGER,
+      value INTEGER,
+      weight_oz REAL,
+      item_ids_json TEXT,
+      wiki_url TEXT,
+      payload_json TEXT NOT NULL,
+      last_fetched_at TEXT NOT NULL
+    );
+    CREATE TABLE item_metadata (
+      item_id INTEGER PRIMARY KEY,
+      name TEXT,
+      wiki_name TEXT,
+      category TEXT,
+      tier INTEGER NOT NULL DEFAULT -1,
+      raw_payload_json TEXT NOT NULL,
+      payload_hash TEXT,
+      fetched_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE item_aliases (
+      normalized_name TEXT PRIMARY KEY,
+      raw_name TEXT NOT NULL,
+      item_id INTEGER NOT NULL,
+      source TEXT NOT NULL DEFAULT 'manual',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
   `);
   return db;
 }
@@ -190,10 +231,16 @@ let db: Database.Database;
 
 beforeEach(() => {
   db = createDb();
+  setItemDetailFetchForTests(async () => ({
+    ok: false,
+    status: 404,
+    json: async () => ({})
+  } as Response));
 });
 
 afterEach(() => {
   resetPublicReferenceFetchForTests();
+  resetItemDetailFetchForTests();
   db.close();
 });
 
@@ -230,6 +277,25 @@ describe("public Tibia reference data", () => {
     });
   });
 
+  it("derives hunting-place level ranges from vocation level fields", () => {
+    const payload = {
+      ...huntingPlacePayload(),
+      minLevel: null,
+      maxLevel: null,
+      levelKnights: "80-120",
+      levelPaladins: "100+",
+      levelMages: "90-140"
+    };
+
+    const place = upsertPublicHuntingPlace(db, payload, "2026-06-11T00:00:00Z");
+
+    expect(place).toMatchObject({ min_level: 80, max_level: 140 });
+    expect(db.prepare("SELECT min_level, max_level FROM public_hunting_places WHERE id = 201").get()).toEqual({
+      min_level: 80,
+      max_level: 140
+    });
+  });
+
   it("keeps duplicate hunting-place area summary names unique", () => {
     upsertPublicHuntingPlace(db, huntingPlacePayload(), "2026-06-11T00:00:00Z");
 
@@ -263,7 +329,7 @@ describe("public Tibia reference data", () => {
       ["/api/v1/creatures", { page: 1, pageSize: 250, totalCount: 1, items: [{ id: 101, name: "Dragon" }] }],
       ["/api/v1/creatures/list", { creatures: [{ id: 101, name: "Dragon" }] }],
       ["/api/v1/creatures/101", creaturePayload()],
-      ["/api/v1/creatures/101/loot", { loot: [{ itemId: 301, itemName: "Dragon Ham", chancePercent: "12.5%", minCount: 1, maxCount: 2 }] }],
+      ["/api/v1/creatures/101/loot", { lootStatistics: [{ itemName: "Dragon Ham", chance: "1-3", rarity: "common", raw: "1-3|Dragon Ham|common" }] }],
       ["/api/v1/hunting-places/list", { huntingPlaces: [{ id: 201, name: "Dragon Lair" }] }],
       ["/api/v1/hunting-places/201", huntingPlacePayload()]
     ]);
@@ -307,6 +373,14 @@ describe("public Tibia reference data", () => {
       }
     });
     expect(db.prepare("SELECT detail_status FROM public_creatures WHERE id = 101").get()).toEqual({ detail_status: "enriched" });
+    expect(db.prepare("SELECT item_name, chance_percent, min_count, max_count, rarity, amount_text FROM public_creature_loot WHERE creature_id = 101").get()).toEqual({
+      item_name: "Dragon Ham",
+      chance_percent: null,
+      min_count: 1,
+      max_count: 3,
+      rarity: "common",
+      amount_text: "1-3"
+    });
     expect(db.prepare("SELECT detail_status FROM public_hunting_places WHERE id = 201").get()).toEqual({ detail_status: "enriched" });
     expect(db.prepare("SELECT COUNT(*) AS count FROM intelligence_jobs WHERE job_type = 'public-reference-catalog' AND status = 'success'").get()).toEqual({ count: 1 });
     expect(db.prepare("SELECT COUNT(*) AS count FROM intelligence_jobs WHERE job_type = 'public-reference-enrichment' AND status = 'success'").get()).toEqual({ count: 1 });
@@ -331,6 +405,106 @@ describe("public Tibia reference data", () => {
           hunting_places: 1
         }
       }
+    });
+  });
+
+  it("deduplicates creature loot and caches details for loot items without market ids", async () => {
+    const routes = new Map<string, unknown>([
+      ["/api/v1/creatures", { page: 1, pageSize: 250, totalCount: 1, items: [{ id: 101, name: "Dragon" }] }],
+      ["/api/v1/creatures/list", { creatures: [{ id: 101, name: "Dragon" }] }],
+      ["/api/v1/creatures/101", creaturePayload()],
+      ["/api/v1/creatures/101/loot", {
+        lootStatistics: [
+          { itemName: "Dragon Ham", chance: "1-3", rarity: "common", raw: "1-3|Dragon Ham|common" },
+          { itemName: "dragon ham", chance: "1-3", rarity: "common", raw: "1-3|Dragon Ham|common" }
+        ]
+      }],
+      ["/api/v1/hunting-places/list", { huntingPlaces: [] }]
+    ]);
+    const fetchMock = vi.fn(async (url: string) => {
+      const path = new URL(url).pathname;
+      return {
+        ok: routes.has(path),
+        status: routes.has(path) ? 200 : 404,
+        json: async () => routes.get(path)
+      };
+    });
+    const itemFetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        item: {
+          name: "Dragon Ham",
+          itemIds: [301],
+          categoryName: "Creature products",
+          marketable: false
+        }
+      })
+    } as Response));
+    setPublicReferenceFetchForTests(fetchMock as unknown as typeof fetch);
+    setItemDetailFetchForTests(itemFetchMock as unknown as typeof fetch);
+
+    await syncPublicReferenceData(db, { creatureLimit: 1, huntingPlaceLimit: 0 });
+    const enriched = await enrichPublicReferenceData(db, { creatureLimit: 1, huntingPlaceLimit: 0 });
+
+    expect(enriched).toMatchObject({
+      creatures: 1,
+      creature_loot_rows: 1,
+      duplicate_creature_loot_rows: 1,
+      item_details_fetched: 1,
+      unresolved_loot_items: 0
+    });
+    expect(db.prepare("SELECT item_id, item_name FROM public_creature_loot WHERE creature_id = 101").all()).toEqual([
+      { item_id: 301, item_name: "Dragon Ham" }
+    ]);
+    expect(db.prepare("SELECT actual_name FROM item_detail_cache WHERE normalized_name = 'dragon ham'").get()).toEqual({
+      actual_name: "Dragon Ham"
+    });
+    expect(db.prepare("SELECT item_id, name, category FROM item_metadata WHERE item_id = 301").get()).toEqual({
+      item_id: 301,
+      name: "Dragon Ham",
+      category: "Creature products"
+    });
+    expect(db.prepare("SELECT normalized_name, item_id, source FROM item_aliases WHERE normalized_name = 'dragon ham'").get()).toEqual({
+      normalized_name: "dragon ham",
+      item_id: 301,
+      source: "public_reference_loot"
+    });
+  });
+
+  it("repairs previously imported amount ranges that were stored as chance percentages", () => {
+    upsertPublicCreature(db, { id: 101, name: "Dragon" }, "2026-06-10T00:00:00Z");
+    db.prepare(
+      `
+      INSERT INTO public_creature_loot (
+        creature_id, item_name, normalized_item_name, chance_percent, amount_text, rarity, fetched_at, payload_json
+      ) VALUES (101, 'Dragon Ham', 'dragon ham', 1, '1-3|Dragon Ham|common', 'common', '2026-06-11T00:00:00Z', ?)
+      `
+    ).run(JSON.stringify({ itemName: "Dragon Ham", chance: "1-3", rarity: "common", raw: "1-3|Dragon Ham|common" }));
+
+    const result = repairPublicCreatureLootRows(db);
+
+    expect(result).toMatchObject({ ok: true, repaired: 1, skipped: 0 });
+    expect(db.prepare("SELECT chance_percent, min_count, max_count, amount_text FROM public_creature_loot WHERE creature_id = 101").get()).toEqual({
+      chance_percent: null,
+      min_count: 1,
+      max_count: 3,
+      amount_text: "1-3"
+    });
+  });
+
+  it("defaults creature loot with no amount to one", () => {
+    upsertPublicCreature(db, { id: 101, name: "Dragon" }, "2026-06-10T00:00:00Z");
+
+    replacePublicCreatureLoot(db, 101, {
+      lootStatistics: [{ itemName: "Broadsword", chance: null, rarity: "semi-rare", raw: "Broadsword|semi-rare" }]
+    }, "2026-06-11T00:00:00Z");
+
+    expect(db.prepare("SELECT chance_percent, min_count, max_count, amount_text FROM public_creature_loot WHERE creature_id = 101").get()).toEqual({
+      chance_percent: null,
+      min_count: 1,
+      max_count: 1,
+      amount_text: "1"
     });
   });
 
@@ -361,6 +535,31 @@ describe("public Tibia reference data", () => {
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v1/creatures/101"), expect.anything());
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v1/creatures/101/loot"), expect.anything());
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v1/hunting-places/201"), expect.anything());
+  });
+
+  it("queues enriched creatures with missing loot for another enrichment pass", () => {
+    upsertPublicCreature(db, { id: 101, name: "Dragon" }, "2026-06-10T00:00:00Z");
+    upsertPublicCreature(db, { id: 102, name: "Demon" }, "2026-06-10T00:00:00Z");
+    db.prepare("UPDATE public_creatures SET detail_status = 'enriched', detail_enriched_at = '2026-06-11T00:00:00Z' WHERE id IN (101, 102)").run();
+    replacePublicCreatureLoot(db, 102, { lootStatistics: [{ itemName: "Demon Horn", chance: "1%", raw: "0-1" }] }, "2026-06-11T00:00:00Z");
+
+    const result = queuePublicReferenceMissingCreatureLoot(db);
+    const status = getPublicReferenceStatus(db);
+
+    expect(result).toMatchObject({ ok: true, creatures: 1 });
+    expect(db.prepare("SELECT detail_status, detail_enriched_at FROM public_creatures WHERE id = 101").get()).toEqual({
+      detail_status: "pending",
+      detail_enriched_at: null
+    });
+    expect(db.prepare("SELECT detail_status FROM public_creatures WHERE id = 102").get()).toEqual({
+      detail_status: "enriched"
+    });
+    expect(status).toMatchObject({
+      data_health: {
+        pending: { creatures: 1 },
+        diagnostics: { creatures_missing_loot: 0 }
+      }
+    });
   });
 
   it("prioritizes never-synced creatures and hunting places before existing local rows", async () => {

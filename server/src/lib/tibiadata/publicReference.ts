@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import { confidence, entityRef, explanation, freshness, provenance } from "../intelligence/metadata";
 import { finishJob, recordJobFailure, startJob, summarizeJobs, updateJobProgress } from "../intelligence/jobs";
 import type { JobStatus } from "../intelligence/types";
+import { fetchAndCacheItemDetail, getCachedItemDetail } from "../hunts/itemDetailCache";
 import { asNumberOrNull, asRecord, asText, firstNumber, firstText, nowIso } from "../hunts/utils";
 
 const DEFAULT_PUBLIC_DATA_BASE_URL = "https://tibiadata.bytewizards.de";
@@ -32,6 +33,9 @@ export type PublicReferenceEnrichmentResult = PublicReferenceSyncResult & {
   job: JobStatus;
   failed_creatures: number;
   failed_hunting_places: number;
+  duplicate_creature_loot_rows: number;
+  item_details_fetched: number;
+  unresolved_loot_items: number;
 };
 
 type PublicCreature = {
@@ -151,6 +155,9 @@ function firstPathNumber(payload: Record<string, unknown>, paths: string[][]): n
     for (const part of path) {
       current = asRecord(current)?.[part];
     }
+    if (current === null || current === undefined || current === "") {
+      continue;
+    }
     const number = asNumberOrNull(current);
     if (number !== null) {
       return number;
@@ -160,8 +167,15 @@ function firstPathNumber(payload: Record<string, unknown>, paths: string[][]): n
 }
 
 function parsePercent(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
   if (typeof value === "string") {
-    const match = value.replace(",", ".").match(/\d+(?:\.\d+)?/);
+    const text = value.trim();
+    if (!text.includes("%")) {
+      return null;
+    }
+    const match = text.replace(",", ".").match(/\d+(?:\.\d+)?/);
     if (!match) {
       return null;
     }
@@ -169,6 +183,64 @@ function parsePercent(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return asNumberOrNull(value);
+}
+
+function amountRangeFromText(value: unknown): { min: number | null; max: number | null; text: string | null } {
+  const text = asText(value).trim();
+  if (!text || text.includes("%")) {
+    return { min: null, max: null, text: null };
+  }
+  const match = text.match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+  if (!match) {
+    return { min: null, max: null, text: null };
+  }
+  const min = asNumberOrNull(match[1]);
+  const max = asNumberOrNull(match[2] ?? match[1]);
+  return { min, max, text: match[2] ? `${match[1]}-${match[2]}` : match[1] };
+}
+
+function rawLootAmount(value: unknown, itemName: string, rarity: string | null): string | null {
+  const text = asText(value).trim();
+  if (!text) {
+    return null;
+  }
+  const parts = text.split("|").map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const first = parts[0];
+    if (normalizePublicName(first) !== normalizePublicName(itemName) && first !== rarity) {
+      return first;
+    }
+    return null;
+  }
+  if (normalizePublicName(text) === normalizePublicName(itemName) || text === rarity) {
+    return null;
+  }
+  return text;
+}
+
+function levelRangeFromText(...values: unknown[]): { min: number | null; max: number | null } {
+  const mins: number[] = [];
+  const maxes: number[] = [];
+  for (const value of values) {
+    const text = asText(value).replace(/,/g, " ");
+    if (!text.trim()) {
+      continue;
+    }
+    const numbers = Array.from(text.matchAll(/\d+/g))
+      .map((match) => Number(match[0]))
+      .filter((number) => Number.isFinite(number) && number > 0);
+    if (!numbers.length) {
+      continue;
+    }
+    mins.push(numbers[0]);
+    if (numbers.length > 1) {
+      maxes.push(numbers[numbers.length - 1]);
+    }
+  }
+  return {
+    min: mins.length ? Math.min(...mins) : null,
+    max: maxes.length ? Math.max(...maxes) : null
+  };
 }
 
 function sourceTimestamp(payload: Record<string, unknown>, field: "last_updated" | "last_seen"): string | null {
@@ -301,13 +373,14 @@ function normalizeHuntingPlace(payload: unknown, fetchedAt: string): PublicHunti
   if (identity.id === null || !identity.name) {
     return null;
   }
+  const vocationLevels = levelRangeFromText(record.levelKnights, record.levelPaladins, record.levelMages);
 
   return {
     id: Math.trunc(identity.id),
     name: identity.name,
     location: firstPathText(record, [["location"], ["city"], ["infobox", "location"], ["structuredData", "infobox", "location"]]),
-    min_level: firstPathNumber(record, [["minLevel"], ["min_level"], ["levelMin"], ["recommendedLevelMin"], ["areaRecommendation", "minLevel"]]),
-    max_level: firstPathNumber(record, [["maxLevel"], ["max_level"], ["levelMax"], ["recommendedLevelMax"], ["areaRecommendation", "maxLevel"]]),
+    min_level: firstPathNumber(record, [["minLevel"], ["min_level"], ["levelMin"], ["recommendedLevelMin"], ["areaRecommendation", "minLevel"]]) ?? vocationLevels.min,
+    max_level: firstPathNumber(record, [["maxLevel"], ["max_level"], ["levelMax"], ["recommendedLevelMax"], ["areaRecommendation", "maxLevel"]]) ?? vocationLevels.max,
     exp_stars: firstPathNumber(record, [["expStars"], ["experienceStars"], ["areaRecommendation", "expStars"], ["areaRecommendation", "experienceStars"]]),
     loot_stars: firstPathNumber(record, [["lootStars"], ["areaRecommendation", "lootStars"]]),
     bestiary_stars: firstPathNumber(record, [["bestiaryStars"], ["areaRecommendation", "bestiaryStars"]]),
@@ -320,7 +393,150 @@ function normalizeHuntingPlace(payload: unknown, fetchedAt: string): PublicHunti
 }
 
 function lootRows(payload: unknown): Array<Record<string, unknown>> {
-  return listFrom(unwrapPayload(payload, ["loot", "data", "items"]), ["loot", "items", "drops", "statistics"]).map(jsonRecord);
+  return listFrom(unwrapPayload(payload, ["lootStatistics", "loot", "data", "items"]), ["lootStatistics", "loot", "items", "drops", "statistics"]).map(jsonRecord);
+}
+
+type NormalizedLootRow = {
+  item_id: number | null;
+  item_name: string;
+  normalized_item_name: string;
+  chance_percent: number | null;
+  min_count: number | null;
+  max_count: number | null;
+  rarity: string | null;
+  amount_text: string | null;
+  payload_json: string;
+};
+
+type CreatureLootReplaceResult = {
+  rows: number;
+  duplicates: number;
+  item_details_fetched: number;
+  unresolved_items: number;
+};
+
+function normalizeLootRow(row: Record<string, unknown>): NormalizedLootRow | null {
+  const name = firstText(row.itemName, row.item_name, row.name, row.title);
+  if (!name) {
+    return null;
+  }
+  const rarity = firstText(row.rarity, row.classification);
+  const chanceAmount = amountRangeFromText(row.chance);
+  const rawAmount = rawLootAmount(row.raw, name, rarity);
+  const explicitAmount = firstText(row.amount, row.count, row.quantity);
+  const amountText = firstText(explicitAmount, chanceAmount.text, rawAmount, "1");
+  return {
+    item_id: firstNumber(row.itemId, row.item_id),
+    item_name: name,
+    normalized_item_name: normalizePublicName(name),
+    chance_percent: parsePercent(row.chancePercent ?? row.chance_percent ?? row.chance ?? row.dropChance ?? row.drop_chance ?? row.percentage),
+    min_count: asNumberOrNull(row.minCount ?? row.min_count ?? row.min) ?? chanceAmount.min ?? 1,
+    max_count: asNumberOrNull(row.maxCount ?? row.max_count ?? row.max) ?? chanceAmount.max ?? 1,
+    rarity,
+    amount_text: amountText,
+    payload_json: JSON.stringify(row)
+  };
+}
+
+function preferLootRow(existing: NormalizedLootRow, next: NormalizedLootRow): NormalizedLootRow {
+  return {
+    item_id: existing.item_id ?? next.item_id,
+    item_name: existing.item_name || next.item_name,
+    normalized_item_name: existing.normalized_item_name,
+    chance_percent: existing.chance_percent ?? next.chance_percent,
+    min_count: existing.min_count ?? next.min_count,
+    max_count: existing.max_count ?? next.max_count,
+    rarity: existing.rarity ?? next.rarity,
+    amount_text: existing.amount_text ?? next.amount_text,
+    payload_json: existing.payload_json
+  };
+}
+
+function normalizedLootRows(payload: unknown): { rows: NormalizedLootRow[]; duplicates: number } {
+  const byName = new Map<string, NormalizedLootRow>();
+  let duplicates = 0;
+  for (const row of lootRows(payload)) {
+    const normalized = normalizeLootRow(row);
+    if (!normalized) {
+      continue;
+    }
+    const existing = byName.get(normalized.normalized_item_name);
+    if (existing) {
+      duplicates += 1;
+      byName.set(normalized.normalized_item_name, preferLootRow(existing, normalized));
+    } else {
+      byName.set(normalized.normalized_item_name, normalized);
+    }
+  }
+  return { rows: Array.from(byName.values()), duplicates };
+}
+
+function stageLootItemIdentity(db: Database.Database, row: NormalizedLootRow, detail: ReturnType<typeof getCachedItemDetail>): void {
+  if (!row.item_id || !detail) {
+    return;
+  }
+  try {
+    const now = nowIso();
+    db.prepare(
+      `
+      INSERT INTO item_metadata (item_id, name, wiki_name, category, raw_payload_json, fetched_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(item_id) DO UPDATE SET
+        name = COALESCE(item_metadata.name, excluded.name),
+        wiki_name = COALESCE(item_metadata.wiki_name, excluded.wiki_name),
+        category = COALESCE(item_metadata.category, excluded.category),
+        raw_payload_json = CASE
+          WHEN item_metadata.raw_payload_json = '{}' THEN excluded.raw_payload_json
+          ELSE item_metadata.raw_payload_json
+        END,
+        updated_at = excluded.updated_at
+      `
+    ).run(
+      Math.trunc(row.item_id),
+      detail.actual_name || row.item_name,
+      detail.actual_name || row.item_name,
+      detail.category_name,
+      detail.payload_json || "{}",
+      detail.last_fetched_at || now,
+      now
+    );
+    db.prepare(
+      `
+      INSERT INTO item_aliases (normalized_name, raw_name, item_id, source, updated_at)
+      VALUES (?, ?, ?, 'public_reference_loot', ?)
+      ON CONFLICT(normalized_name) DO UPDATE SET
+        raw_name = excluded.raw_name,
+        item_id = excluded.item_id,
+        source = excluded.source,
+        updated_at = excluded.updated_at
+      `
+    ).run(row.normalized_item_name, row.item_name, Math.trunc(row.item_id), now);
+  } catch {
+    // Some tests and older local databases may not have the market identity tables.
+  }
+}
+
+async function resolveLootItemDetails(db: Database.Database, rows: NormalizedLootRow[]): Promise<{ fetched: number; unresolved: number }> {
+  let fetched = 0;
+  let unresolved = 0;
+  for (const row of rows) {
+    if (row.item_id !== null) {
+      continue;
+    }
+    const cached = getCachedItemDetail(db, row.normalized_item_name);
+    const detail = cached ?? await fetchAndCacheItemDetail(db, row.item_name);
+    if (!cached && detail) {
+      fetched += 1;
+    }
+    const resolvedId = detail?.item_ids?.[0] ?? null;
+    if (resolvedId) {
+      row.item_id = resolvedId;
+      stageLootItemIdentity(db, row, detail);
+    } else {
+      unresolved += 1;
+    }
+  }
+  return { fetched, unresolved };
 }
 
 function huntingPlaceCreatureRows(payload: unknown): Array<Record<string, unknown>> {
@@ -444,6 +660,40 @@ function activeJobFor(jobs: Record<string, unknown>, jobType: string): Record<st
   return active.find((job) => job.job_type === jobType) ?? null;
 }
 
+function recentPublicReferenceFailures(db: Database.Database): Array<Record<string, unknown>> {
+  return db.prepare(
+    `
+    SELECT
+      event.event_type,
+      event.message,
+      event.entity_type,
+      event.entity_id,
+      event.entity_name,
+      event.payload_json,
+      event.created_at,
+      job.job_type
+    FROM intelligence_job_events event
+    JOIN intelligence_jobs job ON job.id = event.job_id
+    WHERE job.job_type IN ('public-reference-catalog', 'public-reference-enrichment')
+      AND event.event_type = 'failure'
+    ORDER BY event.created_at DESC
+    LIMIT 8
+    `
+  ).all() as Array<Record<string, unknown>>;
+}
+
+function safeRecordJson(value: unknown): Record<string, unknown> {
+  if (typeof value !== "string" || !value.trim()) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return asRecord(parsed) ?? {};
+  } catch {
+    return {};
+  }
+}
+
 function detailBackoff(jobs: Record<string, unknown>): Record<string, unknown> | null {
   const active = activeJobFor(jobs, "public-reference-enrichment");
   const latest = latestJobFor(jobs, "public-reference-enrichment");
@@ -515,6 +765,10 @@ function normalizeLimit(value: number | undefined, fallback: number): number {
   return value === undefined ? fallback : Math.max(0, Math.trunc(value));
 }
 
+function normalizeEnrichmentLimit(value: number | undefined): number {
+  return value === undefined ? 100_000 : Math.max(0, Math.trunc(value));
+}
+
 function detailPrioritySql(includeStale: boolean): string {
   const staleClause = includeStale ? "OR (detail_status = 'enriched' AND detail_enriched_at < ?)" : "";
   return `
@@ -571,8 +825,8 @@ function createPublicReferenceEnrichmentJob(db: Database.Database, options: Publ
     entityType: "creature",
     metadata: {
       started_at: nowIso(),
-      creature_limit: normalizeLimit(options.creatureLimit, 50),
-      hunting_place_limit: normalizeLimit(options.huntingPlaceLimit, 50),
+      creature_limit: normalizeEnrichmentLimit(options.creatureLimit),
+      hunting_place_limit: normalizeEnrichmentLimit(options.huntingPlaceLimit),
       include_stale: Boolean(options.includeStale)
     }
   });
@@ -587,11 +841,14 @@ async function runPublicReferenceEnrichmentJob(
   const startedAt = job.started_at;
   const fetchedAt = nowIso();
   const includeStale = Boolean(options.includeStale);
-  const creatureRows = creatureEnrichmentRows(db, normalizeLimit(options.creatureLimit, 50), includeStale);
-  const placeRows = huntingPlaceEnrichmentRows(db, normalizeLimit(options.huntingPlaceLimit, 50), includeStale);
+  const creatureRows = creatureEnrichmentRows(db, normalizeEnrichmentLimit(options.creatureLimit), includeStale);
+  const placeRows = huntingPlaceEnrichmentRows(db, normalizeEnrichmentLimit(options.huntingPlaceLimit), includeStale);
   const totalCount = creatureRows.length + placeRows.length;
   let creatures = 0;
   let creatureLootRows = 0;
+  let duplicateCreatureLootRows = 0;
+  let itemDetailsFetched = 0;
+  let unresolvedLootItems = 0;
   let failedCreatures = 0;
   let huntingPlaces = 0;
   let huntingPlaceCreatures = 0;
@@ -626,9 +883,25 @@ async function runPublicReferenceEnrichmentJob(
           throw new Error(`Could not normalize creature detail for ${name ?? id}`);
         }
         const loot = await client.getCreatureLoot(creature.id);
-        creatureLootRows += replacePublicCreatureLoot(db, creature.id, loot, fetchedAt);
+        const lootResult = await replacePublicCreatureLootWithItemDetails(db, creature.id, loot, fetchedAt);
+        creatureLootRows += lootResult.rows;
+        duplicateCreatureLootRows += lootResult.duplicates;
+        itemDetailsFetched += lootResult.item_details_fetched;
+        unresolvedLootItems += lootResult.unresolved_items;
         markCreatureDetailState(db, creature.id, "enriched", fetchedAt);
         creatures += 1;
+        updateJobProgress(db, job.id, {
+          totalCount,
+          completedCount: completed,
+          currentEntity: current,
+          cursor: { phase: "creatures", lookup: id },
+          metadata: {
+            creature_loot_rows: creatureLootRows,
+            duplicate_creature_loot_rows: duplicateCreatureLootRows,
+            item_details_fetched: itemDetailsFetched,
+            unresolved_loot_items: unresolvedLootItems
+          }
+        });
       } catch (error) {
         failedCreatures += 1;
         markCreatureDetailState(db, id, "failed", nowIso(), error);
@@ -698,6 +971,9 @@ async function runPublicReferenceEnrichmentJob(
         finished_at: finishedAt,
         creatures,
         creature_loot_rows: creatureLootRows,
+        duplicate_creature_loot_rows: duplicateCreatureLootRows,
+        item_details_fetched: itemDetailsFetched,
+        unresolved_loot_items: unresolvedLootItems,
         failed_creatures: failedCreatures,
         hunting_places: huntingPlaces,
         hunting_place_creatures: huntingPlaceCreatures,
@@ -710,6 +986,9 @@ async function runPublicReferenceEnrichmentJob(
       job: finishedJob,
       creatures,
       creature_loot_rows: creatureLootRows,
+      duplicate_creature_loot_rows: duplicateCreatureLootRows,
+      item_details_fetched: itemDetailsFetched,
+      unresolved_loot_items: unresolvedLootItems,
       failed_creatures: failedCreatures,
       hunting_places: huntingPlaces,
       hunting_place_creatures: huntingPlaceCreatures,
@@ -726,6 +1005,9 @@ async function runPublicReferenceEnrichmentJob(
       metadata: {
         creatures,
         creature_loot_rows: creatureLootRows,
+        duplicate_creature_loot_rows: duplicateCreatureLootRows,
+        item_details_fetched: itemDetailsFetched,
+        unresolved_loot_items: unresolvedLootItems,
         failed_creatures: failedCreatures,
         hunting_places: huntingPlaces,
         hunting_place_creatures: huntingPlaceCreatures,
@@ -818,7 +1100,7 @@ export function upsertPublicCreature(db: Database.Database, payload: unknown, fe
 }
 
 export function replacePublicCreatureLoot(db: Database.Database, creatureId: number, payload: unknown, fetchedAt = nowIso()): number {
-  const rows = lootRows(payload);
+  const { rows } = normalizedLootRows(payload);
   db.prepare("DELETE FROM public_creature_loot WHERE creature_id = ?").run(Math.trunc(creatureId));
   const insert = db.prepare(
     `
@@ -830,26 +1112,123 @@ export function replacePublicCreatureLoot(db: Database.Database, creatureId: num
   );
   let count = 0;
   for (const row of rows) {
-    const name = firstText(row.itemName, row.item_name, row.name, row.title);
-    if (!name) {
-      continue;
-    }
     insert.run(
       Math.trunc(creatureId),
-      firstNumber(row.itemId, row.item_id),
-      name,
-      normalizePublicName(name),
-      parsePercent(row.chancePercent ?? row.chance_percent ?? row.dropChance ?? row.drop_chance ?? row.percentage),
-      asNumberOrNull(row.minCount ?? row.min_count ?? row.min),
-      asNumberOrNull(row.maxCount ?? row.max_count ?? row.max),
-      firstText(row.rarity, row.classification),
-      firstText(row.amount, row.count, row.quantity),
+      row.item_id,
+      row.item_name,
+      row.normalized_item_name,
+      row.chance_percent,
+      row.min_count,
+      row.max_count,
+      row.rarity,
+      row.amount_text,
       fetchedAt,
-      JSON.stringify(row)
+      row.payload_json
     );
     count += 1;
   }
   return count;
+}
+
+export function repairPublicCreatureLootRows(db: Database.Database): Record<string, unknown> {
+  const rows = db.prepare(
+    `
+    SELECT creature_id, normalized_item_name, payload_json
+    FROM public_creature_loot
+    `
+  ).all() as Array<Record<string, unknown>>;
+  const update = db.prepare(
+    `
+    UPDATE public_creature_loot
+    SET chance_percent = ?,
+      min_count = ?,
+      max_count = ?,
+      rarity = ?,
+      amount_text = ?,
+      item_name = ?
+    WHERE creature_id = ?
+      AND normalized_item_name = ?
+    `
+  );
+  let repaired = 0;
+  let skipped = 0;
+  const tx = db.transaction(() => {
+    for (const row of rows) {
+      try {
+        const payload = JSON.parse(asText(row.payload_json));
+        const normalized = normalizeLootRow(jsonRecord(payload));
+        if (!normalized) {
+          skipped += 1;
+          continue;
+        }
+        update.run(
+          normalized.chance_percent,
+          normalized.min_count,
+          normalized.max_count,
+          normalized.rarity,
+          normalized.amount_text,
+          normalized.item_name,
+          Number(row.creature_id),
+          asText(row.normalized_item_name)
+        );
+        repaired += 1;
+      } catch {
+        skipped += 1;
+      }
+    }
+  });
+  tx();
+  return { ok: true, repaired, skipped };
+}
+
+async function replacePublicCreatureLootWithItemDetails(
+  db: Database.Database,
+  creatureId: number,
+  payload: unknown,
+  fetchedAt = nowIso()
+): Promise<CreatureLootReplaceResult> {
+  const { rows, duplicates } = normalizedLootRows(payload);
+  const details = await resolveLootItemDetails(db, rows);
+  db.prepare("DELETE FROM public_creature_loot WHERE creature_id = ?").run(Math.trunc(creatureId));
+  const insert = db.prepare(
+    `
+    INSERT INTO public_creature_loot (
+      creature_id, item_id, item_name, normalized_item_name, chance_percent,
+      min_count, max_count, rarity, amount_text, fetched_at, payload_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(creature_id, normalized_item_name) DO UPDATE SET
+      item_id = COALESCE(excluded.item_id, public_creature_loot.item_id),
+      item_name = excluded.item_name,
+      chance_percent = COALESCE(excluded.chance_percent, public_creature_loot.chance_percent),
+      min_count = COALESCE(excluded.min_count, public_creature_loot.min_count),
+      max_count = COALESCE(excluded.max_count, public_creature_loot.max_count),
+      rarity = COALESCE(excluded.rarity, public_creature_loot.rarity),
+      amount_text = COALESCE(excluded.amount_text, public_creature_loot.amount_text),
+      fetched_at = excluded.fetched_at,
+      payload_json = excluded.payload_json
+  `
+  );
+  for (const row of rows) {
+    insert.run(
+      Math.trunc(creatureId),
+      row.item_id,
+      row.item_name,
+      row.normalized_item_name,
+      row.chance_percent,
+      row.min_count,
+      row.max_count,
+      row.rarity,
+      row.amount_text,
+      fetchedAt,
+      row.payload_json
+    );
+  }
+  return {
+    rows: rows.length,
+    duplicates,
+    item_details_fetched: details.fetched,
+    unresolved_items: details.unresolved
+  };
 }
 
 export function upsertPublicHuntingPlace(db: Database.Database, payload: unknown, fetchedAt = nowIso()): PublicHuntingPlace | null {
@@ -1044,6 +1423,17 @@ export function getPublicReferenceStatus(db: Database.Database): Record<string, 
     db,
     "SELECT COUNT(*) AS count FROM (SELECT normalized_name FROM public_hunting_places GROUP BY normalized_name HAVING COUNT(*) > 1)"
   );
+  const recentFailures = recentPublicReferenceFailures(db).map((row) => ({
+    job_type: asText(row.job_type),
+    message: asText(row.message),
+    entity: {
+      type: asText(row.entity_type) || null,
+      id: asText(row.entity_id) || null,
+      name: asText(row.entity_name) || null
+    },
+    created_at: asText(row.created_at),
+    payload: safeRecordJson(row.payload_json)
+  }));
   const lastFinished = typeof enrichmentJob?.finished_at === "string"
     ? enrichmentJob.finished_at
     : typeof catalogJob?.finished_at === "string"
@@ -1119,8 +1509,36 @@ export function getPublicReferenceStatus(db: Database.Database): Record<string, 
       last_catalog_sync: catalogJob?.finished_at ?? null,
       last_enrichment_run: enrichmentJob?.finished_at ?? activeEnrichment?.updated_at ?? null,
       backoff: detailBackoff(jobs),
+      recent_failures: recentFailures,
       explanations: healthExplanations
     }
+  };
+}
+
+export function queuePublicReferenceMissingCreatureLoot(db: Database.Database): Record<string, unknown> {
+  if (publicReferenceEnrichmentInProgress) {
+    throw new Error("Public reference enrichment is already running");
+  }
+  const result = db.prepare(
+    `
+    UPDATE public_creatures
+    SET detail_status = 'pending',
+      detail_enriched_at = NULL,
+      detail_last_attempt_at = NULL,
+      detail_last_error = NULL
+    WHERE detail_status = 'enriched'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public_creature_loot loot
+        WHERE loot.creature_id = public_creatures.id
+      )
+    `
+  ).run();
+
+  return {
+    ok: true,
+    creatures: result.changes,
+    message: `Queued ${result.changes} creature(s) for loot enrichment.`
   };
 }
 

@@ -1,8 +1,12 @@
 <script setup>
+import EntityLinkPill from '../common/EntityLinkPill.vue'
+
 defineProps({
   monsters: { type: Array, default: () => [] },
   formatValue: { type: Function, required: true },
 })
+
+defineEmits(['open-creature'])
 </script>
 
 <template>
@@ -14,7 +18,11 @@ defineProps({
     </div>
     <div class="monster-list">
       <div v-for="monster in monsters" :key="`monster-${monster.name}`" class="monster-row">
-        <span>{{ monster.name }}</span>
+        <EntityLinkPill
+          :entity="{ type: 'creature', id: monster.name, name: monster.name }"
+          clickable
+          @activate="$emit('open-creature', monster)"
+        />
         <strong>{{ formatValue(monster.count) }}</strong>
       </div>
       <div v-if="!monsters.length" class="muted">No monsters parsed.</div>

@@ -142,10 +142,5 @@ function hydrationLabel(status) {
         </tbody>
       </table>
     </div>
-    <div class="loot-footer">
-      <span>Parser total: <strong>{{ formatValue(lootSummary?.parsed_total_loot) }}</strong></span>
-      <span>Resolved value: <strong>{{ formatValue(lootSummary?.resolved_total_value) }}</strong></span>
-      <span>Unresolved portion: <strong>{{ formatValue(lootSummary?.unresolved_total_value) }}</strong></span>
-    </div>
   </section>
 </template>

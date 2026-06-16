@@ -25,7 +25,6 @@ const props = defineProps({
   publicReferenceStatus: { type: Object, default: () => ({ counts: {}, jobs: {}, data_health: {} }) },
   publicReferenceInfo: { type: String, default: '' },
   publicReferenceBusy: { type: Boolean, default: false },
-  repeatPublicReferenceEnrichment: { type: Boolean, default: false },
   publicHuntStatus: { type: Object, default: () => ({ counts: {}, jobs: {}, freshness: {}, policy: {} }) },
   publicHuntInfo: { type: String, default: '' },
   publicHuntBusy: { type: Boolean, default: false },
@@ -50,11 +49,11 @@ function jobGroup(jobs, type) {
 
 const emit = defineEmits([
   'update:itemPriceMode',
-  'update:repeatPublicReferenceEnrichment',
   'update:publicHuntBatchLimit',
   'refresh',
   'sync-public-reference',
   'enrich-public-reference',
+  'queue-public-reference-missing-loot',
   'check-public-hunts',
   'reprocess-public-hunts',
   'review-public-hunt',
@@ -231,20 +230,29 @@ function pct(value) {
             <RefreshCw :size="16" />
             Enrich Details
           </button>
-          <label class="toggle-label">
-            <input
-              type="checkbox"
-              :checked="repeatPublicReferenceEnrichment"
-              @change="$emit('update:repeatPublicReferenceEnrichment', $event.target.checked)"
-            />
-            Repeat
-          </label>
+          <button
+            :disabled="publicReferenceBusy || !(publicReferenceStatus.data_health?.diagnostics?.creatures_missing_loot > 0)"
+            @click="$emit('queue-public-reference-missing-loot')"
+          >
+            <RefreshCw :size="16" />
+            Queue Missing Loot
+          </button>
           <span class="muted">{{ publicReferenceInfo }}</span>
         </div>
         <div class="status-row mt-10">
           <span class="status-badge">Missing loot {{ publicReferenceStatus.data_health?.diagnostics?.creatures_missing_loot || 0 }}</span>
           <span class="status-badge">Missing place creatures {{ publicReferenceStatus.data_health?.diagnostics?.hunting_places_missing_creatures || 0 }}</span>
           <span class="status-badge">Unresolved loot items {{ publicReferenceStatus.data_health?.diagnostics?.unresolved_loot_items || 0 }}</span>
+        </div>
+        <div v-if="publicReferenceStatus.data_health?.recent_failures?.length" class="compact-list mt-10">
+          <div
+            v-for="failure in publicReferenceStatus.data_health.recent_failures"
+            :key="`${failure.created_at}-${failure.entity?.type}-${failure.entity?.id}`"
+            class="saved-row compact"
+          >
+            <span>{{ failure.entity?.name || failure.entity?.id || failure.job_type }}</span>
+            <small>{{ failure.created_at }} | {{ failure.message }}</small>
+          </div>
         </div>
       </article>
 
