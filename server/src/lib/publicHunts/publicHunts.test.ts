@@ -8,6 +8,7 @@ import {
   listPublicHuntReviewQueue,
   parsePublicHuntDetail,
   parsePublicHuntList,
+  reprocessPublicHunts,
   reviewPublicHunt
 } from ".";
 
@@ -65,6 +66,24 @@ function detailHtml(id = 48541, title = "Dragon Lair Test"): string {
           <tr><th>#</th><th>Monster</th><th>Killed</th></tr>
           <tr><td>#1</td><td><img alt="Dragon" />Dragon</td><td>600</td></tr>
         </table>
+      </div>
+    </div>
+  `;
+}
+
+function detailHtmlWithoutMonsters(id = 48541, title = "Empty Hunt Test"): string {
+  return `
+    <div id="hunt_session_${id}">
+      <h1>${title}<a href="/hunt_sessions?hunt_sessions_by=is_public&search=Tester">by Tester</a></h1>
+      <p class="text-sm text-brand-ink-soft">Jun 10, 2026 21:35</p>
+      <div class="ha-panel">
+        <h3>Hunt Summary</h3>
+        <div>Session Duration</div><div>01:00h</div>
+        <div>XP Gain:</div><div>1,200,000</div>
+        <div>Balance:</div><div>250,000</div>
+        <div>XP/h:</div><div>1,200,000</div>
+        <div>Raw XP/h:</div><div>800,000</div>
+        <span class="font-semibold">EK</span> <span class="font-mono text-[10px] font-semibold">120</span>
       </div>
     </div>
   `;
@@ -132,6 +151,29 @@ describe("public hunt import", () => {
     expect(status.counts).toMatchObject({ total: 1, accepted: 1, matched: 1 });
     const queue = listPublicHuntReviewQueue(db).items as Array<Record<string, unknown>>;
     expect(queue).toHaveLength(0);
+  });
+
+  it("auto-ignores imported public hunts with no parsed monsters", async () => {
+    seedPlace();
+    const pages = new Map<string, string>([
+      ["https://www.hunt-analyser.com/hunt_sessions?hunt_sessions_by=is_public", listHtml()],
+      ["https://www.hunt-analyser.com/hunt_sessions/48541", detailHtmlWithoutMonsters()]
+    ]);
+
+    const result = await checkPublicHunts(db, {
+      limit: 1,
+      throttleMs: 0,
+      fetcher: async (url) => pages.get(url) ?? ""
+    });
+
+    expect(result.imported).toBe(1);
+    expect(getPublicHuntStatus(db).counts).toMatchObject({ total: 1, ignored: 1, matched: 0, needs_review: 0 });
+    expect(listPublicHuntReviewQueue(db).items).toHaveLength(0);
+    expect(db.prepare("SELECT review_status, public_hunting_place_id, review_note FROM public_hunt_sessions WHERE source_session_id = '48541'").get()).toEqual({
+      review_status: "ignored",
+      public_hunting_place_id: null,
+      review_note: "No monster kills were parsed from this public hunt."
+    });
   });
 
   it("imports all public hunt pages and loads details concurrently", async () => {
@@ -280,6 +322,33 @@ describe("public hunt import", () => {
     const ignored = reviewPublicHunt(db, queue[0].id, { action: "ignore" });
     expect(ignored.ok).toBe(true);
     expect(getPublicHuntStatus(db).counts).toMatchObject({ ignored: 1 });
+    expect(listPublicHuntReviewQueue(db).items).toHaveLength(0);
+  });
+
+  it("reprocess auto-ignores existing public hunts with no monster rows", async () => {
+    seedPlace();
+    const pages = new Map<string, string>([
+      ["https://www.hunt-analyser.com/hunt_sessions?hunt_sessions_by=is_public", listHtml()],
+      ["https://www.hunt-analyser.com/hunt_sessions/48541", detailHtml()]
+    ]);
+    await checkPublicHunts(db, {
+      limit: 1,
+      throttleMs: 0,
+      fetcher: async (url) => pages.get(url) ?? ""
+    });
+    db.prepare("DELETE FROM public_hunt_session_monsters").run();
+    db.prepare(`
+      UPDATE public_hunt_sessions
+      SET review_status = 'needs_review',
+        public_hunting_place_id = NULL,
+        hunting_place_match_status = 'review',
+        hunting_place_match_readiness = 'review'
+    `).run();
+
+    const result = reprocessPublicHunts(db);
+
+    expect(result).toMatchObject({ ok: true, reprocessed: 1 });
+    expect(getPublicHuntStatus(db).counts).toMatchObject({ ignored: 1, needs_review: 0, matched: 0 });
     expect(listPublicHuntReviewQueue(db).items).toHaveLength(0);
   });
 

@@ -325,12 +325,15 @@ function upsertPublicHunt(db: Database.Database, input: StoredPublicHunt): numbe
     characterLevel: input.party.map((entry) => entry.level).filter((value): value is number => value !== null).sort((a, b) => a - b)[0] ?? null,
     sourceType: "public_hunt_import"
   });
-  const reviewStatus = suspicious.length
+  const hasMonsterKills = input.monsters.some((monster) => Math.max(0, Math.trunc(monster.count)) > 0);
+  const reviewStatus = !hasMonsterKills
+    ? "ignored"
+    : suspicious.length
     ? "needs_review"
     : match.status === "auto"
       ? "accepted"
       : "needs_review";
-  const selectedPlace = match.status === "auto" ? match.selected_hunting_place_id : null;
+  const selectedPlace = hasMonsterKills && match.status === "auto" ? match.selected_hunting_place_id : null;
 
   const existing = db.prepare("SELECT id, imported_at FROM public_hunt_sessions WHERE source = ? AND source_session_id = ?")
     .get(SOURCE, input.source_session_id) as { id: number; imported_at: string } | undefined;
@@ -359,7 +362,8 @@ function upsertPublicHunt(db: Database.Database, input: StoredPublicHunt): numbe
         hunting_place_match_provenance_json = ?, hunting_place_match_explanations_json = ?,
         hunting_place_match_attempted_at = ?, hunting_place_match_readiness = ?,
         hunting_place_match_readiness_reason = ?, hunting_place_noise_creatures_json = ?,
-        review_status = CASE WHEN review_status IN ('ignored', 'accepted', 'rejected') THEN review_status ELSE ? END
+        review_status = CASE WHEN ? = 'ignored' THEN 'ignored' WHEN review_status IN ('ignored', 'accepted', 'rejected') THEN review_status ELSE ? END,
+        review_note = CASE WHEN ? = 'ignored' THEN 'No monster kills were parsed from this public hunt.' ELSE review_note END
       WHERE id = ?
     `).run(
       input.source_url,
@@ -394,6 +398,8 @@ function upsertPublicHunt(db: Database.Database, input: StoredPublicHunt): numbe
       match.readiness,
       match.readiness_reason,
       JSON.stringify(match.noise_creatures),
+      reviewStatus,
+      reviewStatus,
       reviewStatus,
       existing.id
     );
@@ -451,6 +457,9 @@ function upsertPublicHunt(db: Database.Database, input: StoredPublicHunt): numbe
     JSON.stringify(match.noise_creatures)
   );
   const id = Number(inserted.lastInsertRowid);
+  if (reviewStatus === "ignored") {
+    db.prepare("UPDATE public_hunt_sessions SET review_note = 'No monster kills were parsed from this public hunt.' WHERE id = ?").run(id);
+  }
   replaceMonsters(db, id, input.monsters);
   return id;
 }
@@ -800,6 +809,12 @@ export function listPublicHuntReviewQueue(db: Database.Database, limit = 500): R
       ON place.id = session.public_hunting_place_id
     WHERE session.review_status NOT IN ('ignored', 'accepted')
       AND session.public_hunting_place_id IS NULL
+      AND EXISTS (
+        SELECT 1
+        FROM public_hunt_session_monsters monster
+        WHERE monster.public_hunt_session_id = session.id
+          AND monster.kill_count > 0
+      )
     ORDER BY
       CASE
         WHEN session.review_status = 'needs_review' OR session.suspicious_status = 'suspicious' THEN 0
@@ -874,6 +889,19 @@ export function reprocessPublicHunts(db: Database.Database): Record<string, unkn
   for (const row of rows) {
     const monsters = db.prepare("SELECT monster_name AS name, kill_count AS count FROM public_hunt_session_monsters WHERE public_hunt_session_id = ?")
       .all(row.id) as Array<{ name: string; count: number }>;
+    if (!monsters.some((monster) => Math.max(0, Math.trunc(monster.count)) > 0)) {
+      db.prepare(`
+        UPDATE public_hunt_sessions
+        SET review_status = 'ignored',
+          public_hunting_place_id = NULL,
+          hunting_place_match_status = 'unmatched',
+          hunting_place_match_readiness = 'unmatched',
+          review_note = 'No monster kills were parsed from this public hunt.'
+        WHERE id = ?
+      `).run(row.id);
+      updated += 1;
+      continue;
+    }
     const parsed: ParsedPublicHunt = {
       source_session_id: row.source_session_id,
       source_url: row.source_url,
