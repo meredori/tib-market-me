@@ -5,6 +5,7 @@ import {
   getPublicReferenceStatus,
   queuePublicReferenceMissingCreatureLoot,
   resetPublicReferenceFetchForTests,
+  resetPublicReferenceData,
   replacePublicCreatureLoot,
   replacePublicHuntingPlaceChildren,
   repairPublicCreatureLootRows,
@@ -501,6 +502,128 @@ describe("public Tibia reference data", () => {
       creature_loot_from_details: 1,
       creature_loot_fallback_fetches: 0
     });
+  });
+
+  it("exposes the expected public reference API contract in status", () => {
+    const status = getPublicReferenceStatus(db);
+
+    expect(status).toMatchObject({
+      reference_contract: {
+        operations: {
+          catalog_sync: {
+            mode: "bounded batch",
+            endpoints: [
+              expect.objectContaining({
+                endpoint: "GET /api/v1/creatures?page={page}&pageSize=100",
+                expected_shape: "PagedResponseOfCreatureListItemResponse",
+                timestamp_field: "lastUpdated"
+              }),
+              expect.objectContaining({
+                endpoint: "GET /api/v1/hunting-places/list",
+                expected_shape: "HuntingPlaceListItemResponse[]",
+                timestamp_field: "lastUpdated"
+              })
+            ]
+          },
+          detail_enrichment: {
+            mode: "bounded adaptive batch",
+            endpoints: expect.arrayContaining([
+              expect.objectContaining({
+                endpoint: "GET /api/v1/creatures/{name-or-id}",
+                expected_shape: "CreatureDetailsResponse",
+                required_fields: expect.arrayContaining(["lootStatistics", "lastUpdated"])
+              }),
+              expect.objectContaining({
+                endpoint: "GET /api/v1/hunting-places/{name-or-id}",
+                expected_shape: "HuntingPlaceDetailsResponse",
+                required_fields: expect.arrayContaining(["creatures", "lowerLevels", "lastSeenAt", "lastUpdated"])
+              })
+            ])
+          }
+        }
+      }
+    });
+  });
+
+  it("resets public reference data and detaches reference links", () => {
+    db.exec(`
+      CREATE TABLE hunt_uploads (
+        id INTEGER PRIMARY KEY,
+        public_hunting_place_id INTEGER,
+        hunting_place_confidence REAL NOT NULL DEFAULT 0,
+        hunting_place_match_status TEXT NOT NULL DEFAULT 'unmatched',
+        hunting_place_match_reasons_json TEXT NOT NULL DEFAULT '[]',
+        hunting_place_alternates_json TEXT NOT NULL DEFAULT '[]',
+        hunting_place_match_provenance_json TEXT NOT NULL DEFAULT '[]',
+        hunting_place_match_explanations_json TEXT NOT NULL DEFAULT '[]',
+        hunting_place_match_attempted_at TEXT,
+        hunting_place_match_mode TEXT NOT NULL DEFAULT 'auto',
+        hunting_place_match_readiness TEXT NOT NULL DEFAULT 'unmatched',
+        hunting_place_match_readiness_reason TEXT,
+        hunting_place_noise_creatures_json TEXT NOT NULL DEFAULT '[]',
+        hunting_place_match_manual INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE bestiary_states (
+        id INTEGER PRIMARY KEY,
+        public_creature_id INTEGER,
+        normalized_creature_name TEXT NOT NULL
+      );
+      CREATE TABLE taskboard_entries (
+        id INTEGER PRIMARY KEY,
+        public_creature_id INTEGER
+      );
+      CREATE TABLE public_hunt_sessions (
+        id INTEGER PRIMARY KEY,
+        source TEXT NOT NULL,
+        source_session_id TEXT NOT NULL,
+        payload_fingerprint TEXT NOT NULL
+      );
+      CREATE TABLE public_hunt_session_monsters (
+        public_hunt_session_id INTEGER NOT NULL,
+        normalized_monster_name TEXT NOT NULL
+      );
+    `);
+    upsertPublicCreature(db, { id: 101, name: "Dragon" }, "2026-06-10T00:00:00Z");
+    upsertPublicHuntingPlace(db, { id: 201, name: "Dragon Lair" }, "2026-06-10T00:00:00Z");
+    replacePublicCreatureLoot(db, 101, { lootStatistics: [{ itemName: "Dragon Ham", chance: "1%", raw: "1" }] }, "2026-06-10T00:00:00Z");
+    replacePublicHuntingPlaceChildren(db, 201, { creatures: [{ creatureId: 101, creatureName: "Dragon" }] });
+    db.prepare("INSERT INTO hunt_uploads (id, public_hunting_place_id, hunting_place_confidence, hunting_place_match_status, hunting_place_match_readiness, hunting_place_match_manual) VALUES (1, 201, 0.9, 'auto', 'ready', 0)").run();
+    db.prepare("INSERT INTO bestiary_states (id, public_creature_id, normalized_creature_name) VALUES (1, 101, 'dragon')").run();
+    db.prepare("INSERT INTO taskboard_entries (id, public_creature_id) VALUES (1, 101)").run();
+    db.prepare("INSERT INTO public_hunt_sessions (id, source, source_session_id, payload_fingerprint) VALUES (1, 'hunt-analyser', 'abc', 'hash')").run();
+    db.prepare("INSERT INTO public_hunt_session_monsters (public_hunt_session_id, normalized_monster_name) VALUES (1, 'dragon')").run();
+
+    const result = resetPublicReferenceData(db);
+
+    expect(result).toMatchObject({
+      ok: true,
+      deleted: {
+        public_creatures: 1,
+        public_hunting_places: 1,
+        public_creature_loot: 1,
+        public_hunting_place_creatures: 1,
+        public_hunt_sessions: 1,
+        public_hunt_session_monsters: 1
+      },
+      detached: {
+        hunt_uploads: 1,
+        bestiary_states: 1,
+        taskboard_entries: 1
+      }
+    });
+    expect(getPublicReferenceStatus(db).counts).toMatchObject({
+      creatures: 0,
+      hunting_places: 0,
+      creature_loot_rows: 0,
+      hunting_place_creatures: 0
+    });
+    expect(db.prepare("SELECT public_hunting_place_id, hunting_place_match_status, hunting_place_match_readiness FROM hunt_uploads WHERE id = 1").get()).toEqual({
+      public_hunting_place_id: null,
+      hunting_place_match_status: "unmatched",
+      hunting_place_match_readiness: "unmatched"
+    });
+    expect(db.prepare("SELECT public_creature_id FROM bestiary_states WHERE id = 1").get()).toEqual({ public_creature_id: null });
+    expect(db.prepare("SELECT public_creature_id FROM taskboard_entries WHERE id = 1").get()).toEqual({ public_creature_id: null });
   });
 
   it("deduplicates creature loot and caches details for loot items without market ids", async () => {

@@ -40,6 +40,14 @@ export type PublicReferenceEnrichmentResult = PublicReferenceSyncResult & {
   unresolved_loot_items: number;
 };
 
+export type PublicReferenceResetResult = {
+  ok: true;
+  reset_at: string;
+  deleted: Record<string, number>;
+  detached: Record<string, number>;
+  message: string;
+};
+
 type PublicCreature = {
   id: number;
   name: string;
@@ -758,6 +766,73 @@ function cutoffIso(days: number): string {
 
 function countSql(db: Database.Database, sql: string, ...params: unknown[]): number {
   return (db.prepare(sql).get(...params) as { count: number }).count;
+}
+
+function hasTable(db: Database.Database, tableName: string): boolean {
+  const row = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName);
+  return Boolean(row);
+}
+
+function runIfTable(db: Database.Database, tableName: string, sql: string, ...params: unknown[]): number {
+  if (!hasTable(db, tableName)) {
+    return 0;
+  }
+  return db.prepare(sql).run(...params).changes;
+}
+
+function publicReferenceContract(): Record<string, unknown> {
+  return {
+    source: "TibiaData public API",
+    base_url: DEFAULT_PUBLIC_DATA_BASE_URL,
+    operations: {
+      catalog_sync: {
+        mode: "bounded batch",
+        default_batch: { creatures: 100, hunting_places: 100 },
+        endpoints: [
+          {
+            endpoint: "GET /api/v1/creatures?page={page}&pageSize=100",
+            expected_shape: "PagedResponseOfCreatureListItemResponse",
+            required_fields: ["page", "pageSize", "totalCount", "items"],
+            item_required_fields: ["id", "name", "hitpoints", "experience", "primaryImage", "lastUpdated"],
+            timestamp_field: "lastUpdated"
+          },
+          {
+            endpoint: "GET /api/v1/hunting-places/list",
+            expected_shape: "HuntingPlaceListItemResponse[]",
+            item_required_fields: ["id", "name", "title", "summary", "city", "location", "vocation", "wikiUrl", "lastUpdated"],
+            timestamp_field: "lastUpdated"
+          }
+        ]
+      },
+      detail_enrichment: {
+        mode: "bounded adaptive batch",
+        default_batch: { creatures: 100_000, hunting_places: 100_000 },
+        default_concurrency: { initial: DEFAULT_REFERENCE_INITIAL_CONCURRENCY, max: DEFAULT_REFERENCE_MAX_CONCURRENCY },
+        endpoints: [
+          {
+            endpoint: "GET /api/v1/creatures/{name-or-id}",
+            expected_shape: "CreatureDetailsResponse",
+            required_fields: ["id", "name", "hitpoints", "experience", "structuredData", "lootStatistics", "images", "lastUpdated"],
+            timestamp_field: "lastUpdated",
+            note: "lootStatistics is authoritative for loot; /loot is only a fallback when this array is absent or empty."
+          },
+          {
+            endpoint: "GET /api/v1/creatures/{name-or-id}/loot",
+            expected_shape: "LootStatisticDetailsResponse",
+            required_fields: ["creatureId", "creatureName", "lootStatistics", "lastUpdated"],
+            timestamp_field: "lastUpdated",
+            fallback_only: true
+          },
+          {
+            endpoint: "GET /api/v1/hunting-places/{name-or-id}",
+            expected_shape: "HuntingPlaceDetailsResponse",
+            required_fields: ["id", "name", "title", "structuredData", "creatures", "lowerLevels", "lastSeenAt", "lastUpdated"],
+            timestamp_fields: ["lastUpdated", "lastSeenAt"]
+          }
+        ]
+      }
+    }
+  };
 }
 
 function latestJobFor(jobs: Record<string, unknown>, jobType: string): Record<string, unknown> | null {
@@ -1744,7 +1819,79 @@ export function getPublicReferenceStatus(db: Database.Database): Record<string, 
       backoff: detailBackoff(jobs),
       recent_failures: recentFailures,
       explanations: healthExplanations
-    }
+    },
+    reference_contract: publicReferenceContract()
+  };
+}
+
+export function resetPublicReferenceData(db: Database.Database): PublicReferenceResetResult {
+  if (publicReferenceSyncInProgress || publicReferenceEnrichmentInProgress) {
+    throw new Error("Public reference work is currently running");
+  }
+  const resetAt = nowIso();
+  const deleted: Record<string, number> = {};
+  const detached: Record<string, number> = {};
+
+  const reset = db.transaction(() => {
+    detached.hunt_uploads = runIfTable(
+      db,
+      "hunt_uploads",
+      `
+      UPDATE hunt_uploads
+      SET public_hunting_place_id = NULL,
+        hunting_place_confidence = 0,
+        hunting_place_match_status = 'unmatched',
+        hunting_place_match_reasons_json = '["public reference reset"]',
+        hunting_place_alternates_json = '[]',
+        hunting_place_match_provenance_json = '[]',
+        hunting_place_match_explanations_json = '[]',
+        hunting_place_match_attempted_at = NULL,
+        hunting_place_match_mode = 'auto',
+        hunting_place_match_readiness = 'unmatched',
+        hunting_place_match_readiness_reason = 'Public reference data was reset and needs rematching.',
+        hunting_place_noise_creatures_json = '[]',
+        hunting_place_match_manual = 0
+      WHERE public_hunting_place_id IS NOT NULL
+        OR hunting_place_match_status != 'unmatched'
+      `
+    );
+    detached.taskboard_entries = runIfTable(db, "taskboard_entries", "UPDATE taskboard_entries SET public_creature_id = NULL WHERE public_creature_id IS NOT NULL");
+    detached.bestiary_states = runIfTable(db, "bestiary_states", "UPDATE bestiary_states SET public_creature_id = NULL WHERE public_creature_id IS NOT NULL");
+
+    deleted.public_hunt_session_monsters = runIfTable(db, "public_hunt_session_monsters", "DELETE FROM public_hunt_session_monsters");
+    deleted.public_hunt_sessions = runIfTable(db, "public_hunt_sessions", "DELETE FROM public_hunt_sessions");
+    deleted.public_hunting_place_area_summaries = runIfTable(db, "public_hunting_place_area_summaries", "DELETE FROM public_hunting_place_area_summaries");
+    deleted.public_hunting_place_creatures = runIfTable(db, "public_hunting_place_creatures", "DELETE FROM public_hunting_place_creatures");
+    deleted.public_creature_loot = runIfTable(db, "public_creature_loot", "DELETE FROM public_creature_loot");
+    deleted.public_hunting_places = runIfTable(db, "public_hunting_places", "DELETE FROM public_hunting_places");
+    deleted.public_creatures = runIfTable(db, "public_creatures", "DELETE FROM public_creatures");
+    deleted.public_reference_sync_runs = runIfTable(db, "public_reference_sync_runs", "DELETE FROM public_reference_sync_runs");
+    deleted.intelligence_job_events = runIfTable(
+      db,
+      "intelligence_job_events",
+      `
+      DELETE FROM intelligence_job_events
+      WHERE job_id IN (
+        SELECT id
+        FROM intelligence_jobs
+        WHERE job_type IN ('public-reference-catalog', 'public-reference-enrichment', 'public-hunt-import')
+      )
+      `
+    );
+    deleted.intelligence_jobs = runIfTable(
+      db,
+      "intelligence_jobs",
+      "DELETE FROM intelligence_jobs WHERE job_type IN ('public-reference-catalog', 'public-reference-enrichment', 'public-hunt-import')"
+    );
+  });
+
+  reset();
+  return {
+    ok: true,
+    reset_at: resetAt,
+    deleted,
+    detached,
+    message: "Cleared public reference data and detached existing reference links. Personal hunts and market data were preserved."
   };
 }
 

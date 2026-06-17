@@ -196,6 +196,14 @@ function publicReferencePendingDetails(data = publicReferenceStatus) {
   return Number(data.data_health?.pending?.creatures || 0) + Number(data.data_health?.pending?.hunting_places || 0)
 }
 
+function publicReferenceBatchPayload(extra = {}) {
+  return {
+    creature_limit: 100,
+    hunting_place_limit: 100,
+    ...extra,
+  }
+}
+
 async function loadMarketDashboard() {
   marketDashboardBusy.value = true
   try {
@@ -434,8 +442,7 @@ async function syncPublicReferenceData() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        creature_limit: 100,
-        hunting_place_limit: 100,
+        ...publicReferenceBatchPayload(),
       }),
     })
     await loadPublicReferenceStatus()
@@ -457,7 +464,11 @@ async function startPublicReferenceEnrichmentBatch() {
   return api('/api/public-reference/enrich', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ include_stale: false }),
+    body: JSON.stringify(publicReferenceBatchPayload({
+      include_stale: false,
+      initial_concurrency: 2,
+      max_concurrency: 6,
+    })),
   })
 }
 
@@ -480,6 +491,34 @@ async function enrichPublicReferenceData() {
       publicReferencePoll = null
     }
     publicReferencePollMode = null
+    publicReferenceBusy.value = false
+  }
+}
+
+async function resetPublicReferenceData() {
+  const confirmed = window.confirm('Reset all local public reference and public hunt import data? Personal hunts and market data stay, but existing linked hunting-place matches will be detached.')
+  if (!confirmed) {
+    return
+  }
+  publicReferenceBusy.value = true
+  publicReferenceInfo.value = 'Resetting local public reference data.'
+  if (publicReferencePoll) {
+    clearInterval(publicReferencePoll)
+    publicReferencePoll = null
+  }
+  publicReferencePollMode = null
+  try {
+    const out = await api('/api/public-reference/reset', { method: 'POST' })
+    await Promise.all([
+      loadPublicReferenceStatus(),
+      loadPublicHuntStatus(),
+      loadPublicHuntReviewQueue(),
+      hunts.refreshHuntCollections(),
+    ])
+    publicReferenceInfo.value = out.message || `Reference data reset at ${out.reset_at || 'now'}.`
+  } catch (error) {
+    publicReferenceInfo.value = `Reference reset failed: ${error.message}`
+  } finally {
     publicReferenceBusy.value = false
   }
 }
@@ -1107,6 +1146,7 @@ onBeforeUnmount(() => {
         @sync-public-reference="syncPublicReferenceData"
         @enrich-public-reference="enrichPublicReferenceData"
         @queue-public-reference-missing-loot="queuePublicReferenceMissingLoot"
+        @reset-public-reference="resetPublicReferenceData"
         @check-public-hunts="checkPublicHunts"
         @reprocess-public-hunts="reprocessPublicHunts"
         @review-public-hunt="reviewPublicHunt"

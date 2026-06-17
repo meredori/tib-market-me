@@ -71,6 +71,7 @@ const emit = defineEmits([
   'sync-public-reference',
   'enrich-public-reference',
   'queue-public-reference-missing-loot',
+  'reset-public-reference',
   'check-public-hunts',
   'reprocess-public-hunts',
   'review-public-hunt',
@@ -231,6 +232,10 @@ function pct(value) {
             <RefreshCw :size="16" />
             Queue Missing Loot
           </button>
+          <button class="ghost-action danger" :disabled="publicReferenceBusy" @click="$emit('reset-public-reference')">
+            <Trash2 :size="16" />
+            Reset Reference Data
+          </button>
           <span class="muted">{{ publicReferenceInfo }}</span>
         </div>
         <JobStatusPanel title="Catalog Sync" :jobs="jobGroup(publicReferenceStatus.jobs, 'public-reference-catalog')" />
@@ -249,6 +254,12 @@ function pct(value) {
         <CompactMetricRow label="Place creature rows" :value="publicReferenceStatus.data_health?.staged?.hunting_place_creatures || 0" />
         <CompactMetricRow label="Last catalog sync" :value="publicReferenceStatus.data_health?.last_catalog_sync || 'n/a'" />
         <CompactMetricRow label="Last enrichment" :value="publicReferenceStatus.data_health?.last_enrichment_run || 'n/a'" />
+        <CompactMetricRow label="Catalog batch" value="100 creatures, 100 places" />
+        <CompactMetricRow label="Enrichment batch" value="100 creatures, 100 places" />
+        <CompactMetricRow
+          label="Enrichment concurrency"
+          :value="`${publicReferenceStatus.reference_contract?.operations?.detail_enrichment?.default_concurrency?.initial || 2} -> ${publicReferenceStatus.reference_contract?.operations?.detail_enrichment?.default_concurrency?.max || 6}`"
+        />
         <div v-if="publicReferenceStatus.data_health?.backoff" class="warning mt-10">
           Backoff until <span class="mono">{{ publicReferenceStatus.data_health.backoff.until }}</span>
         </div>

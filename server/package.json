@@ -10,6 +10,7 @@
     "sync": "tsx src/index.ts sync",
     "sync:public": "tsx src/index.ts sync-public",
     "enrich:public": "tsx src/index.ts enrich-public",
+    "reset:public": "tsx src/index.ts reset-public",
     "migrate": "tsx src/index.ts migrate",
     "stage:items": "tsx src/tools/stagePublicItems.ts"
   },

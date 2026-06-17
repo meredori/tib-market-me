@@ -2,7 +2,7 @@ import { config } from "./config";
 import { openDatabase } from "./lib/db/database";
 import { applyMigrations } from "./lib/db/migrations";
 import { runMarketSync } from "./lib/sync/updatePrices";
-import { enrichPublicReferenceData, syncPublicReferenceData } from "./lib/tibiadata/publicReference";
+import { enrichPublicReferenceData, resetPublicReferenceData, syncPublicReferenceData } from "./lib/tibiadata/publicReference";
 import { buildServer } from "./server";
 
 async function main(): Promise<void> {
@@ -32,6 +32,13 @@ async function main(): Promise<void> {
 
   if (command === "enrich-public") {
     const result = await enrichPublicReferenceData(db);
+    console.log(JSON.stringify(result, null, 2));
+    db.close();
+    return;
+  }
+
+  if (command === "reset-public") {
+    const result = resetPublicReferenceData(db);
     console.log(JSON.stringify(result, null, 2));
     db.close();
     return;
