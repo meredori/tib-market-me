@@ -254,10 +254,14 @@ export function buildServer(db: Database.Database) {
       const creatureLimit = Number(body.creature_limit ?? body.creatureLimit);
       const huntingPlaceLimit = Number(body.hunting_place_limit ?? body.huntingPlaceLimit);
       const includeStale = body.include_stale ?? body.includeStale;
+      const initialConcurrency = Number(body.initial_concurrency ?? body.initialConcurrency);
+      const maxConcurrency = Number(body.max_concurrency ?? body.maxConcurrency);
       const job = startPublicReferenceEnrichment(db, {
         creatureLimit: Number.isFinite(creatureLimit) ? Math.max(0, Math.trunc(creatureLimit)) : undefined,
         huntingPlaceLimit: Number.isFinite(huntingPlaceLimit) ? Math.max(0, Math.trunc(huntingPlaceLimit)) : undefined,
-        includeStale: typeof includeStale === "boolean" ? includeStale : undefined
+        includeStale: typeof includeStale === "boolean" ? includeStale : undefined,
+        initialConcurrency: Number.isFinite(initialConcurrency) ? Math.max(1, Math.trunc(initialConcurrency)) : undefined,
+        maxConcurrency: Number.isFinite(maxConcurrency) ? Math.max(1, Math.trunc(maxConcurrency)) : undefined
       });
       reply.code(202);
       return {

@@ -255,6 +255,8 @@ Settings should evolve into a clearer Data Health area that shows what is staged
 
 Phase 2 now keeps catalog sync and detail enrichment as separate operations. Catalog sync stages public reference rows only, while detail enrichment runs as an in-process background job with explicit per-entity enrichment state, retry/backoff visibility, and Data Health reporting.
 
+The enrichment worker now processes external detail imports with bounded adaptive concurrency. It starts conservatively, ramps up after clean batches, backs down after retryable upstream failures, and records concurrency/loot-source metadata on the job. Creature detail enrichment also uses embedded `lootStatistics` from `/api/v1/creatures/{name}` when present, only calling the separate creature loot endpoint when the detail response does not include loot rows.
+
 ## Build
 
 ### 1. Enrichment Operation

@@ -27,6 +27,8 @@ export type PublicReferenceEnrichmentOptions = {
   creatureLimit?: number;
   huntingPlaceLimit?: number;
   includeStale?: boolean;
+  initialConcurrency?: number;
+  maxConcurrency?: number;
 };
 
 export type PublicReferenceEnrichmentResult = PublicReferenceSyncResult & {
@@ -408,7 +410,39 @@ function normalizeHuntingPlace(payload: unknown, fetchedAt: string): PublicHunti
 }
 
 function lootRows(payload: unknown): Array<Record<string, unknown>> {
-  return listFrom(unwrapPayload(payload, ["lootStatistics", "loot", "data", "items"]), ["lootStatistics", "loot", "items", "drops", "statistics"]).map(jsonRecord);
+  const root = jsonRecord(payload);
+  const record = payloadRecord(payload, ["creature", "data", "item"]);
+  const structured = asRecord(record.structuredData);
+  const candidates = [
+    unwrapPayload(payload, ["lootStatistics", "loot", "data", "items"]),
+    record.lootStatistics,
+    record.loot,
+    record.items,
+    record.drops,
+    structured?.lootStatistics,
+    structured?.loot,
+    asRecord(root.creature)?.lootStatistics,
+    asRecord(root.creature)?.loot,
+    asRecord(root.data)?.lootStatistics,
+    asRecord(root.data)?.loot
+  ];
+  const rows: Record<string, unknown>[] = [];
+  const seenRows = new Set<string>();
+  for (const candidate of candidates) {
+    for (const row of listFrom(candidate, ["lootStatistics", "loot", "items", "drops", "statistics"]).map(jsonRecord)) {
+      const key = JSON.stringify(row);
+      if (seenRows.has(key)) {
+        continue;
+      }
+      seenRows.add(key);
+      rows.push(row);
+    }
+  }
+  return rows;
+}
+
+function payloadHasLootRows(payload: unknown): boolean {
+  return normalizedLootRows(payload).rows.length > 0;
 }
 
 type NormalizedLootRow = {
@@ -430,6 +464,22 @@ type CreatureLootReplaceResult = {
   unresolved_items: number;
 };
 
+type AdaptiveQueueStats = {
+  initial_concurrency: number;
+  max_concurrency: number;
+  max_concurrency_used: number;
+  final_concurrency: number;
+  throttle_events: number;
+};
+
+type AdaptiveQueueResult = {
+  retryable_failure: boolean;
+};
+
+const DEFAULT_REFERENCE_INITIAL_CONCURRENCY = 2;
+const DEFAULT_REFERENCE_MAX_CONCURRENCY = 6;
+const LOOT_ITEM_DETAIL_CONCURRENCY = 3;
+
 function normalizeLootRow(row: Record<string, unknown>): NormalizedLootRow | null {
   const name = firstText(row.itemName, row.item_name, row.name, row.title);
   if (!name) {
@@ -439,14 +489,16 @@ function normalizeLootRow(row: Record<string, unknown>): NormalizedLootRow | nul
   const chanceAmount = amountRangeFromText(row.chance);
   const rawAmount = rawLootAmount(row.raw, name, rarity);
   const explicitAmount = firstText(row.amount, row.count, row.quantity);
+  const explicitAmountRange = amountRangeFromText(explicitAmount);
+  const rawAmountRange = amountRangeFromText(rawAmount);
   const amountText = firstText(explicitAmount, chanceAmount.text, rawAmount, "1");
   return {
     item_id: firstNumber(row.itemId, row.item_id),
     item_name: name,
     normalized_item_name: normalizePublicName(name),
     chance_percent: parsePercent(row.chancePercent ?? row.chance_percent ?? row.chance ?? row.dropChance ?? row.drop_chance ?? row.percentage),
-    min_count: asNumberOrNull(row.minCount ?? row.min_count ?? row.min) ?? chanceAmount.min ?? 1,
-    max_count: asNumberOrNull(row.maxCount ?? row.max_count ?? row.max) ?? chanceAmount.max ?? 1,
+    min_count: asNumberOrNull(row.minCount ?? row.min_count ?? row.min) ?? explicitAmountRange.min ?? chanceAmount.min ?? rawAmountRange.min ?? 1,
+    max_count: asNumberOrNull(row.maxCount ?? row.max_count ?? row.max) ?? explicitAmountRange.max ?? chanceAmount.max ?? rawAmountRange.max ?? 1,
     rarity,
     amount_text: amountText,
     payload_json: JSON.stringify(row)
@@ -534,23 +586,32 @@ function stageLootItemIdentity(db: Database.Database, row: NormalizedLootRow, de
 async function resolveLootItemDetails(db: Database.Database, rows: NormalizedLootRow[]): Promise<{ fetched: number; unresolved: number }> {
   let fetched = 0;
   let unresolved = 0;
-  for (const row of rows) {
-    if (row.item_id !== null) {
-      continue;
-    }
-    const cached = getCachedItemDetail(db, row.normalized_item_name);
-    const detail = cached ?? await fetchAndCacheItemDetail(db, row.item_name);
-    if (!cached && detail) {
-      fetched += 1;
-    }
-    const resolvedId = detail?.item_ids?.[0] ?? null;
-    if (resolvedId) {
-      row.item_id = resolvedId;
-      stageLootItemIdentity(db, row, detail);
-    } else {
-      unresolved += 1;
+  const unresolvedRows = rows.filter((row) => row.item_id === null);
+  let cursor = 0;
+
+  async function worker(): Promise<void> {
+    while (cursor < unresolvedRows.length) {
+      const row = unresolvedRows[cursor];
+      cursor += 1;
+      const cached = getCachedItemDetail(db, row.normalized_item_name);
+      const detail = cached ?? await fetchAndCacheItemDetail(db, row.item_name);
+      if (!cached && detail) {
+        fetched += 1;
+      }
+      const resolvedId = detail?.item_ids?.[0] ?? null;
+      if (resolvedId) {
+        row.item_id = resolvedId;
+        stageLootItemIdentity(db, row, detail);
+      } else {
+        unresolved += 1;
+      }
     }
   }
+
+  await Promise.all(
+    Array.from({ length: Math.min(LOOT_ITEM_DETAIL_CONCURRENCY, unresolvedRows.length) }, () => worker())
+  );
+
   return { fetched, unresolved };
 }
 
@@ -819,6 +880,59 @@ function normalizeEnrichmentLimit(value: number | undefined): number {
   return value === undefined ? 100_000 : Math.max(0, Math.trunc(value));
 }
 
+function normalizeConcurrency(value: number | undefined, fallback: number, max: number): number {
+  if (value === undefined) {
+    return Math.min(fallback, max);
+  }
+  return Math.min(max, Math.max(1, Math.trunc(value)));
+}
+
+function enrichmentConcurrency(options: PublicReferenceEnrichmentOptions): { initial: number; max: number } {
+  const max = normalizeConcurrency(options.maxConcurrency, DEFAULT_REFERENCE_MAX_CONCURRENCY, 16);
+  return {
+    initial: normalizeConcurrency(options.initialConcurrency, DEFAULT_REFERENCE_INITIAL_CONCURRENCY, max),
+    max
+  };
+}
+
+async function runAdaptiveQueue<T, R extends AdaptiveQueueResult>(
+  items: T[],
+  options: { initialConcurrency: number; maxConcurrency: number },
+  worker: (item: T) => Promise<R>,
+  onResult: (result: R) => void
+): Promise<AdaptiveQueueStats> {
+  let cursor = 0;
+  let concurrency = options.initialConcurrency;
+  let maxConcurrencyUsed = Math.min(concurrency, items.length);
+  let throttleEvents = 0;
+
+  while (cursor < items.length) {
+    const batch = items.slice(cursor, cursor + concurrency);
+    cursor += batch.length;
+    maxConcurrencyUsed = Math.max(maxConcurrencyUsed, batch.length);
+    const results = await Promise.all(batch.map((item) => worker(item)));
+    let retryableFailure = false;
+    for (const result of results) {
+      onResult(result);
+      retryableFailure ||= result.retryable_failure;
+    }
+    if (retryableFailure) {
+      throttleEvents += 1;
+      concurrency = Math.max(1, Math.floor(concurrency / 2));
+    } else if (concurrency < options.maxConcurrency) {
+      concurrency += 1;
+    }
+  }
+
+  return {
+    initial_concurrency: options.initialConcurrency,
+    max_concurrency: options.maxConcurrency,
+    max_concurrency_used: maxConcurrencyUsed,
+    final_concurrency: concurrency,
+    throttle_events: throttleEvents
+  };
+}
+
 function detailPrioritySql(includeStale: boolean): string {
   const staleClause = includeStale ? "OR (detail_status = 'enriched' AND detail_enriched_at < ?)" : "";
   return `
@@ -870,6 +984,7 @@ function createPublicReferenceEnrichmentJob(db: Database.Database, options: Publ
   }
 
   publicReferenceEnrichmentInProgress = true;
+  const concurrency = enrichmentConcurrency(options);
   return startJob(db, {
     jobType: "public-reference-enrichment",
     entityType: "creature",
@@ -877,7 +992,9 @@ function createPublicReferenceEnrichmentJob(db: Database.Database, options: Publ
       started_at: nowIso(),
       creature_limit: normalizeEnrichmentLimit(options.creatureLimit),
       hunting_place_limit: normalizeEnrichmentLimit(options.huntingPlaceLimit),
-      include_stale: Boolean(options.includeStale)
+      include_stale: Boolean(options.includeStale),
+      initial_concurrency: concurrency.initial,
+      max_concurrency: concurrency.max
     }
   });
 }
@@ -891,6 +1008,7 @@ async function runPublicReferenceEnrichmentJob(
   const startedAt = job.started_at;
   const fetchedAt = nowIso();
   const includeStale = Boolean(options.includeStale);
+  const concurrency = enrichmentConcurrency(options);
   const creatureRows = creatureEnrichmentRows(db, normalizeEnrichmentLimit(options.creatureLimit), includeStale);
   const placeRows = huntingPlaceEnrichmentRows(db, normalizeEnrichmentLimit(options.huntingPlaceLimit), includeStale);
   const totalCount = creatureRows.length + placeRows.length;
@@ -899,6 +1017,8 @@ async function runPublicReferenceEnrichmentJob(
   let duplicateCreatureLootRows = 0;
   let itemDetailsFetched = 0;
   let unresolvedLootItems = 0;
+  let creatureLootFromDetails = 0;
+  let creatureLootFallbackFetches = 0;
   let failedCreatures = 0;
   let huntingPlaces = 0;
   let huntingPlaceCreatures = 0;
@@ -913,11 +1033,14 @@ async function runPublicReferenceEnrichmentJob(
       cursor: { phase: "starting" }
     });
 
-    for (const row of creatureRows) {
+    const creatureQueueStats = await runAdaptiveQueue(
+      creatureRows,
+      { initialConcurrency: concurrency.initial, maxConcurrency: concurrency.max },
+      async (row) => {
       const id = firstNumber(row.id);
       const name = firstText(row.name);
       if (id === null) {
-        continue;
+        return { retryable_failure: false, skipped: true, current: null };
       }
       const current = entityRef("creature", { id, name, normalized_name: firstText(row.normalized_name) });
       updateJobProgress(db, job.id, {
@@ -932,50 +1055,73 @@ async function runPublicReferenceEnrichmentJob(
         if (!creature) {
           throw new Error(`Could not normalize creature detail for ${name ?? id}`);
         }
-        const loot = await client.getCreatureLoot(creature.id);
+        const hasEmbeddedLoot = payloadHasLootRows(details);
+        const loot = hasEmbeddedLoot ? details : await client.getCreatureLoot(creature.id);
         const lootResult = await replacePublicCreatureLootWithItemDetails(db, creature.id, loot, fetchedAt);
-        creatureLootRows += lootResult.rows;
-        duplicateCreatureLootRows += lootResult.duplicates;
-        itemDetailsFetched += lootResult.item_details_fetched;
-        unresolvedLootItems += lootResult.unresolved_items;
         markCreatureDetailState(db, creature.id, "enriched", fetchedAt);
-        creatures += 1;
-        updateJobProgress(db, job.id, {
-          totalCount,
-          completedCount: completed,
-          currentEntity: current,
-          cursor: { phase: "creatures", lookup: id },
-          metadata: {
-            creature_loot_rows: creatureLootRows,
-            duplicate_creature_loot_rows: duplicateCreatureLootRows,
-            item_details_fetched: itemDetailsFetched,
-            unresolved_loot_items: unresolvedLootItems
-          }
-        });
+        return {
+          retryable_failure: false,
+          current,
+          creatures: 1,
+          loot_rows: lootResult.rows,
+          duplicate_loot_rows: lootResult.duplicates,
+          item_details_fetched: lootResult.item_details_fetched,
+          unresolved_loot_items: lootResult.unresolved_items,
+          loot_from_details: hasEmbeddedLoot ? 1 : 0,
+          loot_fallback_fetches: hasEmbeddedLoot ? 0 : 1
+        };
       } catch (error) {
-        failedCreatures += 1;
         markCreatureDetailState(db, id, "failed", nowIso(), error);
         recordJobFailure(db, job.id, {
           error,
           currentEntity: current,
           backoffUntil: isRetryableReferenceError(error) ? backoffUntil() : null
         });
-      } finally {
+        return {
+          retryable_failure: isRetryableReferenceError(error),
+          current,
+          failed_creatures: 1
+        };
+      }
+      },
+      (result) => {
+        if (result.skipped) {
+          return;
+        }
+        creatures += Number(result.creatures ?? 0);
+        creatureLootRows += Number(result.loot_rows ?? 0);
+        duplicateCreatureLootRows += Number(result.duplicate_loot_rows ?? 0);
+        itemDetailsFetched += Number(result.item_details_fetched ?? 0);
+        unresolvedLootItems += Number(result.unresolved_loot_items ?? 0);
+        creatureLootFromDetails += Number(result.loot_from_details ?? 0);
+        creatureLootFallbackFetches += Number(result.loot_fallback_fetches ?? 0);
+        failedCreatures += Number(result.failed_creatures ?? 0);
         completed += 1;
         updateJobProgress(db, job.id, {
           totalCount,
           completedCount: completed,
-          currentEntity: current,
-          cursor: { phase: "creatures", lookup: id }
+          currentEntity: result.current,
+          cursor: { phase: "creatures" },
+          metadata: {
+            creature_loot_rows: creatureLootRows,
+            duplicate_creature_loot_rows: duplicateCreatureLootRows,
+            item_details_fetched: itemDetailsFetched,
+            unresolved_loot_items: unresolvedLootItems,
+            creature_loot_from_details: creatureLootFromDetails,
+            creature_loot_fallback_fetches: creatureLootFallbackFetches
+          }
         });
       }
-    }
+    );
 
-    for (const row of placeRows) {
+    const placeQueueStats = await runAdaptiveQueue(
+      placeRows,
+      { initialConcurrency: concurrency.initial, maxConcurrency: concurrency.max },
+      async (row) => {
       const id = firstNumber(row.id);
       const name = firstText(row.name);
       if (id === null) {
-        continue;
+        return { retryable_failure: false, skipped: true, current: null };
       }
       const current = entityRef("hunting_place", { id, name, normalized_name: firstText(row.normalized_name) });
       updateJobProgress(db, job.id, {
@@ -991,28 +1137,49 @@ async function runPublicReferenceEnrichmentJob(
           throw new Error(`Could not normalize hunting-place detail for ${name ?? id}`);
         }
         const children = replacePublicHuntingPlaceChildren(db, place.id, details);
-        huntingPlaceCreatures += children.creatures;
-        huntingPlaceAreaSummaries += children.area_summaries;
         markHuntingPlaceDetailState(db, place.id, "enriched", fetchedAt);
-        huntingPlaces += 1;
+        return {
+          retryable_failure: false,
+          current,
+          hunting_places: 1,
+          hunting_place_creatures: children.creatures,
+          hunting_place_area_summaries: children.area_summaries
+        };
       } catch (error) {
-        failedHuntingPlaces += 1;
         markHuntingPlaceDetailState(db, id, "failed", nowIso(), error);
         recordJobFailure(db, job.id, {
           error,
           currentEntity: current,
           backoffUntil: isRetryableReferenceError(error) ? backoffUntil() : null
         });
-      } finally {
+        return {
+          retryable_failure: isRetryableReferenceError(error),
+          current,
+          failed_hunting_places: 1
+        };
+      }
+      },
+      (result) => {
+        if (result.skipped) {
+          return;
+        }
+        huntingPlaces += Number(result.hunting_places ?? 0);
+        huntingPlaceCreatures += Number(result.hunting_place_creatures ?? 0);
+        huntingPlaceAreaSummaries += Number(result.hunting_place_area_summaries ?? 0);
+        failedHuntingPlaces += Number(result.failed_hunting_places ?? 0);
         completed += 1;
         updateJobProgress(db, job.id, {
           totalCount,
           completedCount: completed,
-          currentEntity: current,
-          cursor: { phase: "hunting_places", lookup: id }
+          currentEntity: result.current,
+          cursor: { phase: "hunting_places" },
+          metadata: {
+            hunting_place_creatures: huntingPlaceCreatures,
+            hunting_place_area_summaries: huntingPlaceAreaSummaries
+          }
         });
       }
-    }
+    );
 
     const finishedAt = nowIso();
     const finishedJob = finishJob(db, job.id, "success", {
@@ -1024,11 +1191,15 @@ async function runPublicReferenceEnrichmentJob(
         duplicate_creature_loot_rows: duplicateCreatureLootRows,
         item_details_fetched: itemDetailsFetched,
         unresolved_loot_items: unresolvedLootItems,
+        creature_loot_from_details: creatureLootFromDetails,
+        creature_loot_fallback_fetches: creatureLootFallbackFetches,
         failed_creatures: failedCreatures,
         hunting_places: huntingPlaces,
         hunting_place_creatures: huntingPlaceCreatures,
         hunting_place_area_summaries: huntingPlaceAreaSummaries,
-        failed_hunting_places: failedHuntingPlaces
+        failed_hunting_places: failedHuntingPlaces,
+        creature_queue: creatureQueueStats,
+        place_queue: placeQueueStats
       }
     });
     return {

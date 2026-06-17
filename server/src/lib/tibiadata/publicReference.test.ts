@@ -465,6 +465,44 @@ describe("public Tibia reference data", () => {
     });
   });
 
+  it("uses creature detail loot before calling the separate loot endpoint", async () => {
+    upsertPublicCreature(db, { id: 101, name: "Dragon" }, "2026-06-10T00:00:00Z");
+    const routes = new Map<string, unknown>([
+      ["/api/v1/creatures/101", {
+        ...creaturePayload(),
+        creature: {
+          ...creaturePayload(),
+          loot: [{ itemId: 302, itemName: "Dragon Ham", chancePercent: "12%", amount: "1-3", rarity: "common" }]
+        }
+      }]
+    ]);
+    const fetchMock = vi.fn(async (url: string) => {
+      const path = new URL(url).pathname;
+      return {
+        ok: routes.has(path),
+        status: routes.has(path) ? 200 : 404,
+        json: async () => routes.get(path)
+      };
+    });
+    setPublicReferenceFetchForTests(fetchMock as unknown as typeof fetch);
+
+    const enriched = await enrichPublicReferenceData(db, { creatureLimit: 1, huntingPlaceLimit: 0 });
+
+    expect(enriched).toMatchObject({ creatures: 1, creature_loot_rows: 1 });
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v1/creatures/101/loot"), expect.anything());
+    expect(db.prepare("SELECT item_id, item_name, chance_percent, min_count, max_count FROM public_creature_loot WHERE creature_id = 101").get()).toEqual({
+      item_id: 302,
+      item_name: "Dragon Ham",
+      chance_percent: 12,
+      min_count: 1,
+      max_count: 3
+    });
+    expect(enriched.job.metadata).toMatchObject({
+      creature_loot_from_details: 1,
+      creature_loot_fallback_fetches: 0
+    });
+  });
+
   it("deduplicates creature loot and caches details for loot items without market ids", async () => {
     const routes = new Map<string, unknown>([
       ["/api/v1/creatures", { page: 1, pageSize: 250, totalCount: 1, items: [{ id: 101, name: "Dragon" }] }],
@@ -710,6 +748,53 @@ describe("public Tibia reference data", () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/v1/hunting-places/201"), expect.anything());
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/v1/hunting-places/202"), expect.anything());
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v1/hunting-places/203"), expect.anything());
+  });
+
+  it("runs public reference detail enrichment with bounded adaptive concurrency", async () => {
+    upsertPublicCreature(db, { id: 101, name: "Dragon" }, "2026-06-10T00:00:00Z");
+    upsertPublicCreature(db, { id: 102, name: "Demon" }, "2026-06-11T00:00:00Z");
+    upsertPublicCreature(db, { id: 103, name: "Rat" }, "2026-06-12T00:00:00Z");
+    const routes = new Map<string, unknown>([
+      ["/api/v1/creatures/101", { id: 101, name: "Dragon", hitpoints: 1000 }],
+      ["/api/v1/creatures/101/loot", { loot: [] }],
+      ["/api/v1/creatures/102", { id: 102, name: "Demon", hitpoints: 8200 }],
+      ["/api/v1/creatures/102/loot", { loot: [] }],
+      ["/api/v1/creatures/103", { id: 103, name: "Rat", hitpoints: 20 }],
+      ["/api/v1/creatures/103/loot", { loot: [] }]
+    ]);
+    let active = 0;
+    let maxActive = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      active -= 1;
+      const path = new URL(url).pathname;
+      return {
+        ok: routes.has(path),
+        status: routes.has(path) ? 200 : 404,
+        json: async () => routes.get(path)
+      };
+    });
+    setPublicReferenceFetchForTests(fetchMock as unknown as typeof fetch);
+
+    const result = await enrichPublicReferenceData(db, {
+      creatureLimit: 3,
+      huntingPlaceLimit: 0,
+      initialConcurrency: 2,
+      maxConcurrency: 3
+    });
+
+    expect(result).toMatchObject({ creatures: 3, failed_creatures: 0 });
+    expect(maxActive).toBeGreaterThan(1);
+    expect(result.job.metadata).toMatchObject({
+      creature_queue: {
+        initial_concurrency: 2,
+        max_concurrency: 3,
+        max_concurrency_used: expect.any(Number),
+        throttle_events: 0
+      }
+    });
   });
 
   it("records per-entity enrichment failures and exposes retryable backoff in data health", async () => {
