@@ -52,11 +52,11 @@ import { getLootInbox, markLootInboxItemState } from "./lib/lootSelling";
 import { registerBestiaryRoutes } from "./lib/bestiary/routes";
 import { registerHuntingPlaceRoutes } from "./lib/huntingPlaces/routes";
 import {
-  checkPublicHunts,
   getPublicHuntStatus,
   listPublicHuntReviewQueue,
   reprocessPublicHunts,
-  reviewPublicHunt
+  reviewPublicHunt,
+  startPublicHuntImport
 } from "./lib/publicHunts";
 import { registerTaskboardRoutes } from "./lib/taskboard/routes";
 
@@ -302,14 +302,18 @@ export function buildServer(db: Database.Database) {
         : {};
       const limit = Number(body.limit);
       const concurrency = Number(body.concurrency);
-      const result = await checkPublicHunts(db, {
+      const job = startPublicHuntImport(db, {
         limit: Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : undefined,
         concurrency: Number.isFinite(concurrency) ? Math.max(1, Math.trunc(concurrency)) : undefined
       });
       reply.code(202);
-      return result;
+      return {
+        ok: true,
+        job,
+        message: "Public hunt import started."
+      };
     } catch (error) {
-      reply.code(500);
+      reply.code(String(error).includes("already running") ? 409 : 500);
       return { ok: false, error: String(error) };
     }
   });

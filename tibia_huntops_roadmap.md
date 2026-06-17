@@ -1120,7 +1120,7 @@ Document:
 - Source URL shape: listing at `/hunt_sessions?hunt_sessions_by=is_public`, detail pages at `/hunt_sessions/:id`.
 - Available v1 fields: title, public author label, observed date, duration, party vocations/levels, XP, raw XP rate, XP rate, balance/profit, and monster kill counts.
 - Raw detail pages are stored as raw HTML with a payload fingerprint for audit, dedupe, and future reparse.
-- Import is manual, runs all public pages from one action, loads hunt detail pages concurrently with rate-limit spacing, and records progress through intelligence jobs.
+- Import is manual, runs all public pages from one action, loads hunt detail pages concurrently with rate-limit spacing, records progress through intelligence jobs, and refreshes the review queue while rows arrive.
 - Practical concern: `ai-train=no` is respected; imported facts are local app intelligence only.
 
 ### 2. Public Session Storage

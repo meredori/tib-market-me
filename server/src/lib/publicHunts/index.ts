@@ -13,6 +13,7 @@ const BASE_URL = "https://www.hunt-analyser.com";
 const LIST_PATH = "/hunt_sessions?hunt_sessions_by=is_public";
 const DEFAULT_THROTTLE_MS = 900;
 const DEFAULT_DETAIL_CONCURRENCY = 6;
+let publicHuntImportInProgress = false;
 
 type Fetcher = (url: string) => Promise<string>;
 
@@ -507,24 +508,43 @@ export async function checkPublicHunts(
   db: Database.Database,
   options: { limit?: number; fetcher?: Fetcher; throttleMs?: number; concurrency?: number } = {}
 ): Promise<{ ok: true; job: JobStatus; imported: number; discovered: number; skipped: number }> {
+  const job = createPublicHuntImportJob(db, options);
+  return runPublicHuntImportJob(db, job, options);
+}
+
+function createPublicHuntImportJob(
+  db: Database.Database,
+  options: { limit?: number; concurrency?: number } = {}
+): JobStatus {
+  if (publicHuntImportInProgress) {
+    throw new Error("Public hunt import is already running");
+  }
+  publicHuntImportInProgress = true;
+  const limit = options.limit === undefined ? undefined : Math.max(1, Math.trunc(options.limit));
+  const concurrency = normalizeConcurrency(options.concurrency);
+  return startJob(db, {
+    jobType: "public-hunt-import",
+    entityType: "hunt",
+    totalCount: limit ?? 0,
+    cursor: { next_page: 1 },
+    metadata: { source: SOURCE, manual: true, ai_train: false, detail_concurrency: concurrency, scope: limit === undefined ? "all_pages" : "limited" }
+  });
+}
+
+async function runPublicHuntImportJob(
+  db: Database.Database,
+  job: JobStatus,
+  options: { limit?: number; fetcher?: Fetcher; throttleMs?: number; concurrency?: number } = {}
+): Promise<{ ok: true; job: JobStatus; imported: number; discovered: number; skipped: number }> {
   const limit = options.limit === undefined ? undefined : Math.max(1, Math.trunc(options.limit));
   const fetcher = options.fetcher ?? defaultFetch;
   const throttleMs = options.throttleMs ?? DEFAULT_THROTTLE_MS;
   const concurrency = normalizeConcurrency(options.concurrency);
-  const startPage = 1;
-  const job = startJob(db, {
-    jobType: "public-hunt-import",
-    entityType: "hunt",
-    totalCount: limit ?? 0,
-    cursor: { next_page: startPage },
-    metadata: { source: SOURCE, manual: true, ai_train: false, detail_concurrency: concurrency, scope: limit === undefined ? "all_pages" : "limited" }
-  });
-
   let imported = 0;
   let skipped = 0;
   let discovered = 0;
   let attempted = 0;
-  let page = startPage;
+  let page = 1;
   let currentJob = job;
   try {
     while (limit === undefined || imported < limit) {
@@ -598,7 +618,20 @@ export async function checkPublicHunts(
   } catch (error) {
     currentJob = finishJob(db, job.id, "error", { error, completedCount: imported, metadata: { imported, skipped, discovered, next_page: page, detail_concurrency: concurrency } });
     return { ok: true, job: currentJob, imported, discovered, skipped };
+  } finally {
+    publicHuntImportInProgress = false;
   }
+}
+
+export function startPublicHuntImport(
+  db: Database.Database,
+  options: { limit?: number; concurrency?: number } = {}
+): JobStatus {
+  const job = createPublicHuntImportJob(db, options);
+  void runPublicHuntImportJob(db, job, options).catch(() => {
+    // The job record captures background failures.
+  });
+  return job;
 }
 
 function parseArray(value: unknown): unknown[] {

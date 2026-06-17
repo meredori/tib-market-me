@@ -133,6 +133,7 @@ let latestSearchToken = 0
 let searchAbortController = null
 let publicReferencePoll = null
 let publicReferencePollMode = null
+let publicHuntPoll = null
 
 async function loadStatus() {
   try {
@@ -168,6 +169,27 @@ async function loadPublicHuntStatus() {
   try {
     const data = await api('/api/public-hunts/status')
     Object.assign(publicHuntStatus, data)
+    const activeJob = Array.isArray(data.jobs?.active)
+      ? data.jobs.active.find((job) => job.job_type === 'public-hunt-import')
+      : null
+    if (publicHuntPoll && activeJob) {
+      const imported = Number(activeJob.completed_count || 0)
+      const total = Number(activeJob.total_count || activeJob.metadata?.source_total_count || 0)
+      publicHuntInfo.value = total > 0
+        ? `Importing public hunts... ${imported} / ${total} processed. Review rows update as they arrive.`
+        : `Importing public hunts... ${imported} processed. Review rows update as they arrive.`
+    }
+    if (publicHuntPoll && !activeJob) {
+      clearInterval(publicHuntPoll)
+      publicHuntPoll = null
+      publicHuntBusy.value = false
+      const latest = latestPublicHuntImportJob(data)
+      const imported = Number(latest?.metadata?.imported || latest?.completed_count || 0)
+      const skipped = Number(latest?.metadata?.skipped || 0)
+      publicHuntInfo.value = latest?.status === 'error'
+        ? 'Public hunt import stopped after an issue. Review the job details before retrying.'
+        : `Public hunt import finished. Imported ${imported} hunt(s), skipped ${skipped}.`
+    }
   } catch (error) {
     publicHuntInfo.value = `Public hunt status error: ${error.message}`
   }
@@ -185,6 +207,22 @@ async function loadPublicHuntReviewQueue() {
 function hasActivePublicReferenceJob(data = publicReferenceStatus) {
   const activeJobs = Array.isArray(data.jobs?.active) ? data.jobs.active : []
   return activeJobs.some((job) => job.job_type === 'public-reference-catalog' || job.job_type === 'public-reference-enrichment')
+}
+
+function hasActivePublicHuntJob(data = publicHuntStatus) {
+  const activeJobs = Array.isArray(data.jobs?.active) ? data.jobs.active : []
+  return activeJobs.some((job) => job.job_type === 'public-hunt-import')
+}
+
+function latestPublicHuntImportJob(data = publicHuntStatus) {
+  return data.jobs?.by_type?.['public-hunt-import']?.[0] || null
+}
+
+async function refreshPublicHuntsDuringImport() {
+  await Promise.all([
+    loadPublicHuntStatus(),
+    loadPublicHuntReviewQueue(),
+  ])
 }
 
 function latestPublicReferenceEnrichmentJob(data = publicReferenceStatus) {
@@ -530,20 +568,30 @@ async function queuePublicReferenceMissingLoot() {
 
 async function checkPublicHunts() {
   publicHuntBusy.value = true
-  publicHuntInfo.value = 'Checking Hunt Analyser public hunts.'
+  publicHuntInfo.value = 'Starting Hunt Analyser public hunt import.'
+  if (publicHuntPoll) {
+    clearInterval(publicHuntPoll)
+  }
   try {
     const out = await api('/api/public-hunts/check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ concurrency: 6 }),
     })
-    publicHuntInfo.value = `Imported ${out.imported || 0} public hunt(s), skipped ${out.skipped || 0}.`
-    await loadPublicHuntStatus()
-    await loadPublicHuntReviewQueue()
+    publicHuntInfo.value = out.message || 'Public hunt import started.'
+    publicHuntPoll = setInterval(refreshPublicHuntsDuringImport, 2000)
+    await refreshPublicHuntsDuringImport()
   } catch (error) {
     publicHuntInfo.value = `Public hunt import failed: ${error.message}`
-  } finally {
+    if (publicHuntPoll) {
+      clearInterval(publicHuntPoll)
+      publicHuntPoll = null
+    }
     publicHuntBusy.value = false
+  } finally {
+    if (!publicHuntPoll) {
+      publicHuntBusy.value = false
+    }
   }
 }
 
@@ -976,6 +1024,9 @@ onBeforeUnmount(() => {
     clearInterval(publicReferencePoll)
   }
   publicReferencePollMode = null
+  if (publicHuntPoll) {
+    clearInterval(publicHuntPoll)
+  }
 })
 </script>
 
