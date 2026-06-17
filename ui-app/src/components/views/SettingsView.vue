@@ -311,7 +311,7 @@ function pct(value) {
           <span class="pill">Suspicious {{ publicHuntStatus.counts?.suspicious || 0 }}</span>
         </div>
         <FreshnessBadge :freshness="publicHuntStatus.freshness" />
-        <CompactMetricRow label="Import run" value="All public pages" />
+        <CompactMetricRow label="Import run" value="Backfill once, then newest checks" />
         <CompactMetricRow label="Detail loading" value="Concurrent" />
         <CompactMetricRow label="Policy" :value="publicHuntStatus.policy?.manual_only ? 'Manual factual import, no training use' : 'Manual import'" />
         <JobStatusPanel title="Public Hunt Import" :jobs="jobGroup(publicHuntStatus.jobs, 'public-hunt-import')" />

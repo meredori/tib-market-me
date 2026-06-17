@@ -13,6 +13,7 @@ const BASE_URL = "https://www.hunt-analyser.com";
 const LIST_PATH = "/hunt_sessions?hunt_sessions_by=is_public";
 const DEFAULT_THROTTLE_MS = 900;
 const DEFAULT_DETAIL_CONCURRENCY = 6;
+const DEFAULT_KNOWN_PAGE_STOP_THRESHOLD = 1;
 let publicHuntImportInProgress = false;
 
 type Fetcher = (url: string) => Promise<string>;
@@ -482,6 +483,30 @@ function listUrl(page: number): string {
   return `${BASE_URL}${LIST_PATH}${page > 1 ? `&page=${page}` : ""}`;
 }
 
+function parseObjectJson(value: unknown): Record<string, unknown> {
+  if (typeof value !== "string" || !value.trim()) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function hasCompletedPublicHuntBackfill(db: Database.Database): boolean {
+  const rows = db.prepare(`
+    SELECT metadata_json
+    FROM intelligence_jobs
+    WHERE job_type = 'public-hunt-import'
+      AND status = 'success'
+    ORDER BY started_at DESC
+    LIMIT 50
+  `).all() as Array<{ metadata_json: string | null }>;
+  return rows.some((row) => parseObjectJson(row.metadata_json).stop_reason === "end_of_pages");
+}
+
 function normalizeConcurrency(value: number | undefined): number {
   if (value === undefined || !Number.isFinite(value)) {
     return DEFAULT_DETAIL_CONCURRENCY;
@@ -506,7 +531,7 @@ async function runConcurrent<T, R>(items: T[], concurrency: number, worker: (ite
 
 export async function checkPublicHunts(
   db: Database.Database,
-  options: { limit?: number; fetcher?: Fetcher; throttleMs?: number; concurrency?: number } = {}
+  options: { limit?: number; fetcher?: Fetcher; throttleMs?: number; concurrency?: number; knownPageStopThreshold?: number } = {}
 ): Promise<{ ok: true; job: JobStatus; imported: number; discovered: number; skipped: number }> {
   const job = createPublicHuntImportJob(db, options);
   return runPublicHuntImportJob(db, job, options);
@@ -522,28 +547,34 @@ function createPublicHuntImportJob(
   publicHuntImportInProgress = true;
   const limit = options.limit === undefined ? undefined : Math.max(1, Math.trunc(options.limit));
   const concurrency = normalizeConcurrency(options.concurrency);
+  const hasBackfill = hasCompletedPublicHuntBackfill(db);
   return startJob(db, {
     jobType: "public-hunt-import",
     entityType: "hunt",
     totalCount: limit ?? 0,
     cursor: { next_page: 1 },
-    metadata: { source: SOURCE, manual: true, ai_train: false, detail_concurrency: concurrency, scope: limit === undefined ? "all_pages" : "limited" }
+    metadata: { source: SOURCE, manual: true, ai_train: false, detail_concurrency: concurrency, scope: limit === undefined ? hasBackfill ? "freshness_scan" : "backfill_scan" : "limited" }
   });
 }
 
 async function runPublicHuntImportJob(
   db: Database.Database,
   job: JobStatus,
-  options: { limit?: number; fetcher?: Fetcher; throttleMs?: number; concurrency?: number } = {}
+  options: { limit?: number; fetcher?: Fetcher; throttleMs?: number; concurrency?: number; knownPageStopThreshold?: number } = {}
 ): Promise<{ ok: true; job: JobStatus; imported: number; discovered: number; skipped: number }> {
   const limit = options.limit === undefined ? undefined : Math.max(1, Math.trunc(options.limit));
   const fetcher = options.fetcher ?? defaultFetch;
   const throttleMs = options.throttleMs ?? DEFAULT_THROTTLE_MS;
   const concurrency = normalizeConcurrency(options.concurrency);
+  const knownPageStopThreshold = Math.max(1, Math.trunc(options.knownPageStopThreshold ?? DEFAULT_KNOWN_PAGE_STOP_THRESHOLD));
+  const canStopAfterKnownPages = limit === undefined && hasCompletedPublicHuntBackfill(db);
+  const scope = limit === undefined ? canStopAfterKnownPages ? "freshness_scan" : "backfill_scan" : "limited";
   let imported = 0;
   let skipped = 0;
   let discovered = 0;
   let attempted = 0;
+  let knownOnlyPages = 0;
+  let stopReason: string | undefined;
   let page = 1;
   let currentJob = job;
   try {
@@ -569,6 +600,7 @@ async function runPublicHuntImportJob(
         }
         newEntries.push(entry);
       }
+      knownOnlyPages = entries.length > 0 && newEntries.length === 0 ? knownOnlyPages + 1 : 0;
 
       const importedPage = await runConcurrent(newEntries, concurrency, async (entry) => {
         await delay(throttleMs);
@@ -599,6 +631,18 @@ async function runPublicHuntImportJob(
 
       if (!list.next_page || (limit !== undefined && imported >= limit)) {
         page = list.next_page ?? page;
+        stopReason = !list.next_page ? "end_of_pages" : "limit_reached";
+        break;
+      }
+      if (canStopAfterKnownPages && knownOnlyPages >= knownPageStopThreshold) {
+        stopReason = "known_pages";
+        currentJob = updateJobProgress(db, job.id, {
+          completedCount: imported,
+          totalCount,
+          cursor: { next_page: list.next_page, stopped_after_known_pages: knownOnlyPages },
+          metadata: { source_total_count: list.total_count, discovered, skipped, attempted, stop_reason: "known_pages" },
+          message: `Stopped after ${knownOnlyPages} known public hunt page(s).`
+        });
         break;
       }
       page = list.next_page;
@@ -612,7 +656,15 @@ async function runPublicHuntImportJob(
     }
     currentJob = finishJob(db, job.id, "success", {
       completedCount: imported,
-      metadata: { imported, skipped, discovered, next_page: page, detail_concurrency: concurrency, scope: limit === undefined ? "all_pages" : "limited" }
+      metadata: {
+        imported,
+        skipped,
+        discovered,
+        next_page: page,
+        detail_concurrency: concurrency,
+        scope,
+        stop_reason: stopReason
+      }
     });
     return { ok: true, job: currentJob, imported, discovered, skipped };
   } catch (error) {

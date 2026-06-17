@@ -172,6 +172,80 @@ describe("public hunt import", () => {
     expect(getPublicHuntStatus(db).counts).toMatchObject({ total: 3 });
   });
 
+  it("stops routine public hunt checks after the newest page is already imported", async () => {
+    const listPage = (entries: string[], nextPage: number | null) => `
+      ${entries.map((id) => `<div data-row-click-url-value="/hunt_sessions/${id}"><h3>Public Hunt ${id}</h3></div>`).join("\n")}
+      <div class="text-xs text-brand-ink-soft">Displaying hunt sessions <b>1&nbsp;-&nbsp;20</b> of <b>4</b> in total</div>
+      ${nextPage ? `<a href="/hunt_sessions?direction=&hunt_sessions_by=is_public&page=${nextPage}&sort=">Next</a>` : ""}
+    `;
+    const pages = new Map<string, string>([
+      ["https://www.hunt-analyser.com/hunt_sessions?hunt_sessions_by=is_public", listPage(["48541", "48542"], 2)],
+      ["https://www.hunt-analyser.com/hunt_sessions?hunt_sessions_by=is_public&page=2", listPage(["48543", "48544"], null)],
+      ["https://www.hunt-analyser.com/hunt_sessions/48541", detailHtml(48541, "Public Hunt 48541")],
+      ["https://www.hunt-analyser.com/hunt_sessions/48542", detailHtml(48542, "Public Hunt 48542")],
+      ["https://www.hunt-analyser.com/hunt_sessions/48543", detailHtml(48543, "Public Hunt 48543")],
+      ["https://www.hunt-analyser.com/hunt_sessions/48544", detailHtml(48544, "Public Hunt 48544")]
+    ]);
+    const requested: string[] = [];
+    const fetcher = async (url: string) => {
+      requested.push(url);
+      const value = pages.get(url);
+      if (!value) {
+        throw new Error(`Unexpected URL ${url}`);
+      }
+      return value;
+    };
+
+    const first = await checkPublicHunts(db, { throttleMs: 0, concurrency: 2, fetcher });
+    requested.length = 0;
+    const second = await checkPublicHunts(db, { throttleMs: 0, concurrency: 2, fetcher });
+
+    expect(first).toMatchObject({ imported: 4, discovered: 4 });
+    expect(second).toMatchObject({ imported: 0, skipped: 2, discovered: 2 });
+    expect(requested).toEqual(["https://www.hunt-analyser.com/hunt_sessions?hunt_sessions_by=is_public"]);
+    expect(second.job.metadata).toMatchObject({ stop_reason: "known_pages", scope: "freshness_scan" });
+  });
+
+  it("continues past known newest pages when the older public hunt backfill has not completed", async () => {
+    const listPage = (entries: string[], nextPage: number | null) => `
+      ${entries.map((id) => `<div data-row-click-url-value="/hunt_sessions/${id}"><h3>Public Hunt ${id}</h3></div>`).join("\n")}
+      <div class="text-xs text-brand-ink-soft">Displaying hunt sessions <b>1&nbsp;-&nbsp;20</b> of <b>4</b> in total</div>
+      ${nextPage ? `<a href="/hunt_sessions?direction=&hunt_sessions_by=is_public&page=${nextPage}&sort=">Next</a>` : ""}
+    `;
+    const pages = new Map<string, string>([
+      ["https://www.hunt-analyser.com/hunt_sessions?hunt_sessions_by=is_public", listPage(["48541", "48542"], 2)],
+      ["https://www.hunt-analyser.com/hunt_sessions?hunt_sessions_by=is_public&page=2", listPage(["48543", "48544"], null)],
+      ["https://www.hunt-analyser.com/hunt_sessions/48541", detailHtml(48541, "Public Hunt 48541")],
+      ["https://www.hunt-analyser.com/hunt_sessions/48542", detailHtml(48542, "Public Hunt 48542")],
+      ["https://www.hunt-analyser.com/hunt_sessions/48543", detailHtml(48543, "Public Hunt 48543")],
+      ["https://www.hunt-analyser.com/hunt_sessions/48544", detailHtml(48544, "Public Hunt 48544")]
+    ]);
+    const requested: string[] = [];
+    const fetcher = async (url: string) => {
+      requested.push(url);
+      const value = pages.get(url);
+      if (!value) {
+        throw new Error(`Unexpected URL ${url}`);
+      }
+      return value;
+    };
+
+    const partial = await checkPublicHunts(db, { limit: 2, throttleMs: 0, concurrency: 2, fetcher });
+    requested.length = 0;
+    const backfill = await checkPublicHunts(db, { throttleMs: 0, concurrency: 2, fetcher });
+
+    expect(partial).toMatchObject({ imported: 2, discovered: 2 });
+    expect(partial.job.metadata).toMatchObject({ stop_reason: "limit_reached", scope: "limited" });
+    expect(backfill).toMatchObject({ imported: 2, skipped: 2, discovered: 4 });
+    expect(requested).toEqual([
+      "https://www.hunt-analyser.com/hunt_sessions?hunt_sessions_by=is_public",
+      "https://www.hunt-analyser.com/hunt_sessions?hunt_sessions_by=is_public&page=2",
+      "https://www.hunt-analyser.com/hunt_sessions/48543",
+      "https://www.hunt-analyser.com/hunt_sessions/48544"
+    ]);
+    expect(backfill.job.metadata).toMatchObject({ stop_reason: "end_of_pages", scope: "backfill_scan" });
+  });
+
   it("keeps unmatched imports in review with a best guess and supports review actions", async () => {
     const pages = new Map<string, string>([
       ["https://www.hunt-analyser.com/hunt_sessions?hunt_sessions_by=is_public", listHtml()],
