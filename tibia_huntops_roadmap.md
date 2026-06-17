@@ -1358,6 +1358,19 @@ Possible future work:
 
 These should be introduced only when they directly improve taskboard, hunting-place intelligence, or recommendations.
 
+## Task Integration Across App Surfaces
+
+Expand taskboard intelligence into the wider app once the task data is reliable enough to reuse.
+
+Possible future work:
+
+- Highlight active task creatures and task delivery items on hunting-place pages.
+- Filter hunting places by active task creatures.
+- Filter hunting places by task delivery items that can be farmed there.
+- Show task item relevance in Market screens, item search, and item detail views.
+- Let recommendation and hunting-place ranking account for active task overlap without mixing task progress into personal hunt performance totals.
+- Keep task signals source-labelled so task relevance is distinct from loot value, bestiary value, and personal hunt history.
+
 ---
 
 # Definition Of Done For Every Phase
