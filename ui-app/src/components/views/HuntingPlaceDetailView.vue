@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Crosshair,
   ExternalLink,
+  GripVertical,
   PackageSearch,
   RefreshCw,
   Search,
@@ -13,10 +14,13 @@ import {
 } from '@lucide/vue'
 import { api } from '../../lib/api'
 import ConfidenceBadge from '../common/ConfidenceBadge.vue'
+import DataTable from '../common/DataTable.vue'
 import DecisionLabels from '../common/DecisionLabels.vue'
 import EntityLinkPill from '../common/EntityLinkPill.vue'
 import FreshnessBadge from '../common/FreshnessBadge.vue'
+import InlineLink from '../common/InlineLink.vue'
 import SectionHeader from '../common/SectionHeader.vue'
+import Toolbar from '../common/Toolbar.vue'
 
 const props = defineProps({
   detail: { type: Object, default: null },
@@ -26,7 +30,7 @@ const props = defineProps({
   itemImagePath: { type: Function, required: true },
 })
 
-defineEmits([
+const emit = defineEmits([
   'open-hunting-place',
   'open-creature',
   'open-item',
@@ -39,6 +43,11 @@ defineEmits([
 const placesBusy = ref(false)
 const placesError = ref('')
 const places = ref({ items: [], summary: {} })
+const areaOrderDraft = ref([])
+const areaOrderOriginal = ref([])
+const draggedAreaIndex = ref(null)
+const areaOrderBusy = ref(false)
+const areaOrderError = ref('')
 const placeFilters = reactive({
   q: '',
   hasPersonalHunts: false,
@@ -46,6 +55,36 @@ const placeFilters = reactive({
 })
 
 let placeSearchTimer = null
+
+const creatureColumns = [
+  { key: 'creature', label: 'Creature' },
+  { key: 'loot', label: 'Top loot' },
+  { key: 'xp', label: 'XP' },
+  { key: 'bestiary', label: 'Bestiary' },
+]
+
+const lootColumns = [
+  { key: 'item', label: 'Item' },
+  { key: 'amount', label: 'Amount' },
+  { key: 'value', label: 'Value' },
+]
+
+const areaColumns = [
+  { key: 'area', label: 'Area' },
+  { key: 'levels', label: 'Levels' },
+  { key: 'creatures', label: 'Creatures' },
+  { key: 'loot', label: 'Top loot' },
+]
+
+const placeColumns = [
+  { key: 'name', label: 'Name' },
+  { key: 'level', label: 'Level' },
+  { key: 'risk', label: 'Risk' },
+  { key: 'creatures', label: 'Creatures' },
+  { key: 'loot', label: 'Loot' },
+  { key: 'personal', label: 'Personal' },
+  { key: 'public', label: 'Public' },
+]
 
 const sortedExpectedLoot = computed(() => {
   return [...(props.detail?.reference?.expected_loot || [])].sort(compareLootValue)
@@ -59,6 +98,16 @@ const sortedCreatures = computed(() => {
     if (occurrenceDiff !== 0) return occurrenceDiff
     return String(a.name || '').localeCompare(String(b.name || ''))
   })
+})
+
+const sortedAreaSummaries = computed(() => {
+  return areaOrderDraft.value.length ? areaOrderDraft.value : [...(props.detail?.reference?.area_summaries || [])]
+})
+
+const areaOrderChanged = computed(() => {
+  const current = areaOrderDraft.value.map((area) => area.area_name).join('\u001f')
+  const original = areaOrderOriginal.value.join('\u001f')
+  return Boolean(current && original && current !== original)
 })
 
 function gp(value) {
@@ -128,6 +177,99 @@ function levelRange(place) {
   return '-'
 }
 
+function vocationLevelText(value) {
+  return String(value || '').trim() || '-'
+}
+
+function latestPersonalLevel() {
+  const hunt = (props.detail?.personal?.hunts || []).find((entry) => entry.character_level !== null && entry.character_level !== undefined)
+  return hunt?.character_level ?? null
+}
+
+function publicDataLevel() {
+  return levelRange(props.detail?.place)
+}
+
+function areaWikiLevel(area) {
+  return vocationLevelText(area?.recommended_levels?.knights || props.detail?.place?.level_knights)
+}
+
+function areaCreatureKey(creature) {
+  return String(creature?.normalized_creature_name || creature?.name || '').toLowerCase()
+}
+
+function areaLootItems(area, limit = null) {
+  const creatureNames = new Set((area?.creatures || []).map(areaCreatureKey).filter(Boolean))
+  const items = sortedExpectedLoot.value.filter((item) => {
+    return (item.creature_names || []).some((creatureName) => creatureNames.has(String(creatureName || '').toLowerCase()))
+  })
+  return limit ? items.slice(0, limit) : items
+}
+
+function topAreaLoot(area) {
+  return areaLootItems(area, 4)
+}
+
+function extraAreaLootCount(area) {
+  return Math.max(0, areaLootItems(area).length - topAreaLoot(area).length)
+}
+
+function syncAreaOrderDraft(areas) {
+  const next = [...(areas || [])]
+  areaOrderDraft.value = next
+  areaOrderOriginal.value = next.map((area) => area.area_name)
+  draggedAreaIndex.value = null
+  areaOrderError.value = ''
+}
+
+function moveArea(fromIndex, toIndex) {
+  if (fromIndex === null || fromIndex === undefined || fromIndex === toIndex) return
+  const next = [...areaOrderDraft.value]
+  const [moved] = next.splice(fromIndex, 1)
+  if (!moved) return
+  next.splice(toIndex, 0, moved)
+  areaOrderDraft.value = next
+  draggedAreaIndex.value = toIndex
+}
+
+function onAreaDragStart(index) {
+  draggedAreaIndex.value = index
+}
+
+function onAreaDragOver(event, index) {
+  event.preventDefault()
+  moveArea(draggedAreaIndex.value, index)
+}
+
+function onAreaDrop(event, index) {
+  event.preventDefault()
+  moveArea(draggedAreaIndex.value, index)
+  draggedAreaIndex.value = null
+}
+
+function onAreaDragEnd() {
+  draggedAreaIndex.value = null
+}
+
+async function saveAreaOrder() {
+  if (!props.detail?.public_hunting_place_id || !areaOrderChanged.value) return
+  areaOrderBusy.value = true
+  areaOrderError.value = ''
+  try {
+    await api(`/api/hunting-places/${props.detail.public_hunting_place_id}/area-order`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area_names: areaOrderDraft.value.map((area) => area.area_name) }),
+    })
+    areaOrderOriginal.value = areaOrderDraft.value.map((area) => area.area_name)
+    emit('refresh')
+  } catch (error) {
+    areaOrderError.value = String(error?.message || error)
+  } finally {
+    areaOrderBusy.value = false
+  }
+}
+
 function cleanText(value) {
   return String(value || '')
     .replace(/\{\{\s*Mapper Coords\|[^}]*\}\}/gi, '')
@@ -189,6 +331,7 @@ function creatureLootValue(creature) {
 onMounted(loadPlaces)
 
 watch(() => [placeFilters.hasPersonalHunts, placeFilters.hasPublicHunts], loadPlaces)
+watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immediate: true })
 </script>
 
 <template>
@@ -213,7 +356,7 @@ watch(() => [placeFilters.hasPersonalHunts, placeFilters.hasPublicHunts], loadPl
         </button>
       </SectionHeader>
 
-      <div class="places-toolbar">
+      <Toolbar class="places-toolbar">
         <label class="search-field">
           <Search :size="16" />
           <input v-model="placeFilters.q" placeholder="Search places or locations" @input="onPlaceSearchInput" />
@@ -226,32 +369,22 @@ watch(() => [placeFilters.hasPersonalHunts, placeFilters.hasPublicHunts], loadPl
           <input v-model="placeFilters.hasPublicHunts" type="checkbox" />
           Has public hunts
         </label>
-      </div>
-
-      <div class="status-row mt-10">
-        <span class="status-badge">{{ places.summary?.with_level_range || 0 }} with level range</span>
-        <span class="status-badge">{{ places.summary?.with_expected_loot || 0 }} with loot</span>
-        <span class="status-badge">{{ places.summary?.with_personal_hunts || 0 }} with personal hunts</span>
-        <span class="status-badge">{{ places.summary?.with_public_hunts || 0 }} with public hunts</span>
-      </div>
+      </Toolbar>
 
       <p v-if="placesError" class="error">{{ placesError }}</p>
 
-      <div class="table-wrap mt-10">
-        <table class="places-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Level</th>
-              <th>Risk</th>
-              <th>Creatures</th>
-              <th>Loot</th>
-              <th>Personal</th>
-              <th>Public</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="place in places.items || []" :key="place.public_hunting_place_id">
+      <DataTable
+        class="places-table"
+        :columns="placeColumns"
+        :items="places.items || []"
+        row-key="public_hunting_place_id"
+        min-width="820px"
+        :loading="placesBusy"
+        empty-title="No hunting spots match"
+        empty-reason="Adjust the search or personal/public hunt filters."
+      >
+        <template #row="{ items }">
+            <tr v-for="place in items" :key="place.public_hunting_place_id">
               <td>
                 <button class="inline-link place-name-link" @click="$emit('open-hunting-place', place.public_hunting_place_id)">
                   {{ place.name }}
@@ -265,14 +398,14 @@ watch(() => [placeFilters.hasPersonalHunts, placeFilters.hasPublicHunts], loadPl
               <td>{{ formatValue(place.personal_hunt_count) }}</td>
               <td>{{ formatValue(place.public_hunt_count) }}</td>
             </tr>
-            <tr v-if="!placesBusy && !places.items?.length">
-              <td colspan="7" class="muted">No hunting spots match the current filters.</td>
-            </tr>
-            <tr v-if="placesBusy">
-              <td colspan="7" class="muted">Loading hunting spots...</td>
-            </tr>
-          </tbody>
-        </table>
+        </template>
+      </DataTable>
+
+      <div class="status-row mt-10">
+        <span class="status-badge">{{ places.summary?.with_level_range || 0 }} with level range</span>
+        <span class="status-badge">{{ places.summary?.with_expected_loot || 0 }} with loot</span>
+        <span class="status-badge">{{ places.summary?.with_personal_hunts || 0 }} with personal hunts</span>
+        <span class="status-badge">{{ places.summary?.with_public_hunts || 0 }} with public hunts</span>
       </div>
     </article>
 
@@ -424,22 +557,111 @@ watch(() => [placeFilters.hasPersonalHunts, placeFilters.hasPublicHunts], loadPl
           </div>
         </article>
 
-        <article class="panel">
+        <article class="panel table-panel">
+          <SectionHeader title="Area Breakdown" :subtitle="`${detail.reference?.area_summaries?.length || 0} areas`">
+            <button class="ghost-action" :disabled="areaOrderBusy || !areaOrderChanged" @click="saveAreaOrder">
+              <GripVertical :size="15" />
+              Save Order
+            </button>
+          </SectionHeader>
+          <p v-if="areaOrderError" class="error">{{ areaOrderError }}</p>
+          <DataTable
+            :columns="areaColumns"
+            :items="sortedAreaSummaries"
+            row-key="area_name"
+            min-width="900px"
+            empty-title="No area breakdown"
+            empty-reason="Area creature summaries will appear after hunting-place detail enrichment."
+          >
+            <template #row="{ items }">
+              <tr
+                v-for="(area, index) in items"
+                :key="area.area_name"
+                class="area-order-row"
+                :class="{ dragging: draggedAreaIndex === index }"
+                draggable="true"
+                @dragstart="onAreaDragStart(index)"
+                @dragover="onAreaDragOver($event, index)"
+                @drop="onAreaDrop($event, index)"
+                @dragend="onAreaDragEnd"
+              >
+                <td>
+                  <div class="area-name-cell">
+                    <GripVertical :size="15" class="drag-handle" />
+                    <div>
+                      <strong>{{ area.area_name }}</strong>
+                      <div class="muted compact-note">Order {{ index + 1 }} | {{ area.creature_count ?? area.creatures?.length ?? 0 }} creature(s)</div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="area-level-stack">
+                    <span><b>Your level</b> {{ latestPersonalLevel() ?? '-' }}</span>
+                    <span><b>Public data</b> {{ publicDataLevel() }}</span>
+                    <span><b>Wiki recommended</b> {{ areaWikiLevel(area) }}</span>
+                  </div>
+                </td>
+                <td>
+                  <div v-if="area.creatures?.length" class="area-creature-list">
+                    <InlineLink
+                      v-for="creature in area.creatures"
+                      :key="creature.normalized_creature_name || creature.name"
+                      class="creature-name-link"
+                      @click="$emit('open-creature', creature)"
+                    >
+                      {{ creature.name }}
+                    </InlineLink>
+                  </div>
+                  <span v-else class="muted">No creatures listed</span>
+                </td>
+                <td>
+                  <div v-if="topAreaLoot(area).length" class="creature-loot-strip" :aria-label="`${area.area_name} top loot`">
+                  <button
+                    v-for="item in topAreaLoot(area)"
+                    :key="`${area.area_name}-${item.item_id || item.normalized_item_name}`"
+                    class="creature-loot-chip"
+                    :disabled="!item.item_id"
+                    :title="`${item.name}: ${gp(lootSortValue(item))} gp`"
+                    @click="$emit('open-item', item.item_id)"
+                  >
+                    <img v-if="item.item_id" class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.name" loading="lazy" />
+                    <span v-else class="loot-image-placeholder">?</span>
+                    <small>{{ gp(lootSortValue(item)) }}</small>
+                  </button>
+                  <button
+                    v-if="extraAreaLootCount(area) > 0"
+                    class="creature-loot-chip creature-loot-more"
+                    :title="`${extraAreaLootCount(area)} more loot items`"
+                  >
+                    +{{ extraAreaLootCount(area) }}
+                  </button>
+                  </div>
+                  <span v-else class="muted">No loot priced</span>
+                </td>
+              </tr>
+            </template>
+          </DataTable>
+        </article>
+
+        <article class="panel table-panel">
           <SectionHeader title="Known Creatures" :subtitle="`${detail.reference?.creatures?.length || 0} creatures`" />
-          <div v-if="detail.reference?.creatures?.length" class="creature-list-heading">
-            <span>Creature</span>
-            <div class="creature-meta-heading">
-              <span>XP</span>
-              <span>Bestiary</span>
-            </div>
-          </div>
-          <div class="creature-list">
-            <div v-for="creature in sortedCreatures" :key="creature.normalized_creature_name" class="creature-row">
-              <div class="creature-main">
-                <button class="inline-link creature-name-link" @click="$emit('open-creature', creature)">
+          <DataTable
+            :columns="creatureColumns"
+            :items="sortedCreatures"
+            row-key="normalized_creature_name"
+            min-width="760px"
+            empty-title="No creatures enriched"
+            empty-reason="Creature enrichment has not populated this place yet."
+          >
+            <template #row="{ items }">
+              <tr v-for="creature in items" :key="creature.normalized_creature_name">
+                <td>
+                  <InlineLink class="creature-name-link" @click="$emit('open-creature', creature)">
                   {{ creature.name }}
-                </button>
-                <div v-if="topCreatureLoot(creature).length" class="creature-loot-strip" :aria-label="`${creature.name} top loot`">
+                  </InlineLink>
+                </td>
+                <td>
+                  <div v-if="topCreatureLoot(creature).length" class="creature-loot-strip" :aria-label="`${creature.name} top loot`">
                   <button
                     v-for="item in topCreatureLoot(creature)"
                     :key="`${creature.normalized_creature_name}-${item.item_id || item.normalized_item_name}`"
@@ -460,51 +682,45 @@ watch(() => [placeFilters.hasPersonalHunts, placeFilters.hasPublicHunts], loadPl
                   >
                     +{{ extraCreatureLootCount(creature) }}
                   </button>
-                </div>
-              </div>
-              <div class="creature-meta">
-                <span>{{ gp(creature.experience) }}</span>
-                <span>{{ creature.bestiary?.difficulty || 'n/a' }}</span>
-              </div>
-            </div>
-            <p v-if="!detail.reference?.creatures?.length" class="muted">Creature enrichment has not populated this place yet.</p>
-          </div>
+                  </div>
+                  <span v-else class="muted">No loot priced</span>
+                </td>
+                <td>{{ gp(creature.experience) }}</td>
+                <td>{{ creature.bestiary?.difficulty || 'n/a' }}</td>
+              </tr>
+            </template>
+          </DataTable>
         </article>
 
         <article class="panel table-panel">
           <SectionHeader title="Expected Loot" :subtitle="`${detail.reference?.market_weighted_loot_value?.priced_item_count || 0}/${detail.reference?.market_weighted_loot_value?.total_item_count || 0} priced`">
             <FreshnessBadge :freshness="detail.reference?.market_weighted_loot_value?.freshness" />
           </SectionHeader>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>Amount</th>
-                  <th>Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="item in sortedExpectedLoot" :key="`${item.item_id || item.normalized_item_name}`">
-                  <td>
-                    <EntityLinkPill
-                      :entity="{ type: 'item', id: item.item_id, name: item.name }"
-                      :image-src="item.item_id ? itemImagePath(item.item_id) : ''"
-                      :unresolved="!item.item_id"
-                      clickable
-                      @activate="$emit('open-item', item.item_id)"
-                    />
-                    <div class="muted compact-note">{{ item.creature_names?.join(', ') }}</div>
-                  </td>
-                  <td>{{ item.amount_text || [item.min_count, item.max_count].filter((value) => value !== null && value !== undefined).join('-') || 'n/a' }}</td>
-                  <td>{{ gp(item.estimated_unit_value) }}</td>
-                </tr>
-                <tr v-if="!detail.reference?.expected_loot?.length">
-                  <td colspan="3" class="muted">Expected loot will appear after public creature loot enrichment.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            :columns="lootColumns"
+            :items="sortedExpectedLoot"
+            :row-key="(item) => item.item_id || item.normalized_item_name"
+            min-width="640px"
+            empty-title="No expected loot"
+            empty-reason="Expected loot will appear after public creature loot enrichment."
+          >
+            <template #row="{ items }">
+              <tr v-for="item in items" :key="`${item.item_id || item.normalized_item_name}`">
+                <td>
+                  <EntityLinkPill
+                    :entity="{ type: 'item', id: item.item_id, name: item.name }"
+                    :image-src="item.item_id ? itemImagePath(item.item_id) : ''"
+                    :unresolved="!item.item_id"
+                    clickable
+                    @activate="$emit('open-item', item.item_id)"
+                  />
+                  <div class="muted compact-note">{{ item.creature_names?.join(', ') }}</div>
+                </td>
+                <td>{{ item.amount_text || [item.min_count, item.max_count].filter((value) => value !== null && value !== undefined).join('-') || 'n/a' }}</td>
+                <td>{{ gp(item.estimated_unit_value) }}</td>
+              </tr>
+            </template>
+          </DataTable>
         </article>
 
         <article class="panel">
@@ -529,6 +745,16 @@ watch(() => [placeFilters.hasPersonalHunts, placeFilters.hasPublicHunts], loadPl
               <ShieldAlert :size="15" />
               <span>Risk</span>
               <strong>{{ detail.place?.risk_level || 'n/a' }}</strong>
+            </div>
+            <div>
+              <Swords :size="15" />
+              <span>Monk proxy</span>
+              <strong>{{ vocationLevelText(detail.place?.level_knights) }}</strong>
+            </div>
+            <div>
+              <ShieldAlert :size="15" />
+              <span>Knight skill</span>
+              <strong>{{ vocationLevelText(detail.place?.skill_knights) }}</strong>
             </div>
           </div>
           <div class="integration-hooks">
@@ -643,65 +869,51 @@ watch(() => [placeFilters.hasPersonalHunts, placeFilters.hasPublicHunts], loadPl
   color: #8ab4ff;
 }
 
-.creature-list,
 .integration-hooks {
   display: grid;
   gap: 9px;
 }
 
-.creature-list-heading,
-.creature-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
+.area-level-stack,
+.area-creature-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   align-items: center;
-  gap: 12px;
 }
 
-.creature-list-heading {
-  margin: 2px 0 -1px;
-  color: var(--muted);
-  font-size: 0.76rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.creature-row {
-  border-bottom: 1px solid var(--line-soft);
-  padding-bottom: 9px;
-}
-
-.creature-main {
+.area-level-stack {
   display: grid;
   gap: 3px;
-  min-width: 0;
 }
 
-.creature-row:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-.creature-row strong,
-.creature-row span {
-  display: block;
-}
-
-.creature-meta {
-  display: grid;
-  grid-template-columns: minmax(60px, auto) minmax(72px, auto);
-  gap: 10px;
-  justify-content: end;
+.area-level-stack span {
   color: var(--muted);
-  font-size: 0.9rem;
-  text-align: right;
+  font-size: 0.86rem;
 }
 
-.creature-meta-heading {
+.area-level-stack b {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.area-order-row {
+  cursor: grab;
+}
+
+.area-order-row.dragging {
+  opacity: 0.58;
+}
+
+.area-name-cell {
   display: grid;
-  grid-template-columns: minmax(60px, auto) minmax(72px, auto);
-  gap: 10px;
-  justify-content: end;
-  text-align: right;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.drag-handle {
+  color: var(--muted);
 }
 
 .creature-loot-strip {
@@ -709,7 +921,6 @@ watch(() => [placeFilters.hasPersonalHunts, placeFilters.hasPublicHunts], loadPl
   align-items: flex-start;
   flex-wrap: wrap;
   gap: 7px;
-  margin-top: 7px;
 }
 
 .creature-loot-chip {

@@ -3,9 +3,32 @@ import {
   Eye,
   Filter,
 } from '@lucide/vue'
+import DataTable from '../common/DataTable.vue'
 import MetricCard from '../common/MetricCard.vue'
 import SectionHeader from '../common/SectionHeader.vue'
 import EntityLinkPill from '../common/EntityLinkPill.vue'
+
+const recentHuntColumns = [
+  { key: 'date', label: 'Date' },
+  { key: 'spawn', label: 'Spawn' },
+  { key: 'time', label: 'Hunt Time' },
+  { key: 'profit', label: 'Profit' },
+  { key: 'xp', label: 'XP/H' },
+  { key: 'actions', label: '', class: 'action-col' },
+]
+
+const huntingAreaColumns = [
+  { key: 'area', label: 'Area' },
+  { key: 'hunts', label: 'Hunts' },
+  { key: 'xp', label: 'Avg XP/H' },
+  { key: 'gp', label: 'Avg GP/H' },
+]
+
+const lootColumns = [
+  { key: 'item', label: 'Item' },
+  { key: 'looted', label: 'Looted' },
+  { key: 'value', label: 'Total Value' },
+]
 
 defineProps({
   recentHunts: { type: Array, default: () => [] },
@@ -38,25 +61,20 @@ defineEmits(['open-history', 'open-hunt', 'open-item', 'open-loot-inbox'])
       <MetricCard label="Supplies" :value="formatValue(totalSupplies)" tone="danger" />
     </div>
 
-    <div class="dashboard-grid">
+    <div class="dashboard-grid dashboard-primary-grid">
       <article class="panel table-panel">
         <SectionHeader title="Recent Hunts">
           <button class="ghost-action" @click="$emit('open-history', '')">View all hunts</button>
         </SectionHeader>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Spawn</th>
-                <th>Hunt Time</th>
-                <th>Profit</th>
-                <th>XP/H</th>
-                <th class="action-col"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in recentHunts" :key="row.id">
+        <DataTable
+          :columns="recentHuntColumns"
+          :items="recentHunts"
+          row-key="id"
+          empty-title="No hunts uploaded"
+          empty-reason="Recent hunts appear here after importing or saving hunt logs."
+        >
+          <template #row="{ items }">
+              <tr v-for="row in items" :key="row.id">
                 <td class="mono">{{ row.started_at || row.uploaded_at }}</td>
                 <td>{{ row.location_name || row.label || `Hunt ${row.id}` }}</td>
                 <td>{{ row.duration_minutes }}m</td>
@@ -68,12 +86,8 @@ defineEmits(['open-history', 'open-hunt', 'open-item', 'open-loot-inbox'])
                   </button>
                 </td>
               </tr>
-              <tr v-if="!recentHunts.length">
-                <td colspan="6" class="muted">No hunts uploaded yet.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+          </template>
+        </DataTable>
       </article>
 
       <article class="panel chart-panel">
@@ -89,23 +103,22 @@ defineEmits(['open-history', 'open-hunt', 'open-item', 'open-loot-inbox'])
         </svg>
         <p v-if="!huntTrendLines.profit" class="muted">Profit and XP trends appear after saved hunts.</p>
       </article>
+    </div>
 
+    <div class="dashboard-grid dashboard-secondary-grid">
       <article class="panel table-panel">
         <SectionHeader title="Hunting Areas">
           <Filter :size="16" />
         </SectionHeader>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Area</th>
-                <th>Hunts</th>
-                <th>Avg XP/H</th>
-                <th>Avg GP/H</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="area in huntingAreas.slice(0, 6)" :key="area.location_name">
+        <DataTable
+          :columns="huntingAreaColumns"
+          :items="huntingAreas.slice(0, 6)"
+          row-key="location_name"
+          empty-title="No hunting areas"
+          empty-reason="Saved hunts with locations will populate this table."
+        >
+          <template #row="{ items }">
+              <tr v-for="area in items" :key="area.location_name">
                 <td>
                   <EntityLinkPill
                     :entity="{ type: 'hunting_place', id: area.location_name, name: area.location_name }"
@@ -117,29 +130,23 @@ defineEmits(['open-history', 'open-hunt', 'open-item', 'open-loot-inbox'])
                 <td>{{ formatValue(area.average_xp_per_hour) }}</td>
                 <td>{{ formatValue(area.average_gp_per_hour) }}</td>
               </tr>
-              <tr v-if="!huntingAreas.length">
-                <td colspan="4" class="muted">No hunting areas yet.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+          </template>
+        </DataTable>
       </article>
 
       <article class="panel table-panel">
         <SectionHeader title="Loot Analysis" :subtitle="`${topLootRows.length} items`">
           <button class="ghost-action" @click="$emit('open-loot-inbox')">Open inbox</button>
         </SectionHeader>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Looted</th>
-                <th>Total Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in topLootRows" :key="item.name">
+        <DataTable
+          :columns="lootColumns"
+          :items="topLootRows"
+          row-key="name"
+          empty-title="No loot analysis"
+          empty-reason="Save hunts to populate all-time loot analysis."
+        >
+          <template #row="{ items }">
+              <tr v-for="item in items" :key="item.name">
                 <td>
                   <EntityLinkPill
                     v-if="item.item_id"
@@ -156,12 +163,8 @@ defineEmits(['open-history', 'open-hunt', 'open-item', 'open-loot-inbox'])
                 <td>{{ formatValue(item.quantity) }}</td>
                 <td>{{ formatValue(item.total_value) }}</td>
               </tr>
-              <tr v-if="!topLootRows.length">
-                <td colspan="3" class="muted">Save hunts to populate all-time loot analysis.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+          </template>
+        </DataTable>
       </article>
     </div>
   </section>

@@ -1,0 +1,1 @@
+ALTER TABLE public_hunting_place_area_summaries ADD COLUMN display_order INTEGER;

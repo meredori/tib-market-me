@@ -60,6 +60,11 @@ type PublicHuntingPlace = {
   location: string | null;
   min_level: number | null;
   max_level: number | null;
+  level_knights: string | null;
+  level_paladins: string | null;
+  level_mages: string | null;
+  skill_knights: string | null;
+  defense_knights: string | null;
   exp_stars: number | null;
   loot_stars: number | null;
   bestiary_stars: number | null;
@@ -373,14 +378,24 @@ function normalizeHuntingPlace(payload: unknown, fetchedAt: string): PublicHunti
   if (identity.id === null || !identity.name) {
     return null;
   }
-  const vocationLevels = levelRangeFromText(record.levelKnights, record.levelPaladins, record.levelMages);
+  const levelKnights = firstPathText(record, [["levelKnights"], ["level_knights"], ["structuredData", "infobox", "lvlknights"], ["infobox", "lvlknights"]]);
+  const levelPaladins = firstPathText(record, [["levelPaladins"], ["level_paladins"], ["structuredData", "infobox", "lvlpaladins"], ["infobox", "lvlpaladins"]]);
+  const levelMages = firstPathText(record, [["levelMages"], ["level_mages"], ["structuredData", "infobox", "lvlmages"], ["infobox", "lvlmages"]]);
+  const knightLevels = levelRangeFromText(levelKnights);
+  const vocationLevels = levelRangeFromText(levelKnights, levelPaladins, levelMages);
+  const fallbackLevels = knightLevels.min !== null || knightLevels.max !== null ? knightLevels : vocationLevels;
 
   return {
     id: Math.trunc(identity.id),
     name: identity.name,
     location: firstPathText(record, [["location"], ["city"], ["infobox", "location"], ["structuredData", "infobox", "location"]]),
-    min_level: firstPathNumber(record, [["minLevel"], ["min_level"], ["levelMin"], ["recommendedLevelMin"], ["areaRecommendation", "minLevel"]]) ?? vocationLevels.min,
-    max_level: firstPathNumber(record, [["maxLevel"], ["max_level"], ["levelMax"], ["recommendedLevelMax"], ["areaRecommendation", "maxLevel"]]) ?? vocationLevels.max,
+    min_level: fallbackLevels.min ?? firstPathNumber(record, [["minLevel"], ["min_level"], ["levelMin"], ["recommendedLevelMin"], ["areaRecommendation", "minLevel"]]),
+    max_level: fallbackLevels.max ?? firstPathNumber(record, [["maxLevel"], ["max_level"], ["levelMax"], ["recommendedLevelMax"], ["areaRecommendation", "maxLevel"]]),
+    level_knights: levelKnights,
+    level_paladins: levelPaladins,
+    level_mages: levelMages,
+    skill_knights: firstPathText(record, [["skillKnights"], ["skill_knights"], ["structuredData", "infobox", "skknights"], ["infobox", "skknights"]]),
+    defense_knights: firstPathText(record, [["defenseKnights"], ["defense_knights"], ["structuredData", "infobox", "defknights"], ["infobox", "defknights"]]),
     exp_stars: firstPathNumber(record, [["expStars"], ["experienceStars"], ["areaRecommendation", "expStars"], ["areaRecommendation", "experienceStars"]]),
     loot_stars: firstPathNumber(record, [["lootStars"], ["areaRecommendation", "lootStars"]]),
     bestiary_stars: firstPathNumber(record, [["bestiaryStars"], ["areaRecommendation", "bestiaryStars"]]),
@@ -555,9 +570,44 @@ function huntingPlaceCreatureRows(payload: unknown): Array<Record<string, unknow
 function huntingPlaceAreaRows(payload: unknown): Array<Record<string, unknown>> {
   const record = payloadRecord(payload, ["huntingPlace", "hunting_place", "data", "item"]);
   const structured = asRecord(record.structuredData);
+  const lowerLevels = listFrom(record.lowerLevels, ["lowerLevels"])
+    .concat(listFrom(structured?.lowerLevels, ["lowerLevels"]))
+    .map(jsonRecord);
+  const recommendationsByArea = new Map<string, Record<string, unknown>>();
+  for (const lowerLevel of lowerLevels) {
+    const areaName = firstText(lowerLevel.areaName, lowerLevel.area_name, lowerLevel.name, lowerLevel.title);
+    if (areaName) {
+      recommendationsByArea.set(normalizePublicName(areaName), lowerLevel);
+    }
+  }
   return listFrom(record.areaCreatureSummaries, ["areaCreatureSummaries"])
     .concat(listFrom(structured?.areaCreatureSummaries, ["areaCreatureSummaries"]))
-    .map(jsonRecord);
+    .map(jsonRecord)
+    .map((row) => {
+      const areaName = firstText(row.areaName, row.area_name, row.name, row.title);
+      const recommendation = areaName ? recommendationsByArea.get(normalizePublicName(areaName)) : undefined;
+      if (!recommendation) {
+        return row;
+      }
+      return {
+        ...row,
+        recommendedLevels: row.recommendedLevels ?? {
+          knights: firstText(recommendation.levelKnights, recommendation.level_knights),
+          paladins: firstText(recommendation.levelPaladins, recommendation.level_paladins),
+          mages: firstText(recommendation.levelMages, recommendation.level_mages)
+        },
+        recommendedSkills: row.recommendedSkills ?? {
+          knights: firstText(recommendation.skillKnights, recommendation.skill_knights),
+          paladins: firstText(recommendation.skillPaladins, recommendation.skill_paladins),
+          mages: firstText(recommendation.skillMages, recommendation.skill_mages)
+        },
+        recommendedDefense: row.recommendedDefense ?? {
+          knights: firstText(recommendation.defenseKnights, recommendation.defense_knights),
+          paladins: firstText(recommendation.defensePaladins, recommendation.defense_paladins),
+          mages: firstText(recommendation.defenseMages, recommendation.defense_mages)
+        }
+      };
+    });
 }
 
 function uniqueAreaName(baseName: string, seenNames: Set<string>): string {
@@ -1264,14 +1314,20 @@ export function upsertPublicHuntingPlace(db: Database.Database, payload: unknown
     INSERT INTO public_hunting_places (
       id, name, normalized_name, location, min_level, max_level, exp_stars, loot_stars,
       bestiary_stars, risk_level, last_updated, last_seen, fetched_at, payload_json,
+      level_knights, level_paladins, level_mages, skill_knights, defense_knights,
       provenance_type, confidence_score, freshness_status, intelligence_metadata_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       normalized_name = excluded.normalized_name,
       location = excluded.location,
       min_level = excluded.min_level,
       max_level = excluded.max_level,
+      level_knights = excluded.level_knights,
+      level_paladins = excluded.level_paladins,
+      level_mages = excluded.level_mages,
+      skill_knights = excluded.skill_knights,
+      defense_knights = excluded.defense_knights,
       exp_stars = excluded.exp_stars,
       loot_stars = excluded.loot_stars,
       bestiary_stars = excluded.bestiary_stars,
@@ -1300,6 +1356,11 @@ export function upsertPublicHuntingPlace(db: Database.Database, payload: unknown
     place.last_seen,
     place.fetched_at,
     place.payload_json,
+    place.level_knights,
+    place.level_paladins,
+    place.level_mages,
+    place.skill_knights,
+    place.defense_knights,
     placeProvenance.type,
     placeConfidence.score,
     placeFreshness.status,
@@ -1349,8 +1410,8 @@ export function replacePublicHuntingPlaceChildren(db: Database.Database, hunting
   const insertArea = db.prepare(
     `
     INSERT INTO public_hunting_place_area_summaries (
-      hunting_place_id, area_name, creature_count, exp_stars, loot_stars, bestiary_stars, payload_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      hunting_place_id, area_name, display_order, creature_count, exp_stars, loot_stars, bestiary_stars, payload_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `
   );
   let areaCount = 0;
@@ -1361,6 +1422,7 @@ export function replacePublicHuntingPlaceChildren(db: Database.Database, hunting
     insertArea.run(
       Math.trunc(huntingPlaceId),
       areaName,
+      areaCount,
       asNumberOrNull(row.creatureCount ?? row.creature_count),
       asNumberOrNull(row.expStars ?? row.experienceStars),
       asNumberOrNull(row.lootStars),

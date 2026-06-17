@@ -4,6 +4,7 @@ import {
   RefreshCw,
 } from '@lucide/vue'
 import ConfidenceBadge from '../common/ConfidenceBadge.vue'
+import DataTable from '../common/DataTable.vue'
 import DecisionLabels from '../common/DecisionLabels.vue'
 import EntityLinkPill from '../common/EntityLinkPill.vue'
 import FreshnessBadge from '../common/FreshnessBadge.vue'
@@ -36,6 +37,19 @@ const bucketLabels = {
   unknown_price: 'Unknown price',
 }
 
+const listingColumns = [
+  { key: 'action', label: 'Action' },
+  { key: 'item', label: 'Item' },
+  { key: 'qty', label: 'Qty' },
+  { key: 'min', label: 'Min' },
+  { key: 'max', label: 'Max' },
+  { key: 'total', label: 'Total' },
+  { key: 'band', label: 'Band / NPC' },
+  { key: 'quality', label: 'Quality' },
+  { key: 'reasons', label: 'Reasons' },
+  { key: 'actions', label: '', class: 'action-col' },
+]
+
 function bucketValue(summary, key) {
   return summary?.buckets?.[key] || 0
 }
@@ -56,13 +70,10 @@ function huntTitle(item) {
 </script>
 
 <template>
-  <section class="page-stack">
-    <article class="panel market-status-panel">
-      <SectionHeader title="Loot Inbox" :subtitle="`${lootInbox.summary?.hunt_count || 0} recent hunt(s)`">
-        <button class="ghost-action" :disabled="lootInboxBusy" @click="$emit('refresh-loot-inbox')">
-          <RefreshCw :size="15" />
-          Refresh
-        </button>
+  <section class="page-stack loot-inbox-view">
+    <article class="panel loot-checklist-panel">
+      <SectionHeader title="Listing Checklist" :subtitle="`${lootInbox.items?.length || 0} item(s) from ${lootInbox.summary?.hunt_count || 0} hunt(s)`">
+        <PackageOpen :size="17" />
       </SectionHeader>
       <div class="loot-inbox-toolbar">
         <FreshnessBadge :freshness="lootInbox.freshness" />
@@ -78,41 +89,23 @@ function huntTitle(item) {
             <option :value="0">All saved hunts</option>
           </select>
         </label>
+        <button class="ghost-action" :disabled="lootInboxBusy" @click="$emit('refresh-loot-inbox')">
+          <RefreshCw :size="15" />
+          Refresh
+        </button>
         <span v-if="lootInboxInfo" class="muted">{{ lootInboxInfo }}</span>
       </div>
-    </article>
-
-    <div class="metric-strip loot-metric-strip">
-      <MetricCard label="Inbox Items" :value="formatValue(lootInbox.summary?.item_count)" tone="blue" />
-      <MetricCard label="Estimated Value" :value="formatValue(lootInbox.summary?.total_estimated_value)" tone="positive" />
-      <MetricCard label="Sell Now" :value="formatValue(bucketValue(lootInbox.summary, 'sell_now'))" tone="positive" />
-      <MetricCard label="NPC/vendor" :value="formatValue(bucketValue(lootInbox.summary, 'npc_vendor'))" tone="teal" />
-      <MetricCard label="Review" :value="formatValue(bucketValue(lootInbox.summary, 'review_price') + bucketValue(lootInbox.summary, 'unknown_price'))" tone="loot" />
-      <MetricCard label="Hold/Watch" :value="formatValue(bucketValue(lootInbox.summary, 'hold') + bucketValue(lootInbox.summary, 'watch'))" />
-    </div>
-
-    <article class="panel">
-      <SectionHeader title="Listing Checklist" :subtitle="`${lootInbox.items?.length || 0} item(s)`">
-        <PackageOpen :size="17" />
-      </SectionHeader>
-      <div class="table-wrap">
-        <table class="loot-inbox-table">
-          <thead>
-            <tr>
-              <th>Action</th>
-              <th>Item</th>
-              <th>Qty</th>
-              <th>Min</th>
-              <th>Max</th>
-              <th>Total</th>
-              <th>Band / NPC</th>
-              <th>Quality</th>
-              <th>Reasons</th>
-              <th class="action-col"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in lootInbox.items || []" :key="item.normalized_name">
+      <DataTable
+        class="loot-inbox-table"
+        :columns="listingColumns"
+        :items="lootInbox.items || []"
+        row-key="normalized_name"
+        min-width="1120px"
+        empty-title="No loot in the inbox"
+        empty-reason="Save hunts with loot to populate the inbox."
+      >
+        <template #row="{ items }">
+            <tr v-for="item in items" :key="item.normalized_name">
               <td>
                 <span class="status-badge" :class="`loot-action-${item.action}`">
                   {{ item.action_label || bucketLabels[item.action] || item.action }}
@@ -167,12 +160,17 @@ function huntTitle(item) {
                 <button class="ghost-action" @click="$emit('mark-item-state', item, 'sold')">Sold</button>
               </td>
             </tr>
-            <tr v-if="!lootInbox.items?.length">
-              <td colspan="9" class="muted">Save hunts with loot to populate the inbox.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        </template>
+      </DataTable>
     </article>
+
+    <div class="metric-strip loot-metric-strip compact-metric-strip">
+      <MetricCard label="Inbox Items" :value="formatValue(lootInbox.summary?.item_count)" tone="blue" />
+      <MetricCard label="Estimated Value" :value="formatValue(lootInbox.summary?.total_estimated_value)" tone="positive" />
+      <MetricCard label="Sell Now" :value="formatValue(bucketValue(lootInbox.summary, 'sell_now'))" tone="positive" />
+      <MetricCard label="NPC/vendor" :value="formatValue(bucketValue(lootInbox.summary, 'npc_vendor'))" tone="teal" />
+      <MetricCard label="Review" :value="formatValue(bucketValue(lootInbox.summary, 'review_price') + bucketValue(lootInbox.summary, 'unknown_price'))" tone="loot" />
+      <MetricCard label="Hold/Watch" :value="formatValue(bucketValue(lootInbox.summary, 'hold') + bucketValue(lootInbox.summary, 'watch'))" />
+    </div>
   </section>
 </template>

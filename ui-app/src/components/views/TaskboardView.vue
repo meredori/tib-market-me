@@ -10,11 +10,14 @@ import {
 } from '@lucide/vue'
 import { api } from '../../lib/api'
 import ConfidenceBadge from '../common/ConfidenceBadge.vue'
+import DataTable from '../common/DataTable.vue'
 import DecisionLabels from '../common/DecisionLabels.vue'
 import EmptyState from '../common/EmptyState.vue'
 import EntityLinkPill from '../common/EntityLinkPill.vue'
 import FreshnessBadge from '../common/FreshnessBadge.vue'
-import MetricCard from '../common/MetricCard.vue'
+import InlineLink from '../common/InlineLink.vue'
+import MetricGrid from '../common/MetricGrid.vue'
+import Panel from '../common/Panel.vue'
 import SectionHeader from '../common/SectionHeader.vue'
 
 const emit = defineEmits(['open-item', 'open-hunting-place', 'open-hunt'])
@@ -33,6 +36,22 @@ const form = reactive({
 })
 
 const visibleEntries = computed(() => entries.value || [])
+
+const summaryMetrics = computed(() => [
+  { label: 'Offers', value: compactNumber(summary.value.total), tone: 'blue' },
+  { label: 'Creatures', value: compactNumber(summary.value.creatures) },
+  { label: 'Items', value: compactNumber(summary.value.delivery_items), tone: 'teal' },
+  { label: 'Combos', value: compactNumber(summary.value.combine_hints), tone: 'positive' },
+])
+
+const placeColumns = [
+  { key: 'place', label: 'Hunting place' },
+  { key: 'floor', label: 'Floor' },
+  { key: 'level', label: 'Level' },
+  { key: 'risk', label: 'Risk' },
+  { key: 'pace', label: 'Your pace' },
+  { key: 'actions', label: '', class: 'action-col' },
+]
 
 function numberOrNull(value) {
   const numeric = Number(value)
@@ -155,25 +174,13 @@ onMounted(loadEntries)
 
 <template>
   <section class="page-stack weekly-taskboard">
-    <article class="panel">
-      <SectionHeader title="Taskboard" :subtitle="info || 'Weekly boosted task offers'">
+    <Panel>
+      <SectionHeader title="Add Weekly Offer" :subtitle="info || 'Enter what the game offered this week'">
         <button class="ghost-action" :disabled="busy" @click="loadEntries">
           <RefreshCw :size="15" />
           Refresh
         </button>
       </SectionHeader>
-
-      <div class="metric-strip taskboard-metrics">
-        <MetricCard label="Offers" :value="compactNumber(summary.total)" tone="blue" />
-        <MetricCard label="Creatures" :value="compactNumber(summary.creatures)" />
-        <MetricCard label="Items" :value="compactNumber(summary.delivery_items)" tone="teal" />
-        <MetricCard label="Combos" :value="compactNumber(summary.combine_hints)" tone="positive" />
-      </div>
-      <p v-if="error" class="error-text">{{ error }}</p>
-    </article>
-
-    <article class="panel">
-      <SectionHeader title="Add Weekly Offer" subtitle="Enter what the game offered this week" />
       <form class="offer-form" @submit.prevent="saveEntry">
         <div class="segmented-control">
           <button type="button" :class="{ active: form.entry_type === 'creature' }" @click="form.entry_type = 'creature'">
@@ -199,15 +206,18 @@ onMounted(loadEntries)
           Add
         </button>
       </form>
-    </article>
+      <p v-if="error" class="error-text">{{ error }}</p>
+    </Panel>
 
-    <article class="panel">
-      <SectionHeader title="Weekly Offers" :subtitle="`${visibleEntries.length} entered`" />
-      <EmptyState v-if="!busy && !visibleEntries.length" title="No weekly offers yet" subtitle="Add the creatures and item quantities shown in game." />
+    <Panel>
+      <SectionHeader title="Weekly Offers" :subtitle="`${visibleEntries.length} entered`">
+        <MetricGrid class="inline-metrics taskboard-inline-metrics" :items="summaryMetrics" :columns="4" />
+      </SectionHeader>
+      <EmptyState v-if="!busy && !visibleEntries.length" title="No weekly offers yet" reason="Add the creatures and item quantities shown in game." />
 
       <div v-else class="offer-list">
-        <section v-for="entry in visibleEntries" :key="entry.id" class="offer-row">
-          <header class="offer-head">
+        <section v-for="entry in visibleEntries" :key="entry.id" class="ui-list-card offer-row">
+          <header class="ui-list-head offer-head">
             <component :is="entryIcon(entry)" :size="18" />
             <div>
               <h3>{{ entry.name }}</h3>
@@ -229,40 +239,36 @@ onMounted(loadEntries)
           </div>
 
           <div v-if="entry.entry_type === 'creature'" class="place-table-wrap">
-            <table class="place-table">
-              <thead>
-                <tr>
-                  <th>Hunting place</th>
-                  <th>Floor</th>
-                  <th>Level</th>
-                  <th>Risk</th>
-                  <th>Your pace</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
+            <DataTable
+              :columns="placeColumns"
+              :items="entry.guidance?.known_hunting_places || []"
+              row-key="id"
+              min-width="680px"
+              empty-title="No hunting places matched"
+              empty-reason="Enrich public hunting-place data or adjust the creature name."
+            >
+              <template #row="{ items }">
                 <tr
-                  v-for="place in entry.guidance?.known_hunting_places || []"
+                  v-for="place in items"
                   :key="place.id"
                   :class="{ observed: place.personal_pace }"
                 >
                   <td>
-                    <button class="inline-link place-name" @click="emit('open-hunting-place', place)">
+                    <InlineLink class="place-name" @click="emit('open-hunting-place', place)">
                       {{ place.name }}
-                    </button>
+                    </InlineLink>
                     <small>{{ place.location || place.occurrence || 'Reference details only' }}</small>
                   </td>
                   <td>{{ floorLevel(place) }}</td>
                   <td>{{ levelRange(place) }}</td>
                   <td>{{ place.risk_level || '-' }}</td>
                   <td>
-                    <button
+                    <InlineLink
                       v-if="place.personal_pace?.hunt_id"
-                      class="inline-link"
                       @click="emit('open-hunt', place.personal_pace)"
                     >
                       {{ placePace(place) }}
-                    </button>
+                    </InlineLink>
                     <span v-else>-</span>
                   </td>
                   <td>
@@ -271,13 +277,8 @@ onMounted(loadEntries)
                     </button>
                   </td>
                 </tr>
-              </tbody>
-            </table>
-            <EmptyState
-              v-if="!entry.guidance?.known_hunting_places?.length"
-              title="No hunting places matched"
-              subtitle="Enrich public hunting-place data or adjust the creature name."
-            />
+              </template>
+            </DataTable>
           </div>
 
           <div v-if="entry.entry_type === 'item'" class="guidance-grid">
@@ -342,7 +343,7 @@ onMounted(loadEntries)
           </div>
         </section>
       </div>
-    </article>
+    </Panel>
   </section>
 </template>
 
@@ -395,19 +396,11 @@ onMounted(loadEntries)
 }
 
 .offer-row {
-  display: grid;
-  gap: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px;
-  background: var(--surface);
+  background: rgba(13, 27, 41, 0.72);
 }
 
 .offer-head {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
+  align-items: start;
 }
 
 .offer-head h3 {
@@ -443,36 +436,11 @@ onMounted(loadEntries)
   overflow-x: auto;
 }
 
-.place-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 680px;
-}
-
-.place-table th,
-.place-table td {
-  border-bottom: 1px solid var(--border);
-  padding: 9px 8px;
-  text-align: left;
-  vertical-align: middle;
-}
-
-.place-table th {
-  color: var(--text-muted);
-  font-size: 0.76rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.place-table td {
-  font-size: 0.88rem;
-}
-
-.place-table tr.observed {
+:deep(.data-table tr.observed) {
   background: rgba(61, 179, 136, 0.08);
 }
 
-.place-table small {
+:deep(.data-table small) {
   display: block;
   margin-top: 3px;
   color: var(--text-muted);

@@ -1,10 +1,14 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { CheckCircle2, MapPin, RefreshCw, RotateCcw } from '@lucide/vue'
 import { api } from '../../lib/api'
+import DataTable from '../common/DataTable.vue'
 import EmptyState from '../common/EmptyState.vue'
 import EntityLinkPill from '../common/EntityLinkPill.vue'
+import MetricGrid from '../common/MetricGrid.vue'
+import Panel from '../common/Panel.vue'
 import SectionHeader from '../common/SectionHeader.vue'
+import Toolbar from '../common/Toolbar.vue'
 
 const emit = defineEmits(['open-hunting-place'])
 
@@ -16,6 +20,27 @@ const filters = reactive({
   character_name: '',
   account_name: '',
 })
+
+const checklistColumns = [
+  { key: 'creature', label: 'Creature' },
+  { key: 'points', label: 'Points' },
+  { key: 'difficulty', label: 'Difficulty' },
+  { key: 'spawn', label: 'Suggested spawn' },
+  { key: 'actions', label: '', class: 'row-action' },
+]
+
+const completedColumns = [
+  { key: 'creature', label: 'Creature' },
+  { key: 'points', label: 'Points' },
+  { key: 'difficulty', label: 'Difficulty' },
+  { key: 'actions', label: '', class: 'row-action' },
+]
+
+const summaryMetrics = computed(() => [
+  { label: 'Checklist', value: formatNumber(bestiary.value.summary?.checklist), tone: 'blue' },
+  { label: 'Completed', value: formatNumber(bestiary.value.summary?.completed), tone: 'positive' },
+  { label: 'Creatures', value: formatNumber(bestiary.value.summary?.total_creatures), tone: 'loot' },
+])
 
 function formatNumber(value) {
   const number = Number(value ?? 0)
@@ -85,15 +110,15 @@ onMounted(loadBestiary)
 
 <template>
   <section class="page-stack bestiary-view">
-    <article class="panel">
-      <SectionHeader title="Bestiary" :subtitle="`${formatNumber(bestiary.summary?.checklist)} left to check off`">
+    <Panel variant="table" class="bestiary-checklist-panel">
+      <SectionHeader title="Bestiary Checklist" :subtitle="`${formatNumber(bestiary.summary?.checklist)} left to check off`">
         <button class="ghost-action" :disabled="loading" @click="loadBestiary">
           <RefreshCw :size="16" :class="{ 'spin-icon': loading }" />
           Refresh
         </button>
       </SectionHeader>
 
-      <div class="bestiary-toolbar">
+      <Toolbar>
         <label>
           Character
           <input v-model="filters.character_name" placeholder="optional character scope" @keydown.enter="loadBestiary" />
@@ -103,41 +128,20 @@ onMounted(loadBestiary)
           <input v-model="filters.account_name" placeholder="optional account scope" @keydown.enter="loadBestiary" />
         </label>
         <button class="primary-action" :disabled="loading" @click="loadBestiary">Apply</button>
-      </div>
+      </Toolbar>
 
       <p v-if="error" class="error">{{ error }}</p>
 
-      <div class="metric-strip bestiary-metrics">
-        <div class="metric-card blue">
-          <span>Checklist</span>
-          <strong>{{ formatNumber(bestiary.summary?.checklist) }}</strong>
-        </div>
-        <div class="metric-card positive">
-          <span>Completed</span>
-          <strong>{{ formatNumber(bestiary.summary?.completed) }}</strong>
-        </div>
-        <div class="metric-card loot">
-          <span>Creatures</span>
-          <strong>{{ formatNumber(bestiary.summary?.total_creatures) }}</strong>
-        </div>
-      </div>
-    </article>
-
-    <article class="panel table-panel">
-      <SectionHeader title="Checklist" :subtitle="`${bestiary.groups?.checklist?.length || 0} creatures`" />
-      <div class="table-wrap">
-        <table class="bestiary-table">
-          <thead>
-            <tr>
-              <th>Creature</th>
-              <th>Points</th>
-              <th>Difficulty</th>
-              <th>Suggested spawn</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in bestiary.groups?.checklist || []" :key="item.normalized_creature_name">
+      <DataTable
+        :columns="checklistColumns"
+        :items="bestiary.groups?.checklist || []"
+        row-key="normalized_creature_name"
+        min-width="760px"
+        empty-title="Checklist clear"
+        empty-reason="Completed creatures stay out of the main list."
+      >
+        <template #row="{ items }">
+            <tr v-for="item in items" :key="item.normalized_creature_name">
               <td>
                 <EntityLinkPill :entity="{ type: 'creature', id: item.public_creature_id, name: item.creature_name }" />
               </td>
@@ -166,30 +170,27 @@ onMounted(loadBestiary)
                 </button>
               </td>
             </tr>
-            <tr v-if="!bestiary.groups?.checklist?.length">
-              <td colspan="5">
-                <EmptyState title="Checklist clear" subtitle="Completed creatures stay out of the main list." />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </article>
+        </template>
+        <template #empty>
+          <EmptyState title="Checklist clear" reason="Completed creatures stay out of the main list." />
+        </template>
+      </DataTable>
+      <MetricGrid class="bestiary-metrics compact-metric-strip" :items="summaryMetrics" :columns="3" />
+    </Panel>
 
-    <article class="panel table-panel">
+    <Panel variant="table">
       <SectionHeader title="Completed" :subtitle="`${bestiary.groups?.completed?.length || 0} checked off`" />
-      <div class="table-wrap">
-        <table class="bestiary-table completed-table">
-          <thead>
-            <tr>
-              <th>Creature</th>
-              <th>Points</th>
-              <th>Difficulty</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in bestiary.groups?.completed || []" :key="`completed-${item.normalized_creature_name}`">
+      <DataTable
+        class="completed-table"
+        :columns="completedColumns"
+        :items="bestiary.groups?.completed || []"
+        row-key="normalized_creature_name"
+        min-width="760px"
+        empty-title="No completed creatures"
+        empty-reason="Checked-off creatures will appear here."
+      >
+        <template #row="{ items }">
+            <tr v-for="item in items" :key="`completed-${item.normalized_creature_name}`">
               <td>
                 <EntityLinkPill :entity="{ type: 'creature', id: item.public_creature_id, name: item.creature_name }" />
               </td>
@@ -206,36 +207,19 @@ onMounted(loadBestiary)
                 </button>
               </td>
             </tr>
-            <tr v-if="!bestiary.groups?.completed?.length">
-              <td colspan="4" class="muted">Checked-off creatures will appear here.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </article>
+        </template>
+      </DataTable>
+    </Panel>
   </section>
 </template>
 
 <style scoped>
-.bestiary-toolbar {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
-  gap: 10px;
-  align-items: end;
-  margin-top: 12px;
-}
-
 .bestiary-metrics {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: 12px;
 }
 
-.bestiary-table {
-  min-width: 760px;
-}
-
-.bestiary-table th,
-.bestiary-table td {
+:deep(.data-table th),
+:deep(.data-table td) {
   vertical-align: middle;
 }
 
@@ -260,7 +244,6 @@ onMounted(loadBestiary)
 }
 
 @media (max-width: 820px) {
-  .bestiary-toolbar,
   .bestiary-metrics {
     grid-template-columns: 1fr;
   }

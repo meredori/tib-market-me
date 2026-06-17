@@ -4,10 +4,37 @@ import {
   Star,
 } from '@lucide/vue'
 import ConfidenceBadge from '../common/ConfidenceBadge.vue'
+import DataTable from '../common/DataTable.vue'
 import DecisionLabels from '../common/DecisionLabels.vue'
 import EntityLinkPill from '../common/EntityLinkPill.vue'
 import FreshnessBadge from '../common/FreshnessBadge.vue'
 import SectionHeader from '../common/SectionHeader.vue'
+import Toolbar from '../common/Toolbar.vue'
+
+const lookupColumns = [
+  { key: 'image', label: '' },
+  { key: 'name', label: 'Name' },
+  { key: 'fair', label: 'Fair Sale' },
+  { key: 'offer', label: 'Sell Offer' },
+  { key: 'confidence', label: 'Confidence' },
+  { key: 'trend', label: 'Trend' },
+  { key: 'actions', label: '', class: 'action-col' },
+]
+
+const cheapColumns = [
+  { key: 'item', label: 'Item' },
+  { key: 'latest', label: 'Latest sync' },
+  { key: 'band', label: 'Band' },
+  { key: 'signal', label: 'Signal' },
+  { key: 'actions', label: '', class: 'action-col' },
+]
+
+const lootColumns = [
+  { key: 'item', label: 'Item' },
+  { key: 'looted', label: 'Looted' },
+  { key: 'value', label: 'Snapshot Value' },
+  { key: 'signal', label: 'Signal' },
+]
 
 defineProps({
   marketDashboard: { type: Object, default: () => ({}) },
@@ -32,66 +59,42 @@ defineEmits([
 </script>
 
 <template>
-  <section class="page-stack">
-    <article class="panel market-status-panel">
-      <SectionHeader title="Market Snapshot" :subtitle="marketDashboard.freshness?.label || 'latest sync status'">
+  <section class="page-stack market-view">
+    <article class="panel market-lookup-panel">
+      <SectionHeader title="Item Lookup" :subtitle="searchInfo || 'Search local market data'" />
+      <Toolbar variant="inline" class="market-primary-toolbar">
+        <label class="search-field">
+          Search items
+          <input
+            :value="searchQuery"
+            placeholder="type item name..."
+            @input="$emit('update:searchQuery', $event.target.value); $emit('search-input')"
+          />
+        </label>
+        <div class="inline-status market-inline-status">
+          <FreshnessBadge :freshness="marketDashboard.freshness" />
+          <span>{{ marketDashboard.freshness?.server || 'n/a' }}</span>
+          <span>{{ marketDashboard.freshness?.age_hours ?? 'n/a' }}h old</span>
+        </div>
         <button class="ghost-action" :disabled="marketDashboardBusy" @click="$emit('refresh-market-dashboard')">
           Refresh view
         </button>
-      </SectionHeader>
-      <FreshnessBadge :freshness="marketDashboard.freshness" />
-      <div class="market-status-grid">
-        <div>
-          <span class="muted">World</span>
-          <strong>{{ marketDashboard.freshness?.server || 'n/a' }}</strong>
-        </div>
-        <div>
-          <span class="muted">Last seen</span>
-          <strong class="mono">{{ marketDashboard.freshness?.finished_at || 'n/a' }}</strong>
-        </div>
-        <div>
-          <span class="muted">Snapshot age</span>
-          <strong>{{ marketDashboard.freshness?.age_hours ?? 'n/a' }}h</strong>
-        </div>
-        <div>
-          <span class="muted">Priced items</span>
-          <strong>{{ formatValue(marketDashboard.freshness?.priced_item_count) }}</strong>
-        </div>
-      </div>
+      </Toolbar>
       <div v-if="marketDashboard.warnings?.length" class="warning-list">
         <span v-for="warning in marketDashboard.warnings" :key="warning" class="warning-chip">
           <AlertTriangle :size="14" />
           {{ warning }}
         </span>
       </div>
-      <p v-else class="muted snapshot-copy">Dashboard values come from local snapshots and historical bands, not live listings.</p>
-    </article>
-
-    <article class="panel">
-      <SectionHeader title="Item Lookup" :subtitle="searchInfo" />
-      <label>
-        Search items
-        <input
-          :value="searchQuery"
-          placeholder="type item name..."
-          @input="$emit('update:searchQuery', $event.target.value); $emit('search-input')"
-        />
-      </label>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th></th>
-              <th>Name</th>
-              <th>Fair Sale</th>
-              <th>Sell Offer</th>
-              <th>Confidence</th>
-              <th>Trend</th>
-              <th class="action-col"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in searchRows" :key="row.id">
+      <DataTable
+        :columns="lookupColumns"
+        :items="searchRows"
+        row-key="id"
+        empty-title="Search for an item"
+        empty-reason="Inspect pricing, history, and overrides from local market data."
+      >
+        <template #row="{ items }">
+            <tr v-for="row in items" :key="row.id">
               <td class="item-image-cell">
                 <img class="item-image" :src="row.image_path || itemImagePath(row.id)" :alt="row.name" loading="lazy" />
               </td>
@@ -112,45 +115,22 @@ defineEmits([
                 </button>
               </td>
             </tr>
-            <tr v-if="!searchRows.length">
-              <td colspan="7" class="muted">Search for an item to inspect pricing, history, and overrides.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        </template>
+      </DataTable>
     </article>
 
-    <div class="dashboard-grid">
-      <article class="panel table-panel">
-        <SectionHeader title="Favorites Watchlist" :subtitle="`${marketDashboard.watchlist?.length || 0} items`" />
-        <div class="market-card-list">
-          <div v-for="item in marketDashboard.watchlist || []" :key="item.item_id" class="market-row-card">
-            <EntityLinkPill :entity="{ type: 'item', id: item.item_id, name: item.name }" :image-src="itemImagePath(item.item_id)" clickable @activate="$emit('open-item', item.item_id)" />
-            <strong>{{ formatValue(item.latest_price) }}</strong>
-            <DecisionLabels class="market-labels" :reasons="item.reasons" :warnings="item.warnings" :reason-labels="item.reason_labels" :warning-labels="item.warning_labels" />
-            <button class="icon-btn" title="Remove favorite" :disabled="watchlistBusy" @click="$emit('toggle-favorite', item)">
-              <Star :size="16" fill="currentColor" />
-            </button>
-          </div>
-          <p v-if="!marketDashboard.watchlist?.length" class="muted">Favorite market items from market rows, item lookup, or item details to watch trends here.</p>
-        </div>
-      </article>
-
+    <div class="dashboard-grid market-signal-grid">
       <article class="panel table-panel">
         <SectionHeader title="Historically Cheap" :subtitle="`${marketDashboard.historicallyCheap?.length || 0} signals`" />
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Latest sync</th>
-                <th>Band</th>
-                <th>Signal</th>
-                <th class="action-col"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in marketDashboard.historicallyCheap || []" :key="item.item_id">
+        <DataTable
+          :columns="cheapColumns"
+          :items="marketDashboard.historicallyCheap || []"
+          row-key="item_id"
+          empty-title="No cheap-item signals"
+          empty-reason="Needs more synced history before cheap-item signals appear."
+        >
+          <template #row="{ items }">
+              <tr v-for="item in items" :key="item.item_id">
                 <td>
                   <EntityLinkPill :entity="{ type: 'item', id: item.item_id, name: item.name }" :image-src="itemImagePath(item.item_id)" clickable @activate="$emit('open-item', item.item_id)" />
                 </td>
@@ -165,11 +145,48 @@ defineEmits([
                   </button>
                 </td>
               </tr>
-              <tr v-if="!marketDashboard.historicallyCheap?.length">
-                <td colspan="5" class="muted">Needs more synced history before cheap-item signals appear.</td>
+          </template>
+        </DataTable>
+      </article>
+
+      <article class="panel table-panel">
+        <SectionHeader title="Loot Worth Listing" :subtitle="`${marketDashboard.hotLootedItems?.length || 0} items`">
+          <button class="ghost-action" @click="$emit('open-loot-inbox')">Open inbox</button>
+        </SectionHeader>
+        <DataTable
+          :columns="lootColumns"
+          :items="marketDashboard.hotLootedItems || []"
+          row-key="item_id"
+          empty-title="No listing candidates"
+          empty-reason="Save hunts with market-known loot to populate listing candidates."
+        >
+          <template #row="{ items }">
+              <tr v-for="item in items" :key="item.item_id">
+                <td>
+                  <EntityLinkPill :entity="{ type: 'item', id: item.item_id, name: item.name }" :image-src="itemImagePath(item.item_id)" clickable @activate="$emit('open-item', item.item_id)" />
+                </td>
+                <td>{{ formatValue(item.looted_quantity) }}</td>
+                <td>{{ formatValue(item.looted_value) }}</td>
+                <td><DecisionLabels :reasons="item.reasons" :reason-labels="item.reason_labels" :limit="1" /></td>
               </tr>
-            </tbody>
-          </table>
+          </template>
+        </DataTable>
+      </article>
+    </div>
+
+    <div class="dashboard-grid market-secondary-grid">
+      <article class="panel table-panel">
+        <SectionHeader title="Favorites Watchlist" :subtitle="`${marketDashboard.watchlist?.length || 0} items`" />
+        <div class="market-card-list">
+          <div v-for="item in marketDashboard.watchlist || []" :key="item.item_id" class="market-row-card">
+            <EntityLinkPill :entity="{ type: 'item', id: item.item_id, name: item.name }" :image-src="itemImagePath(item.item_id)" clickable @activate="$emit('open-item', item.item_id)" />
+            <strong>{{ formatValue(item.latest_price) }}</strong>
+            <DecisionLabels class="market-labels" :reasons="item.reasons" :warnings="item.warnings" :reason-labels="item.reason_labels" :warning-labels="item.warning_labels" />
+            <button class="icon-btn" title="Remove favorite" :disabled="watchlistBusy" @click="$emit('toggle-favorite', item)">
+              <Star :size="16" fill="currentColor" />
+            </button>
+          </div>
+          <p v-if="!marketDashboard.watchlist?.length" class="muted">Favorite market items from market rows, item lookup, or item details to watch trends here.</p>
         </div>
       </article>
 
@@ -189,37 +206,6 @@ defineEmits([
       </article>
 
       <article class="panel table-panel">
-        <SectionHeader title="Loot Worth Listing" :subtitle="`${marketDashboard.hotLootedItems?.length || 0} items`">
-          <button class="ghost-action" @click="$emit('open-loot-inbox')">Open inbox</button>
-        </SectionHeader>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Looted</th>
-                <th>Snapshot Value</th>
-                <th>Signal</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in marketDashboard.hotLootedItems || []" :key="item.item_id">
-                <td>
-                  <EntityLinkPill :entity="{ type: 'item', id: item.item_id, name: item.name }" :image-src="itemImagePath(item.item_id)" clickable @activate="$emit('open-item', item.item_id)" />
-                </td>
-                <td>{{ formatValue(item.looted_quantity) }}</td>
-                <td>{{ formatValue(item.looted_value) }}</td>
-                <td><DecisionLabels :reasons="item.reasons" :reason-labels="item.reason_labels" :limit="1" /></td>
-              </tr>
-              <tr v-if="!marketDashboard.hotLootedItems?.length">
-                <td colspan="4" class="muted">Save hunts with market-known loot to populate listing candidates.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </article>
-
-      <article class="panel table-panel">
         <SectionHeader title="Quiet Or Low Confidence" :subtitle="`${marketDashboard.quietItems?.length || 0} items`" />
         <div class="market-card-list">
           <div v-for="item in marketDashboard.quietItems || []" :key="item.item_id" class="market-row-card">
@@ -232,6 +218,29 @@ defineEmits([
           </div>
           <p v-if="!marketDashboard.quietItems?.length" class="muted">No quiet-market warnings in the latest local snapshot.</p>
         </div>
+      </article>
+
+      <article class="panel market-status-panel compact-status-panel">
+        <SectionHeader title="Snapshot Health" :subtitle="marketDashboard.freshness?.label || 'latest sync status'" />
+        <div class="market-status-grid">
+          <div>
+            <span class="muted">World</span>
+            <strong>{{ marketDashboard.freshness?.server || 'n/a' }}</strong>
+          </div>
+          <div>
+            <span class="muted">Last seen</span>
+            <strong class="mono">{{ marketDashboard.freshness?.finished_at || 'n/a' }}</strong>
+          </div>
+          <div>
+            <span class="muted">Snapshot age</span>
+            <strong>{{ marketDashboard.freshness?.age_hours ?? 'n/a' }}h</strong>
+          </div>
+          <div>
+            <span class="muted">Priced items</span>
+            <strong>{{ formatValue(marketDashboard.freshness?.priced_item_count) }}</strong>
+          </div>
+        </div>
+        <p class="muted snapshot-copy">Values come from local snapshots and historical bands, not live listings.</p>
       </article>
     </div>
   </section>

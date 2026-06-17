@@ -101,6 +101,11 @@ function createDb(): Database.Database {
       location TEXT,
       min_level INTEGER,
       max_level INTEGER,
+      level_knights TEXT,
+      level_paladins TEXT,
+      level_mages TEXT,
+      skill_knights TEXT,
+      defense_knights TEXT,
       exp_stars REAL,
       loot_stars REAL,
       bestiary_stars REAL,
@@ -132,6 +137,7 @@ function createDb(): Database.Database {
     CREATE TABLE public_hunting_place_area_summaries (
       hunting_place_id INTEGER NOT NULL,
       area_name TEXT NOT NULL,
+      display_order INTEGER,
       creature_count INTEGER,
       exp_stars REAL,
       loot_stars REAL,
@@ -277,22 +283,51 @@ describe("public Tibia reference data", () => {
     });
   });
 
-  it("derives hunting-place level ranges from vocation level fields", () => {
+  it("stores vocation guidance and derives hunting-place level ranges from knights first", () => {
     const payload = {
       ...huntingPlacePayload(),
       minLevel: null,
       maxLevel: null,
       levelKnights: "80-120",
       levelPaladins: "100+",
+      levelMages: "90-140",
+      skillKnights: "85",
+      defenseKnights: "80"
+    };
+
+    const place = upsertPublicHuntingPlace(db, payload, "2026-06-11T00:00:00Z");
+
+    expect(place).toMatchObject({ min_level: 80, max_level: 120, level_knights: "80-120", level_paladins: "100+", level_mages: "90-140" });
+    expect(db.prepare("SELECT min_level, max_level, level_knights, level_paladins, level_mages, skill_knights, defense_knights FROM public_hunting_places WHERE id = 201").get()).toEqual({
+      min_level: 80,
+      max_level: 120,
+      level_knights: "80-120",
+      level_paladins: "100+",
+      level_mages: "90-140",
+      skill_knights: "85",
+      defense_knights: "80"
+    });
+  });
+
+  it("falls back to all vocation levels when knight guidance is missing", () => {
+    const payload = {
+      ...huntingPlacePayload(),
+      minLevel: null,
+      maxLevel: null,
+      levelKnights: null,
+      levelPaladins: "100+",
       levelMages: "90-140"
     };
 
     const place = upsertPublicHuntingPlace(db, payload, "2026-06-11T00:00:00Z");
 
-    expect(place).toMatchObject({ min_level: 80, max_level: 140 });
-    expect(db.prepare("SELECT min_level, max_level FROM public_hunting_places WHERE id = 201").get()).toEqual({
-      min_level: 80,
-      max_level: 140
+    expect(place).toMatchObject({ min_level: 90, max_level: 140, level_knights: null });
+    expect(db.prepare("SELECT min_level, max_level, level_knights, level_paladins, level_mages FROM public_hunting_places WHERE id = 201").get()).toEqual({
+      min_level: 90,
+      max_level: 140,
+      level_knights: null,
+      level_paladins: "100+",
+      level_mages: "90-140"
     });
   });
 
@@ -313,15 +348,37 @@ describe("public Tibia reference data", () => {
         ]
       }
     });
-    const rows = db.prepare("SELECT area_name, creature_count FROM public_hunting_place_area_summaries ORDER BY area_name").all() as Array<Record<string, unknown>>;
+    const rows = db.prepare("SELECT area_name, display_order, creature_count FROM public_hunting_place_area_summaries ORDER BY display_order").all() as Array<Record<string, unknown>>;
 
     expect(result.area_summaries).toBe(4);
     expect(rows).toEqual([
-      { area_name: "Area 4", creature_count: 1 },
-      { area_name: "Main floor", creature_count: 2 },
-      { area_name: "Main floor (2)", creature_count: 3 },
-      { area_name: "Main floor (3)", creature_count: 4 }
+      { area_name: "Main floor", display_order: 0, creature_count: 2 },
+      { area_name: "Main floor (2)", display_order: 1, creature_count: 3 },
+      { area_name: "Main floor (3)", display_order: 2, creature_count: 4 },
+      { area_name: "Area 4", display_order: 3, creature_count: 1 }
     ]);
+  });
+
+  it("merges lower-level recommendation data into hunting-place area summaries", () => {
+    upsertPublicHuntingPlace(db, huntingPlacePayload(), "2026-06-11T00:00:00Z");
+
+    replacePublicHuntingPlaceChildren(db, 201, {
+      id: 201,
+      name: "Dragon Lair",
+      areaCreatureSummaries: [
+        { areaName: "Main floor", creatureCount: 2, creatures: [{ creatureId: 101, name: "Dragon" }] }
+      ],
+      lowerLevels: [
+        { areaName: "Main floor", levelKnights: "80-120", levelPaladins: "100+", levelMages: "90-140", skillKnights: "85", defenseKnights: "80" }
+      ]
+    });
+
+    const row = db.prepare("SELECT payload_json FROM public_hunting_place_area_summaries WHERE area_name = 'Main floor'").get() as { payload_json: string };
+    expect(JSON.parse(row.payload_json)).toMatchObject({
+      recommendedLevels: { knights: "80-120", paladins: "100+", mages: "90-140" },
+      recommendedSkills: { knights: "85" },
+      recommendedDefense: { knights: "80" }
+    });
   });
 
   it("syncs catalog rows and enriches creature/place details separately", async () => {

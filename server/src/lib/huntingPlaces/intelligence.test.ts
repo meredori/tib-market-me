@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { config } from "../../config";
 import { applyMigrations } from "../db/migrations";
-import { getHuntingPlaceDetail, listHuntingPlaces } from "./intelligence";
+import { getHuntingPlaceDetail, listHuntingPlaces, updateHuntingPlaceAreaOrder } from "./intelligence";
 
 let db: Database.Database;
 
@@ -43,6 +43,37 @@ function seedCreature(id = 200): void {
     ) VALUES (100, ?, 'Dragon', 'dragon', 'common', '{}')
     `
   ).run(id);
+}
+
+function seedAreaSummaries(): void {
+  db.prepare(
+    `
+    INSERT INTO public_hunting_place_area_summaries (
+      hunting_place_id, area_name, creature_count, exp_stars, loot_stars, bestiary_stars, payload_json
+    ) VALUES (100, 'Ground Level', 2, NULL, NULL, NULL, ?)
+    `
+  ).run(JSON.stringify({
+    areaName: "Ground Level",
+    creatureCount: 2,
+    creatures: [
+      { creatureId: 200, name: "Dragon" },
+      { creatureId: 201, name: "Dragon Hatchling" }
+    ],
+    recommendedLevels: { knights: "80-120", paladins: "90-130", mages: "100-140" },
+    recommendedSkills: { knights: "85", paladins: "80", mages: null },
+    recommendedDefense: { knights: "80", paladins: null, mages: null }
+  }));
+  db.prepare(
+    `
+    INSERT INTO public_hunting_place_area_summaries (
+      hunting_place_id, area_name, creature_count, exp_stars, loot_stars, bestiary_stars, payload_json
+    ) VALUES (100, 'Basement', 1, NULL, NULL, NULL, ?)
+    `
+  ).run(JSON.stringify({
+    areaName: "Basement",
+    creatureCount: 1,
+    creatures: [{ creatureId: 200, name: "Dragon" }]
+  }));
 }
 
 function seedMarket(itemId = 300): number {
@@ -220,6 +251,7 @@ describe("hunting place intelligence", () => {
   it("aggregates canonical detail by public_hunting_place_id", () => {
     seedPlace();
     seedCreature();
+    seedAreaSummaries();
     seedMarket();
     seedLoot();
     seedHunt();
@@ -235,6 +267,19 @@ describe("hunting place intelligence", () => {
       public_creature_id: 200,
       normalized_creature_name: "dragon"
     });
+    expect(detail.reference.area_summaries.map((area) => area.area_name)).toEqual(["Ground Level", "Basement"]);
+    expect(detail.reference.area_summaries[0]).toMatchObject({
+      area_name: "Ground Level",
+      display_order: null,
+      creature_count: 2,
+      creatures: [
+        { public_creature_id: 200, name: "Dragon", normalized_creature_name: "dragon" },
+        { public_creature_id: 201, name: "Dragon Hatchling", normalized_creature_name: "dragon hatchling" }
+      ],
+      recommended_levels: { knights: "80-120", paladins: "90-130", mages: "100-140" },
+      recommended_skills: { knights: "85", paladins: "80", mages: null },
+      recommended_defense: { knights: "80", paladins: null, mages: null }
+    });
     expect(detail.reference.expected_loot[0]).toMatchObject({
       item_id: 300,
       normalized_item_name: "dragon ham",
@@ -245,6 +290,31 @@ describe("hunting place intelligence", () => {
       best_xp_per_hour: 100000,
       best_profit_per_hour: 40000
     });
+  });
+
+  it("persists corrected area summary ordering", () => {
+    seedPlace();
+    seedAreaSummaries();
+
+    const result = updateHuntingPlaceAreaOrder(db, 100, ["Basement", "Ground Level"]);
+    expect(result).toEqual({
+      ok: true,
+      public_hunting_place_id: 100,
+      area_summaries: [
+        { area_name: "Basement", display_order: 0 },
+        { area_name: "Ground Level", display_order: 1 }
+      ]
+    });
+
+    const detail = getHuntingPlaceDetail(db, 100);
+    expect(detail.ok).toBe(true);
+    if (!detail.ok) {
+      return;
+    }
+    expect(detail.reference.area_summaries.map((area) => [area.area_name, area.display_order])).toEqual([
+      ["Basement", 0],
+      ["Ground Level", 1]
+    ]);
   });
 
   it("keeps personal observed hunts separate from public expected loot", () => {
@@ -340,6 +410,7 @@ describe("hunting place intelligence", () => {
       return;
     }
     expect(detail.reference.creatures).toEqual([]);
+    expect(detail.reference.area_summaries).toEqual([]);
     expect(detail.reference.expected_loot).toEqual([]);
     expect(detail.reference.market_weighted_loot_value).toMatchObject({
       total_estimated_value: 0,

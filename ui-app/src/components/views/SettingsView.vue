@@ -12,6 +12,7 @@ import {
 import { api } from '../../lib/api'
 import CompactMetricRow from '../common/CompactMetricRow.vue'
 import ConfidenceBadge from '../common/ConfidenceBadge.vue'
+import DataTable from '../common/DataTable.vue'
 import DecisionLabels from '../common/DecisionLabels.vue'
 import FreshnessBadge from '../common/FreshnessBadge.vue'
 import JobStatusPanel from '../common/JobStatusPanel.vue'
@@ -37,6 +38,22 @@ const props = defineProps({
 })
 
 const activeJobStatuses = new Set(['queued', 'running', 'paused', 'backoff'])
+
+const publicHuntColumns = [
+  { key: 'hunt', label: 'Hunt' },
+  { key: 'match', label: 'Match' },
+  { key: 'status', label: 'Status' },
+  { key: 'place', label: 'Hunting Place' },
+  { key: 'actions', label: '', class: 'action-col' },
+]
+
+const logImportColumns = [
+  { key: 'file', label: 'File' },
+  { key: 'hunt', label: 'Hunt' },
+  { key: 'status', label: 'Status' },
+  { key: 'modified', label: 'Modified' },
+  { key: 'actions', label: '', class: 'action-col' },
+]
 
 function jobGroup(jobs, type) {
   const list = jobs?.by_type?.[type] || []
@@ -160,27 +177,6 @@ function pct(value) {
 
     <div class="settings-grid">
       <article v-if="activeSettingsTab === 'general'" class="panel">
-        <h2>Run Status</h2>
-        <template v-if="hasStatus">
-          <div class="pills">
-            <span class="pill">Server {{ status.server }}</span>
-            <span class="pill">Items {{ status.item_count }}</span>
-          </div>
-          <div class="muted"><strong>Local run started:</strong> <span class="mono">{{ status.local_run?.started_at || 'n/a' }}</span></div>
-          <div class="muted"><strong>Local run finished:</strong> <span class="mono">{{ status.local_run?.finished_at || 'n/a' }}</span></div>
-          <div class="muted"><strong>World last update:</strong> <span class="mono">{{ status.world_data?.last_update || 'n/a' }}</span></div>
-          <div class="muted"><strong>World queried at:</strong> <span class="mono">{{ status.world_data?.queried_at || 'n/a' }}</span></div>
-        </template>
-        <template v-else>
-          <div class="muted">Loading status...</div>
-        </template>
-        <div class="button-row mt-10">
-          <button :disabled="isRefreshing" @click="$emit('refresh')">Refresh From Server</button>
-          <span class="muted">{{ refreshInfo }}</span>
-        </div>
-      </article>
-
-      <article v-if="activeSettingsTab === 'general'" class="panel">
         <h2>Generate itemprices.json</h2>
         <p class="muted">Create a Tibia item price file from latest market data using a selectable valuation mode.</p>
         <label>
@@ -196,8 +192,49 @@ function pct(value) {
         </div>
       </article>
 
+      <article v-if="activeSettingsTab === 'general'" class="panel">
+        <h2>Run Status</h2>
+        <div class="button-row mt-10">
+          <button :disabled="isRefreshing" @click="$emit('refresh')">Refresh From Server</button>
+          <span class="muted">{{ refreshInfo }}</span>
+        </div>
+        <template v-if="hasStatus">
+          <div class="pills mt-10">
+            <span class="pill">Server {{ status.server }}</span>
+            <span class="pill">Items {{ status.item_count }}</span>
+          </div>
+          <div class="muted"><strong>Local run started:</strong> <span class="mono">{{ status.local_run?.started_at || 'n/a' }}</span></div>
+          <div class="muted"><strong>Local run finished:</strong> <span class="mono">{{ status.local_run?.finished_at || 'n/a' }}</span></div>
+          <div class="muted"><strong>World last update:</strong> <span class="mono">{{ status.world_data?.last_update || 'n/a' }}</span></div>
+          <div class="muted"><strong>World queried at:</strong> <span class="mono">{{ status.world_data?.queried_at || 'n/a' }}</span></div>
+        </template>
+        <template v-else>
+          <div class="muted mt-10">Loading status...</div>
+        </template>
+      </article>
+
       <article v-if="activeSettingsTab === 'reference'" class="panel settings-wide">
         <h2>Data Health</h2>
+        <div class="button-row mt-10">
+          <button :disabled="publicReferenceBusy" @click="$emit('sync-public-reference')">
+            <Database :size="16" />
+            Sync Catalog
+          </button>
+          <button :disabled="publicReferenceBusy" @click="$emit('enrich-public-reference')">
+            <RefreshCw :size="16" />
+            Enrich Details
+          </button>
+          <button
+            :disabled="publicReferenceBusy || !(publicReferenceStatus.data_health?.diagnostics?.creatures_missing_loot > 0)"
+            @click="$emit('queue-public-reference-missing-loot')"
+          >
+            <RefreshCw :size="16" />
+            Queue Missing Loot
+          </button>
+          <span class="muted">{{ publicReferenceInfo }}</span>
+        </div>
+        <JobStatusPanel title="Catalog Sync" :jobs="jobGroup(publicReferenceStatus.jobs, 'public-reference-catalog')" />
+        <JobStatusPanel title="Detail Enrichment" :jobs="jobGroup(publicReferenceStatus.jobs, 'public-reference-enrichment')" />
         <div class="pills">
           <span class="pill">Creatures {{ publicReferenceStatus.data_health?.staged?.creatures || 0 }}</span>
           <span class="pill">Hunting Places {{ publicReferenceStatus.data_health?.staged?.hunting_places || 0 }}</span>
@@ -219,26 +256,6 @@ function pct(value) {
           :reasons="(publicReferenceStatus.data_health?.explanations || []).filter((item) => item.severity !== 'warning' && item.severity !== 'blocked')"
           :warnings="(publicReferenceStatus.data_health?.explanations || []).filter((item) => item.severity === 'warning' || item.severity === 'blocked')"
         />
-        <JobStatusPanel title="Catalog Sync" :jobs="jobGroup(publicReferenceStatus.jobs, 'public-reference-catalog')" />
-        <JobStatusPanel title="Detail Enrichment" :jobs="jobGroup(publicReferenceStatus.jobs, 'public-reference-enrichment')" />
-        <div class="button-row mt-10">
-          <button :disabled="publicReferenceBusy" @click="$emit('sync-public-reference')">
-            <Database :size="16" />
-            Sync Catalog
-          </button>
-          <button :disabled="publicReferenceBusy" @click="$emit('enrich-public-reference')">
-            <RefreshCw :size="16" />
-            Enrich Details
-          </button>
-          <button
-            :disabled="publicReferenceBusy || !(publicReferenceStatus.data_health?.diagnostics?.creatures_missing_loot > 0)"
-            @click="$emit('queue-public-reference-missing-loot')"
-          >
-            <RefreshCw :size="16" />
-            Queue Missing Loot
-          </button>
-          <span class="muted">{{ publicReferenceInfo }}</span>
-        </div>
         <div class="status-row mt-10">
           <span class="status-badge">Missing loot {{ publicReferenceStatus.data_health?.diagnostics?.creatures_missing_loot || 0 }}</span>
           <span class="status-badge">Missing place creatures {{ publicReferenceStatus.data_health?.diagnostics?.hunting_places_missing_creatures || 0 }}</span>
@@ -287,6 +304,56 @@ function pct(value) {
         <CompactMetricRow label="Policy" :value="publicHuntStatus.policy?.manual_only ? 'Manual factual import, no training use' : 'Manual import'" />
         <JobStatusPanel title="Public Hunt Import" :jobs="jobGroup(publicHuntStatus.jobs, 'public-hunt-import')" />
         <p v-if="publicHuntInfo" class="muted">{{ publicHuntInfo }}</p>
+
+        <DataTable
+          class="mt-10"
+          :columns="publicHuntColumns"
+          :items="publicHuntReviewItems"
+          row-key="id"
+          empty-title="No public hunts need review"
+          empty-reason="Accepted, ignored, or already-matched public hunts stay out of this queue."
+        >
+          <template #row="{ items }">
+              <tr
+                v-for="item in items"
+                :key="item.id"
+                :class="{ selected: selectedPublicHunt?.id === item.id }"
+              >
+                <td>
+                  <button class="loot-item-link entity-link-pill" @click="selectPublicHunt(item)">
+                    <Eye :size="14" />
+                    <span>{{ item.title }}</span>
+                  </button>
+                  <div class="muted mono">{{ item.source_session_id }}</div>
+                </td>
+                <td>
+                  <span>{{ item.match?.status || 'unmatched' }}</span>
+                  <span v-if="item.match?.confidence?.score !== null" class="muted">
+                    {{ Math.round(Number(item.match.confidence.score || 0) * 100) }}%
+                  </span>
+                </td>
+                <td>
+                  <span class="status-badge">{{ item.display_status || item.review_status }}</span>
+                  <span v-if="item.suspicious_status === 'suspicious'" class="status-badge confidence-low">suspicious</span>
+                </td>
+                <td>
+                  <div v-if="item.matched_hunting_place?.name">
+                    {{ item.matched_hunting_place.name }}
+                    <div class="muted compact-note">{{ item.matched_hunting_place.location || '' }}</div>
+                  </div>
+                  <span v-else class="muted">{{ (item.match?.candidates || [])[0]?.name || 'No matched area' }}</span>
+                </td>
+                <td class="action-col">
+                  <button class="icon-btn" :disabled="publicHuntBusy" title="Review details" @click="selectPublicHunt(item)">
+                    <Eye :size="15" />
+                  </button>
+                  <button class="icon-btn danger" :disabled="publicHuntBusy" title="Ignore" @click="$emit('review-public-hunt', item, 'ignore')">
+                    <X :size="15" />
+                  </button>
+                </td>
+              </tr>
+          </template>
+        </DataTable>
 
         <div v-if="selectedPublicHunt" class="public-hunt-review-detail mt-10">
           <SectionHeader :title="selectedPublicHunt.title" :subtitle="`Public hunt ${selectedPublicHunt.source_session_id}`">
@@ -419,63 +486,6 @@ function pct(value) {
             </div>
           </div>
         </div>
-
-        <div class="table-wrap mt-10">
-          <table>
-            <thead>
-              <tr>
-                <th>Hunt</th>
-                <th>Match</th>
-                <th>Status</th>
-                <th>Hunting Place</th>
-                <th class="action-col"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="item in publicHuntReviewItems"
-                :key="item.id"
-                :class="{ selected: selectedPublicHunt?.id === item.id }"
-              >
-                <td>
-                  <button class="loot-item-link entity-link-pill" @click="selectPublicHunt(item)">
-                    <Eye :size="14" />
-                    <span>{{ item.title }}</span>
-                  </button>
-                  <div class="muted mono">{{ item.source_session_id }}</div>
-                </td>
-                <td>
-                  <span>{{ item.match?.status || 'unmatched' }}</span>
-                  <span v-if="item.match?.confidence?.score !== null" class="muted">
-                    {{ Math.round(Number(item.match.confidence.score || 0) * 100) }}%
-                  </span>
-                </td>
-                <td>
-                  <span class="status-badge">{{ item.display_status || item.review_status }}</span>
-                  <span v-if="item.suspicious_status === 'suspicious'" class="status-badge confidence-low">suspicious</span>
-                </td>
-                <td>
-                  <div v-if="item.matched_hunting_place?.name">
-                    {{ item.matched_hunting_place.name }}
-                    <div class="muted compact-note">{{ item.matched_hunting_place.location || '' }}</div>
-                  </div>
-                  <span v-else class="muted">{{ (item.match?.candidates || [])[0]?.name || 'No matched area' }}</span>
-                </td>
-                <td class="action-col">
-                  <button class="icon-btn" :disabled="publicHuntBusy" title="Review details" @click="selectPublicHunt(item)">
-                    <Eye :size="15" />
-                  </button>
-                  <button class="icon-btn danger" :disabled="publicHuntBusy" title="Ignore" @click="$emit('review-public-hunt', item, 'ignore')">
-                    <X :size="15" />
-                  </button>
-                </td>
-              </tr>
-              <tr v-if="!publicHuntReviewItems.length">
-                <td colspan="5" class="muted">No public hunts need review.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
       </article>
 
       <article v-if="activeSettingsTab === 'log-imports'" class="panel settings-wide">
@@ -486,19 +496,15 @@ function pct(value) {
           </button>
         </SectionHeader>
         <p v-if="hunts.huntImportInfo.value" class="muted">{{ hunts.huntImportInfo.value }}</p>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>File</th>
-                <th>Hunt</th>
-                <th>Status</th>
-                <th>Modified</th>
-                <th class="action-col"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="candidate in hunts.huntImportCandidates.value" :key="candidate.import_key">
+        <DataTable
+          :columns="logImportColumns"
+          :items="hunts.huntImportCandidates.value"
+          row-key="import_key"
+          empty-title="No pending log imports"
+          empty-reason="Scan logs to review pending imports."
+        >
+          <template #row="{ items }">
+              <tr v-for="candidate in items" :key="candidate.import_key">
                 <td class="mono">{{ candidate.file_name }}</td>
                 <td>{{ candidate.preview?.suggested_label || candidate.imported_hunt?.label || 'Unparsed log' }}</td>
                 <td>
@@ -522,12 +528,8 @@ function pct(value) {
                   </template>
                 </td>
               </tr>
-              <tr v-if="!hunts.huntImportCandidates.value.length">
-                <td colspan="5" class="muted">Scan logs to review pending imports.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+          </template>
+        </DataTable>
       </article>
     </div>
   </section>

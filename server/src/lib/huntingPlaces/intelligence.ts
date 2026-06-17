@@ -25,6 +25,11 @@ type HuntingPlaceRow = {
   location: string | null;
   min_level: number | null;
   max_level: number | null;
+  level_knights: string | null;
+  level_paladins: string | null;
+  level_mages: string | null;
+  skill_knights: string | null;
+  defense_knights: string | null;
   exp_stars: number | null;
   loot_stars: number | null;
   bestiary_stars: number | null;
@@ -53,6 +58,16 @@ type PlaceCreatureRow = {
   creature_last_updated: string | null;
   creature_last_seen: string | null;
   creature_fetched_at: string | null;
+};
+
+type AreaSummaryRow = {
+  area_name: string;
+  display_order: number | null;
+  creature_count: number | null;
+  exp_stars: number | null;
+  loot_stars: number | null;
+  bestiary_stars: number | null;
+  payload_json: string;
 };
 
 type LootRow = {
@@ -148,6 +163,39 @@ export type HuntingPlaceCreatureSummary = {
     total_kills: number | null;
   };
   freshness: Freshness;
+  provenance: Provenance[];
+  confidence: Confidence;
+};
+
+export type HuntingPlaceAreaCreature = {
+  public_creature_id: number | null;
+  name: string;
+  normalized_creature_name: string;
+};
+
+export type HuntingPlaceAreaSummary = {
+  area_name: string;
+  display_order: number | null;
+  creature_count: number | null;
+  creatures: HuntingPlaceAreaCreature[];
+  recommended_levels: {
+    knights: string | null;
+    paladins: string | null;
+    mages: string | null;
+  };
+  recommended_skills: {
+    knights: string | null;
+    paladins: string | null;
+    mages: string | null;
+  };
+  recommended_defense: {
+    knights: string | null;
+    paladins: string | null;
+    mages: string | null;
+  };
+  exp_stars: number | null;
+  loot_stars: number | null;
+  bestiary_stars: number | null;
   provenance: Provenance[];
   confidence: Confidence;
 };
@@ -269,6 +317,11 @@ export type HuntingPlaceDetail = {
     location: string | null;
     min_level: number | null;
     max_level: number | null;
+    level_knights: string | null;
+    level_paladins: string | null;
+    level_mages: string | null;
+    skill_knights: string | null;
+    defense_knights: string | null;
     exp_stars: number | null;
     loot_stars: number | null;
     bestiary_stars: number | null;
@@ -279,6 +332,7 @@ export type HuntingPlaceDetail = {
     confidence: Confidence;
   };
   reference: {
+    area_summaries: HuntingPlaceAreaSummary[];
     creatures: HuntingPlaceCreatureSummary[];
     expected_loot: HuntingPlaceLootSummary[];
     market_weighted_loot_value: {
@@ -358,6 +412,16 @@ export type HuntingPlaceDetailResult = HuntingPlaceDetail | {
   public_hunting_place_id: number;
 };
 
+export type HuntingPlaceAreaOrderResult = {
+  ok: true;
+  public_hunting_place_id: number;
+  area_summaries: Array<{ area_name: string; display_order: number }>;
+} | {
+  ok: false;
+  error: string;
+  public_hunting_place_id: number;
+};
+
 export type HuntingPlaceListFilters = {
   q?: string;
   has_personal_hunts?: boolean;
@@ -430,6 +494,64 @@ function parseJsonObject(raw: string | null | undefined): Record<string, unknown
   }
 }
 
+function parseObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function listFromRecord(record: Record<string, unknown>, key: string): unknown[] {
+  return Array.isArray(record[key]) ? record[key] as unknown[] : [];
+}
+
+function firstText(...values: unknown[]): string | null {
+  for (const value of values) {
+    const text = asText(value).trim();
+    if (text) {
+      return text;
+    }
+  }
+  return null;
+}
+
+function textFromPaths(record: Record<string, unknown>, paths: string[][]): string | null {
+  for (const path of paths) {
+    let current: unknown = record;
+    for (const part of path) {
+      current = parseObject(current)[part];
+    }
+    const text = firstText(current);
+    if (text) {
+      return text;
+    }
+  }
+  return null;
+}
+
+function numberFromPaths(record: Record<string, unknown>, paths: string[][]): number | null {
+  for (const path of paths) {
+    let current: unknown = record;
+    for (const part of path) {
+      current = parseObject(current)[part];
+    }
+    const numeric = Number(current);
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+  }
+  return null;
+}
+
+function areaVocationValues(record: Record<string, unknown>, fieldName: "recommendedLevels" | "recommendedSkills" | "recommendedDefense", prefix: string): {
+  knights: string | null;
+  paladins: string | null;
+  mages: string | null;
+} {
+  return {
+    knights: textFromPaths(record, [[fieldName, "knights"], [`${prefix}Knights`], [`${prefix}_knights`]]),
+    paladins: textFromPaths(record, [[fieldName, "paladins"], [`${prefix}Paladins`], [`${prefix}_paladins`]]),
+    mages: textFromPaths(record, [[fieldName, "mages"], [`${prefix}Mages`], [`${prefix}_mages`]])
+  };
+}
+
 function latestIso(...values: Array<string | null | undefined>): string | null {
   let best: string | null = null;
   let bestMs = -Infinity;
@@ -481,7 +603,9 @@ function fetchPlace(db: Database.Database, placeId: number): HuntingPlaceRow | n
   return db
     .prepare(
       `
-      SELECT id, name, normalized_name, location, min_level, max_level, exp_stars, loot_stars,
+      SELECT id, name, normalized_name, location, min_level, max_level,
+             level_knights, level_paladins, level_mages, skill_knights, defense_knights,
+             exp_stars, loot_stars,
              bestiary_stars, risk_level, last_updated, last_seen, fetched_at, payload_json
       FROM public_hunting_places
       WHERE id = ?
@@ -489,6 +613,19 @@ function fetchPlace(db: Database.Database, placeId: number): HuntingPlaceRow | n
       `
     )
     .get(placeId) as HuntingPlaceRow | undefined ?? null;
+}
+
+function fetchAreaSummaries(db: Database.Database, placeId: number): AreaSummaryRow[] {
+  return db
+    .prepare(
+      `
+      SELECT area_name, display_order, creature_count, exp_stars, loot_stars, bestiary_stars, payload_json
+      FROM public_hunting_place_area_summaries
+      WHERE hunting_place_id = ?
+      ORDER BY COALESCE(display_order, rowid), rowid
+      `
+    )
+    .all(placeId) as AreaSummaryRow[];
 }
 
 function fetchCreatures(db: Database.Database, placeId: number): PlaceCreatureRow[] {
@@ -710,6 +847,50 @@ function fetchPublicHuntCreatures(db: Database.Database, placeId: number): Publi
     kills_per_hour: row.duration_minutes && row.duration_minutes > 0 ? Math.round(Number(row.kills || 0) * 60 / row.duration_minutes) : null,
     session_count: Number(row.session_count || 0)
   }));
+}
+
+function summarizeAreaCreatures(record: Record<string, unknown>): HuntingPlaceAreaCreature[] {
+  return listFromRecord(record, "creatures")
+    .map(parseObject)
+    .map((creature) => {
+      const name = firstText(creature.name, creature.creatureName, creature.creature_name);
+      if (!name) {
+        return null;
+      }
+      const id = numberFromPaths(creature, [["creatureId"], ["creature_id"], ["id"]]);
+      return {
+        public_creature_id: id === null ? null : Math.trunc(id),
+        name,
+        normalized_creature_name: normalizeLootItemName(name)
+      };
+    })
+    .filter((creature): creature is HuntingPlaceAreaCreature => creature !== null);
+}
+
+function summarizeAreaRows(rows: AreaSummaryRow[], place: HuntingPlaceRow): HuntingPlaceAreaSummary[] {
+  return rows.map((row) => {
+    const payload = parseJsonObject(row.payload_json);
+    const creatures = summarizeAreaCreatures(payload);
+    const source = provenance("public_tibia_reference", {
+      source_ref: entityRef("hunting_place", { id: place.id, name: place.name, normalized_name: place.normalized_name }),
+      source_id: place.id,
+      imported_at: place.fetched_at
+    });
+    return {
+      area_name: row.area_name,
+      display_order: row.display_order,
+      creature_count: row.creature_count ?? numberFromPaths(payload, [["creatureCount"], ["creature_count"]]) ?? creatures.length,
+      creatures,
+      recommended_levels: areaVocationValues(payload, "recommendedLevels", "level"),
+      recommended_skills: areaVocationValues(payload, "recommendedSkills", "skill"),
+      recommended_defense: areaVocationValues(payload, "recommendedDefense", "defense"),
+      exp_stars: row.exp_stars ?? numberFromPaths(payload, [["expStars"], ["experienceStars"]]),
+      loot_stars: row.loot_stars ?? numberFromPaths(payload, [["lootStars"]]),
+      bestiary_stars: row.bestiary_stars ?? numberFromPaths(payload, [["bestiaryStars"]]),
+      provenance: [source],
+      confidence: buildConfidence(creatures.length ? 0.85 : 0.65, { estimated: true })
+    };
+  });
 }
 
 function booleanFilter(value: unknown): boolean {
@@ -1344,6 +1525,7 @@ export function getHuntingPlaceDetail(db: Database.Database, publicHuntingPlaceI
     source_id: place.id,
     imported_at: place.fetched_at
   });
+  const areaSummaries = summarizeAreaRows(fetchAreaSummaries(db, publicHuntingPlaceId), place);
   const creatures = summarizeCreatures(fetchCreatures(db, publicHuntingPlaceId));
   const expectedLoot = summarizeLoot(fetchLoot(db, publicHuntingPlaceId));
   const personalHunts = fetchPersonalHunts(db, publicHuntingPlaceId).map(summarizePersonalHunt);
@@ -1361,6 +1543,12 @@ export function getHuntingPlaceDetail(db: Database.Database, publicHuntingPlaceI
   if (!creatures.length) {
     dataExplanations.push(explanation("creatures missing", "warning", "No public creature list is available for this hunting place.", {
       missing_data_reason: "Public hunting-place detail enrichment may be incomplete.",
+      provenance: [placeSource]
+    }));
+  }
+  if (!areaSummaries.length) {
+    dataExplanations.push(explanation("area breakdown missing", "neutral", "No public sublocation or floor breakdown is available for this hunting place.", {
+      missing_data_reason: "Public hunting-place detail did not include area creature summaries.",
       provenance: [placeSource]
     }));
   }
@@ -1383,6 +1571,11 @@ export function getHuntingPlaceDetail(db: Database.Database, publicHuntingPlaceI
       location: place.location,
       min_level: place.min_level,
       max_level: place.max_level,
+      level_knights: place.level_knights,
+      level_paladins: place.level_paladins,
+      level_mages: place.level_mages,
+      skill_knights: place.skill_knights,
+      defense_knights: place.defense_knights,
       exp_stars: place.exp_stars,
       loot_stars: place.loot_stars,
       bestiary_stars: place.bestiary_stars,
@@ -1393,6 +1586,7 @@ export function getHuntingPlaceDetail(db: Database.Database, publicHuntingPlaceI
       confidence: buildConfidence(0.8 + Math.min(0.15, fieldCoverage * 0.15), { estimated: true })
     },
     reference: {
+      area_summaries: areaSummaries,
       creatures,
       expected_loot: expectedLoot,
       market_weighted_loot_value: marketLoot
@@ -1419,5 +1613,61 @@ export function getHuntingPlaceDetail(db: Database.Database, publicHuntingPlaceI
       explanations: dataExplanations,
       provenance: [placeSource, ...marketLoot.provenance, ...personalSummary.provenance, ...publicSessionSummary.provenance]
     }
+  };
+}
+
+export function updateHuntingPlaceAreaOrder(
+  db: Database.Database,
+  publicHuntingPlaceIdInput: unknown,
+  areaNamesInput: unknown
+): HuntingPlaceAreaOrderResult {
+  const publicHuntingPlaceId = asPositiveInteger(publicHuntingPlaceIdInput) ?? 0;
+  if (!publicHuntingPlaceId) {
+    return { ok: false, error: "Invalid public_hunting_place_id", public_hunting_place_id: publicHuntingPlaceId };
+  }
+  if (!fetchPlace(db, publicHuntingPlaceId)) {
+    return { ok: false, error: "Hunting place not found", public_hunting_place_id: publicHuntingPlaceId };
+  }
+  if (!Array.isArray(areaNamesInput)) {
+    return { ok: false, error: "area_names must be an array", public_hunting_place_id: publicHuntingPlaceId };
+  }
+
+  const areaNames = areaNamesInput.map((value) => asText(value).trim()).filter(Boolean);
+  const uniqueNames = new Set(areaNames);
+  if (areaNames.length === 0 || uniqueNames.size !== areaNames.length) {
+    return { ok: false, error: "area_names must contain each area exactly once", public_hunting_place_id: publicHuntingPlaceId };
+  }
+
+  const existingRows = db.prepare(
+    `
+    SELECT area_name
+    FROM public_hunting_place_area_summaries
+    WHERE hunting_place_id = ?
+    ORDER BY COALESCE(display_order, rowid), rowid
+    `
+  ).all(publicHuntingPlaceId) as Array<{ area_name: string }>;
+  const existingNames = new Set(existingRows.map((row) => row.area_name));
+  if (existingNames.size !== areaNames.length || areaNames.some((name) => !existingNames.has(name))) {
+    return { ok: false, error: "area_names must match this hunting place's area summaries", public_hunting_place_id: publicHuntingPlaceId };
+  }
+
+  const updateOne = db.prepare(
+    `
+    UPDATE public_hunting_place_area_summaries
+    SET display_order = ?
+    WHERE hunting_place_id = ? AND area_name = ?
+    `
+  );
+  const applyOrder = db.transaction(() => {
+    areaNames.forEach((areaName, index) => {
+      updateOne.run(index, publicHuntingPlaceId, areaName);
+    });
+  });
+  applyOrder();
+
+  return {
+    ok: true,
+    public_hunting_place_id: publicHuntingPlaceId,
+    area_summaries: areaNames.map((areaName, index) => ({ area_name: areaName, display_order: index }))
   };
 }
