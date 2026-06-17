@@ -53,6 +53,7 @@ import { registerBestiaryRoutes } from "./lib/bestiary/routes";
 import { registerHuntingPlaceRoutes } from "./lib/huntingPlaces/routes";
 import {
   getPublicHuntStatus,
+  getPublicHuntTitleAliases,
   listPublicHuntReviewQueue,
   reprocessPublicHunts,
   reviewPublicHunt,
@@ -295,6 +296,14 @@ export function buildServer(db: Database.Database) {
   });
 
   app.get("/api/public-hunts/status", async () => getPublicHuntStatus(db));
+
+  app.get("/api/public-hunts/title-aliases", async (request) => {
+    const query = typeof request.query === "object" && request.query !== null
+      ? (request.query as Record<string, unknown>)
+      : {};
+    const limit = Number(query.limit);
+    return getPublicHuntTitleAliases(db, Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : undefined);
+  });
 
   app.post("/api/public-hunts/check", async (request, reply) => {
     try {

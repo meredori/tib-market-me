@@ -5,6 +5,7 @@ import { getHuntingPlaceDetail } from "../huntingPlaces/intelligence";
 import {
   checkPublicHunts,
   getPublicHuntStatus,
+  getPublicHuntTitleAliases,
   listPublicHuntReviewQueue,
   parsePublicHuntDetail,
   parsePublicHuntList,
@@ -68,7 +69,7 @@ function listHtml(): string {
   `;
 }
 
-function detailHtml(id = 48541, title = "Dragon Lair Test"): string {
+function detailHtml(id = 48541, title = "Dragon Lair Test", monster = "Dragon"): string {
   return `
     <div id="hunt_session_${id}">
       <h1>${title}<a href="/hunt_sessions?hunt_sessions_by=is_public&search=Tester">by Tester</a></h1>
@@ -86,7 +87,7 @@ function detailHtml(id = 48541, title = "Dragon Lair Test"): string {
         <h2>Monster Killed</h2>
         <table>
           <tr><th>#</th><th>Monster</th><th>Killed</th></tr>
-          <tr><td>#1</td><td><img alt="Dragon" />Dragon</td><td>600</td></tr>
+          <tr><td>#1</td><td><img alt="${monster}" />${monster}</td><td>600</td></tr>
         </table>
       </div>
     </div>
@@ -428,6 +429,55 @@ describe("public hunt import", () => {
     expect(result).toMatchObject({ ok: true, reprocessed: 1 });
     expect(getPublicHuntStatus(db).counts).toMatchObject({ ignored: 1, needs_review: 0, matched: 0 });
     expect(listPublicHuntReviewQueue(db).items).toHaveLength(0);
+  });
+
+  it("learns title aliases from accepted matches and applies them to remaining review hunts", async () => {
+    seedHuntingPlace(301, "Pits of Inferno", ["demon"], "Edron");
+    seedHuntingPlace(302, "Demon Forge", ["demon"], "Yalahar");
+    const listPage = `
+      <div data-row-click-url-value="/hunt_sessions/50101"><h3>DT Seal #1</h3></div>
+      <div data-row-click-url-value="/hunt_sessions/50102"><h3>DT Seal #2</h3></div>
+      <div data-row-click-url-value="/hunt_sessions/50103"><h3>DT Seal #3</h3></div>
+      <div class="text-xs text-brand-ink-soft">Displaying hunt sessions <b>1&nbsp;-&nbsp;20</b> of <b>3</b> in total</div>
+    `;
+    const pages = new Map<string, string>([
+      ["https://www.hunt-analyser.com/hunt_sessions?hunt_sessions_by=is_public", listPage],
+      ["https://www.hunt-analyser.com/hunt_sessions/50101", detailHtml(50101, "DT Seal #1", "Demon")],
+      ["https://www.hunt-analyser.com/hunt_sessions/50102", detailHtml(50102, "DT Seal #2", "Demon")],
+      ["https://www.hunt-analyser.com/hunt_sessions/50103", detailHtml(50103, "DT Seal #3", "Demon")]
+    ]);
+    await checkPublicHunts(db, {
+      throttleMs: 0,
+      concurrency: 3,
+      fetcher: async (url) => pages.get(url) ?? ""
+    });
+
+    const first = db.prepare("SELECT id FROM public_hunt_sessions WHERE source_session_id = '50101'").get() as { id: number };
+    const second = db.prepare("SELECT id FROM public_hunt_sessions WHERE source_session_id = '50102'").get() as { id: number };
+    reviewPublicHunt(db, first.id, { action: "choose_place", public_hunting_place_id: 301 });
+    reviewPublicHunt(db, second.id, { action: "choose_place", public_hunting_place_id: 301 });
+
+    const third = db.prepare(`
+      SELECT review_status, public_hunting_place_id, hunting_place_match_status, hunting_place_match_reasons_json
+      FROM public_hunt_sessions
+      WHERE source_session_id = '50103'
+    `).get() as Record<string, unknown>;
+    expect(third).toMatchObject({
+      review_status: "accepted",
+      public_hunting_place_id: 301,
+      hunting_place_match_status: "auto"
+    });
+    expect(JSON.parse(String(third.hunting_place_match_reasons_json))).toContain('title alias "dt seal" from 2 accepted hunts');
+
+    const aliases = getPublicHuntTitleAliases(db).items as Array<Record<string, unknown>>;
+    expect(aliases[0]).toMatchObject({
+      phrase: "dt seal",
+      public_hunting_place_id: 301,
+      hunting_place_name: "Pits of Inferno",
+      evidence_count: 3,
+      total_phrase_count: 3,
+      confidence: 1
+    });
   });
 
   it("adds accepted public sessions to hunting-place intelligence without changing personal totals", async () => {

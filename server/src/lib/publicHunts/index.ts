@@ -7,6 +7,10 @@ import { matchHuntToHuntingPlaces, scoreHuntingPlaceForHunt } from "../hunts/hun
 import type { ParsedHuntText } from "../hunts/types";
 import { asNumber, asRecord, asText, nowIso, sha256 } from "../hunts/utils";
 import { normalizePublicName } from "../tibiadata/publicReference";
+import {
+  listPublicHuntTitleAliases,
+  rebuildPublicHuntTitleAliases
+} from "./titleAliases";
 
 const SOURCE = "hunt-analyser";
 const BASE_URL = "https://www.hunt-analyser.com";
@@ -663,6 +667,7 @@ async function runPublicHuntImportJob(
       });
       await delay(throttleMs);
     }
+    const aliasCount = rebuildPublicHuntTitleAliases(db);
     currentJob = finishJob(db, job.id, "success", {
       completedCount: imported,
       metadata: {
@@ -672,7 +677,8 @@ async function runPublicHuntImportJob(
         next_page: page,
         detail_concurrency: concurrency,
         scope,
-        stop_reason: stopReason
+        stop_reason: stopReason,
+        title_aliases: aliasCount
       }
     });
     return { ok: true, job: currentJob, imported, discovered, skipped };
@@ -796,6 +802,10 @@ export function getPublicHuntStatus(db: Database.Database): Record<string, unkno
       note: "Manual factual import from public pages; not used for model training."
     }
   };
+}
+
+export function getPublicHuntTitleAliases(db: Database.Database, limit = 80): Record<string, unknown> {
+  return listPublicHuntTitleAliases(db, limit);
 }
 
 export function listPublicHuntReviewQueue(db: Database.Database, limit = 500): Record<string, unknown> {
@@ -967,12 +977,32 @@ export function reviewPublicHunt(db: Database.Database, idInput: unknown, payloa
   } else {
     return { ok: false, error: "Unsupported public hunt review action." };
   }
+  let aliases = action === "accept_match" || action === "choose_place" || action === "ignore"
+    ? rebuildPublicHuntTitleAliases(db)
+    : 0;
   const updated = db.prepare("SELECT * FROM public_hunt_sessions WHERE id = ?").get(id) as PublicHuntRow;
-  return { ok: true, item: rowToPublicHunt(db, updated) };
+  const remaining = action === "accept_match" || action === "choose_place"
+    ? reprocessPublicHunts(db, { reviewOnly: true, rebuildAliases: false })
+    : null;
+  if (remaining) {
+    aliases = rebuildPublicHuntTitleAliases(db);
+  }
+  return { ok: true, item: rowToPublicHunt(db, updated), title_aliases: aliases, reprocessed: remaining?.reprocessed ?? 0 };
 }
 
-export function reprocessPublicHunts(db: Database.Database): Record<string, unknown> {
-  const rows = db.prepare("SELECT * FROM public_hunt_sessions WHERE review_status != 'ignored' ORDER BY refreshed_at DESC").all() as PublicHuntRow[];
+export function reprocessPublicHunts(
+  db: Database.Database,
+  options: { reviewOnly?: boolean; rebuildAliases?: boolean } = {}
+): Record<string, unknown> {
+  const rebuildAliases = options.rebuildAliases !== false;
+  const startingAliasCount = rebuildAliases ? rebuildPublicHuntTitleAliases(db) : 0;
+  const rows = db.prepare(`
+    SELECT *
+    FROM public_hunt_sessions
+    WHERE review_status != 'ignored'
+      AND (? = 0 OR (review_status != 'accepted' AND public_hunting_place_id IS NULL))
+    ORDER BY refreshed_at DESC
+  `).all(options.reviewOnly ? 1 : 0) as PublicHuntRow[];
   let updated = 0;
   for (const row of rows) {
     const monsters = db.prepare("SELECT monster_name AS name, kill_count AS count FROM public_hunt_session_monsters WHERE public_hunt_session_id = ?")
@@ -1042,5 +1072,6 @@ export function reprocessPublicHunts(db: Database.Database): Record<string, unkn
     );
     updated += 1;
   }
-  return { ok: true, reprocessed: updated };
+  const endingAliasCount = rebuildAliases ? rebuildPublicHuntTitleAliases(db) : startingAliasCount;
+  return { ok: true, reprocessed: updated, title_aliases: endingAliasCount };
 }

@@ -80,6 +80,7 @@ const publicReferenceBusy = ref(false)
 const publicHuntInfo = ref('')
 const publicHuntBusy = ref(false)
 const publicHuntReviewItems = ref([])
+const publicHuntTitleAliases = ref([])
 const itemPriceMode = ref('conservative_min')
 const itemPriceInfo = ref('')
 const itemPriceBusy = ref(false)
@@ -204,6 +205,15 @@ async function loadPublicHuntReviewQueue() {
   }
 }
 
+async function loadPublicHuntTitleAliases() {
+  try {
+    const data = await api('/api/public-hunts/title-aliases?limit=80')
+    publicHuntTitleAliases.value = data.items || []
+  } catch (error) {
+    publicHuntInfo.value = `Public hunt aliases error: ${error.message}`
+  }
+}
+
 function hasActivePublicReferenceJob(data = publicReferenceStatus) {
   const activeJobs = Array.isArray(data.jobs?.active) ? data.jobs.active : []
   return activeJobs.some((job) => job.job_type === 'public-reference-catalog' || job.job_type === 'public-reference-enrichment')
@@ -222,6 +232,7 @@ async function refreshPublicHuntsDuringImport() {
   await Promise.all([
     loadPublicHuntStatus(),
     loadPublicHuntReviewQueue(),
+    loadPublicHuntTitleAliases(),
   ])
 }
 
@@ -603,6 +614,7 @@ async function reprocessPublicHunts() {
     publicHuntInfo.value = `Reprocessed ${out.reprocessed || 0} public hunt(s).`
     await loadPublicHuntStatus()
     await loadPublicHuntReviewQueue()
+    await loadPublicHuntTitleAliases()
   } catch (error) {
     publicHuntInfo.value = `Public hunt reprocess failed: ${error.message}`
   } finally {
@@ -621,6 +633,7 @@ async function reviewPublicHunt(item, action, payload = {}) {
     publicHuntInfo.value = 'Updated public hunt review.'
     await loadPublicHuntStatus()
     await loadPublicHuntReviewQueue()
+    await loadPublicHuntTitleAliases()
   } catch (error) {
     publicHuntInfo.value = `Public hunt review failed: ${error.message}`
   } finally {
@@ -1007,6 +1020,7 @@ onMounted(async () => {
     loadPublicReferenceStatus(),
     loadPublicHuntStatus(),
     loadPublicHuntReviewQueue(),
+    loadPublicHuntTitleAliases(),
     loadMarketDashboard(),
     loadLootInbox(),
     hunts.refreshHuntCollections(),
@@ -1178,6 +1192,7 @@ onBeforeUnmount(() => {
         :public-hunt-info="publicHuntInfo"
         :public-hunt-busy="publicHuntBusy"
         :public-hunt-review-items="publicHuntReviewItems"
+        :public-hunt-title-aliases="publicHuntTitleAliases"
         :item-price-info="itemPriceInfo"
         :item-price-busy="itemPriceBusy"
         :hunts="hunts"

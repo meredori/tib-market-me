@@ -31,6 +31,7 @@ const props = defineProps({
   publicHuntInfo: { type: String, default: '' },
   publicHuntBusy: { type: Boolean, default: false },
   publicHuntReviewItems: { type: Array, default: () => [] },
+  publicHuntTitleAliases: { type: Array, default: () => [] },
   itemPriceMode: { type: String, default: 'conservative_min' },
   itemPriceInfo: { type: String, default: '' },
   itemPriceBusy: { type: Boolean, default: false },
@@ -45,6 +46,13 @@ const publicHuntColumns = [
   { key: 'place', label: 'Best Match' },
   { key: 'second_place', label: 'Second Best' },
   { key: 'actions', label: '', class: 'action-col' },
+]
+
+const publicHuntAliasColumns = [
+  { key: 'phrase', label: 'Alias' },
+  { key: 'place', label: 'Hunting Place' },
+  { key: 'evidence', label: 'Evidence' },
+  { key: 'confidence', label: 'Confidence' },
 ]
 
 const logImportColumns = [
@@ -194,6 +202,10 @@ function publicHuntBestMatch(item) {
 function publicHuntSecondMatch(item) {
   const bestId = publicHuntBestMatch(item)?.id
   return (item.match?.candidates || []).find((candidate) => candidate.id !== bestId) || null
+}
+
+function aliasExamples(alias) {
+  return (alias.example_titles || []).slice(0, 3).join(', ')
 }
 </script>
 
@@ -526,6 +538,30 @@ function publicHuntSecondMatch(item) {
                   </button>
                 </td>
               </tr>
+          </template>
+        </DataTable>
+
+        <DataTable
+          class="mt-10"
+          :columns="publicHuntAliasColumns"
+          :items="publicHuntTitleAliases"
+          row-key="phrase"
+          empty-title="No known title aliases"
+          empty-reason="Accepted public hunt matches will populate this list."
+        >
+          <template #row="{ items }">
+            <tr v-for="alias in items" :key="`${alias.phrase}-${alias.public_hunting_place_id}`">
+              <td>
+                <span class="mono">{{ alias.phrase }}</span>
+                <div v-if="aliasExamples(alias)" class="muted compact-note">{{ aliasExamples(alias) }}</div>
+              </td>
+              <td>
+                {{ alias.hunting_place_name }}
+                <div class="muted compact-note">{{ alias.hunting_place_location || '' }}</div>
+              </td>
+              <td>{{ alias.evidence_count }} / {{ alias.total_phrase_count }}</td>
+              <td>{{ pct(alias.confidence) }}</td>
+            </tr>
           </template>
         </DataTable>
       </article>

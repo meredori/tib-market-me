@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { confidence as buildConfidence, entityRef, explanation, provenance } from "../intelligence/metadata";
 import type { Confidence, InsightExplanation, Provenance } from "../intelligence/types";
+import { titleAliasSignalForPlace, titleAliasSignalsForTitle, type TitleAliasSignal } from "../publicHunts/titleAliases";
 import {
   normalizePublicName,
   PublicTibiaDataClient,
@@ -22,6 +23,7 @@ export type HuntingPlaceCandidate = {
   provenance: Provenance[];
   matched_monsters: string[];
   missing_monsters: string[];
+  title_alias: TitleAliasSignal | null;
 };
 
 export type HuntingPlaceMatchResult = {
@@ -233,6 +235,7 @@ function scorePlace(
   huntMonsters: HuntMonster[],
   locationName: string | null,
   characterLevel: number | null,
+  titleAlias: TitleAliasSignal | null = null,
   sourceType: "personal_hunt" | "public_hunt_import" = "personal_hunt"
 ): HuntingPlaceCandidate {
   const placeCreatures = new Set(parseJsonArray(row.creatures_json));
@@ -247,6 +250,7 @@ function scorePlace(
   const locationScore = locationName
     ? Math.max(...names.map((name) => textSimilarity(locationName, name)), 0)
     : 0;
+  const titleAliasScore = titleAlias ? Math.min(1, titleAlias.confidence) : 0;
 
   let levelScore = 0;
   if (characterLevel !== null && (row.min_level !== null || row.max_level !== null)) {
@@ -261,13 +265,16 @@ function scorePlace(
     }
   }
 
-  const confidence = Number(Math.min(1, monsterScore * 0.74 + locationScore * 0.2 + levelScore * 0.06).toFixed(4));
+  const confidence = Number(Math.min(1, monsterScore * 0.72 + locationScore * 0.16 + titleAliasScore * 0.08 + levelScore * 0.04).toFixed(4));
   const reasons: string[] = [];
   if (matched.length) {
     reasons.push(`${matched.length} matching monster${matched.length === 1 ? "" : "s"}`);
   }
   if (locationScore >= 0.5) {
     reasons.push("location text matches staged place or sub-area");
+  }
+  if (titleAlias) {
+    reasons.push(`title alias "${titleAlias.phrase}" from ${titleAlias.evidence_count} accepted hunt${titleAlias.evidence_count === 1 ? "" : "s"}`);
   }
   if (levelScore >= 1) {
     reasons.push("character level fits staged range");
@@ -304,7 +311,8 @@ function scorePlace(
     confidence_detail: buildConfidence(confidence, { estimated: true }),
     provenance: matchProvenance,
     matched_monsters: matched.map((monster) => monster.name),
-    missing_monsters: missing.slice(0, 5).map((monster) => monster.name)
+    missing_monsters: missing.slice(0, 5).map((monster) => monster.name),
+    title_alias: titleAlias
   };
 }
 
@@ -333,7 +341,11 @@ export function scoreHuntingPlaceForHunt(
   if (!row || !parseJsonArray(row.creatures_json).length) {
     return null;
   }
-  return scorePlace(row, huntMonsters, options.locationName ?? null, options.characterLevel ?? null, options.sourceType ?? "personal_hunt");
+  const sourceType = options.sourceType ?? "personal_hunt";
+  const titleAlias = sourceType === "public_hunt_import"
+    ? titleAliasSignalForPlace(db, options.locationName ?? null, row.id)
+    : null;
+  return scorePlace(row, huntMonsters, options.locationName ?? null, options.characterLevel ?? null, titleAlias, sourceType);
 }
 
 function manualPlaceCandidate(row: PlaceRow, confidence = 1): HuntingPlaceCandidate {
@@ -356,7 +368,8 @@ function manualPlaceCandidate(row: PlaceRow, confidence = 1): HuntingPlaceCandid
     confidence_detail: buildConfidence(confidence, { manual: true }),
     provenance: matchProvenance,
     matched_monsters: [],
-    missing_monsters: []
+    missing_monsters: [],
+    title_alias: null
   };
 }
 
@@ -470,8 +483,19 @@ export function matchHuntToHuntingPlaces(
     return blockedMatch("missing enriched hunting-place creature data", "Run public reference enrichment before matching can compare hunt monsters to hunting places.", sourceType);
   }
 
+  const titleAliasSignals = sourceType === "public_hunt_import"
+    ? titleAliasSignalsForTitle(db, options.locationName ?? null)
+    : new Map<number, TitleAliasSignal>();
+
   const candidates = enrichedRows
-    .map((row) => scorePlace(row, huntMonsters, options.locationName ?? null, options.characterLevel ?? null, sourceType))
+    .map((row) => scorePlace(
+      row,
+      huntMonsters,
+      options.locationName ?? null,
+      options.characterLevel ?? null,
+      sourceType === "public_hunt_import" ? titleAliasSignals.get(row.id) ?? null : null,
+      sourceType
+    ))
     .filter((candidate) => candidate.confidence >= REVIEW_CONFIDENCE || candidate.matched_monsters.length > 0)
     .sort((a, b) => b.confidence - a.confidence || b.matched_monsters.length - a.matched_monsters.length || a.name.localeCompare(b.name))
     .slice(0, 5);
