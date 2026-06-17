@@ -1121,6 +1121,7 @@ Document:
 - Available v1 fields: title, public author label, observed date, duration, party vocations/levels, XP, raw XP rate, XP rate, balance/profit, and monster kill counts.
 - Raw detail pages are stored as raw HTML with a payload fingerprint for audit, dedupe, and future reparse.
 - Import is manual, backfills all public pages until an end-of-pages run is recorded, then routine checks scan newest pages until already-known rows prove the app is caught up. Hunt detail pages load concurrently with rate-limit spacing, progress is recorded through intelligence jobs, and the review queue refreshes while rows arrive.
+- Public hunt matching ranks candidates primarily by monster overlap, uses hunt title/place text as a lighter ordering signal, auto-accepts a single high-confidence candidate when the runner-up drops to medium, and lets manual search filter by typed text while showing confidence from the selected hunt's monsters/title.
 - Practical concern: `ai-train=no` is respected; imported facts are local app intelligence only.
 
 ### 2. Public Session Storage

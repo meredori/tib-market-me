@@ -56,6 +56,7 @@ import {
   listPublicHuntReviewQueue,
   reprocessPublicHunts,
   reviewPublicHunt,
+  searchPublicHuntHuntingPlaces,
   startPublicHuntImport
 } from "./lib/publicHunts";
 import { registerTaskboardRoutes } from "./lib/taskboard/routes";
@@ -432,6 +433,14 @@ export function buildServer(db: Database.Database) {
         ? (request.query as Record<string, unknown>)
         : {};
       const q = typeof query.q === "string" ? query.q : "";
+      const publicHuntId = Number(query.public_hunt_id ?? query.publicHuntId);
+      if (Number.isFinite(publicHuntId) && publicHuntId > 0) {
+        const result = searchPublicHuntHuntingPlaces(db, publicHuntId, q);
+        if (!result.ok) {
+          reply.code(404);
+        }
+        return result;
+      }
       return searchHuntingPlaces(db, q);
     } catch (error) {
       reply.code(400);

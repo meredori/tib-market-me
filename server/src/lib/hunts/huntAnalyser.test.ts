@@ -402,6 +402,54 @@ describe("hunt to public hunting-place matching", () => {
     expect(result.candidates[0].reasons).toContain("location text matches staged place or sub-area");
   });
 
+  it("uses hunt title as a lighter ordering signal than monster overlap", () => {
+    const result = matchHuntToHuntingPlaces(matcherDb([
+      place(551, "Guzzlemaw Valley", ["guzzlemaw", "frazzlemaw", "silencer"]),
+      place(552, "Upper Roshamuul", ["guzzlemaw", "frazzlemaw", "silencer"], { areaNames: ["Rosha West"] })
+    ]), {
+      label: null,
+      duration_minutes: 30,
+      raw_total_xp: 1000,
+      total_xp: 1000,
+      total_loot_gold: 0,
+      total_supply_cost: 0,
+      started_at: null,
+      ended_at: null,
+      hunt_date: null,
+      monsters: [{ name: "guzzlemaw", count: 90 }, { name: "frazzlemaw", count: 60 }, { name: "silencer", count: 20 }],
+      loot_items: []
+    }, { locationName: "Rosha West" });
+
+    expect(result.candidates[0]).toMatchObject({ id: 552, name: "Upper Roshamuul" });
+    expect(result.candidates[1]).toMatchObject({ id: 551, name: "Guzzlemaw Valley" });
+  });
+
+  it("auto-matches one high-confidence candidate when the runner-up drops to medium", () => {
+    const result = matchHuntToHuntingPlaces(matcherDb([
+      place(561, "Best Spawn", ["guzzlemaw", "frazzlemaw", "silencer"], { areaNames: ["Rosha West"] }),
+      place(562, "Partial Spawn", ["guzzlemaw", "frazzlemaw"])
+    ]), {
+      label: null,
+      duration_minutes: 30,
+      raw_total_xp: 1000,
+      total_xp: 1000,
+      total_loot_gold: 0,
+      total_supply_cost: 0,
+      started_at: null,
+      ended_at: null,
+      hunt_date: null,
+      monsters: [{ name: "guzzlemaw", count: 80 }, { name: "frazzlemaw", count: 60 }, { name: "silencer", count: 30 }],
+      loot_items: []
+    }, { locationName: "Rosha West" });
+
+    expect(result).toMatchObject({
+      selected_hunting_place_id: 561,
+      status: "auto"
+    });
+    expect(result.candidates[0].confidence_detail.level).toBe("high");
+    expect(result.candidates[1].confidence_detail.level).toBe("medium");
+  });
+
   it("does not auto-match low-confidence hunts", () => {
     const result = matchHuntToHuntingPlaces(matcherDb([
       place(601, "Dragon Lair", ["dragon"])

@@ -127,7 +127,11 @@ async function searchPublicHuntPlaces() {
   }
   publicHuntPlaceBusy.value = true
   try {
-    const out = await api(`/api/hunting-places/search?q=${encodeURIComponent(q)}`)
+    const params = new URLSearchParams({ q })
+    if (selectedPublicHunt.value?.id) {
+      params.set('public_hunt_id', String(selectedPublicHunt.value.id))
+    }
+    const out = await api(`/api/hunting-places/search?${params.toString()}`)
     publicHuntPlaceResults.value = out.items || []
     publicHuntPlaceInfo.value = publicHuntPlaceResults.value.length
       ? `${publicHuntPlaceResults.value.length} hunting spot(s)`

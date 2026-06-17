@@ -3,7 +3,7 @@ import { confidence as buildConfidence, freshness as buildFreshness, provenance 
 import { finishJob, listJobs, startJob, updateJobProgress } from "../intelligence/jobs";
 import { summarizeJobs } from "../intelligence/jobs";
 import type { JobStatus } from "../intelligence/types";
-import { matchHuntToHuntingPlaces } from "../hunts/huntingPlaceMatcher";
+import { matchHuntToHuntingPlaces, scoreHuntingPlaceForHunt } from "../hunts/huntingPlaceMatcher";
 import type { ParsedHuntText } from "../hunts/types";
 import { asNumber, asRecord, asText, nowIso, sha256 } from "../hunts/utils";
 import { normalizePublicName } from "../tibiadata/publicReference";
@@ -825,6 +825,94 @@ export function listPublicHuntReviewQueue(db: Database.Database, limit = 500): R
     LIMIT ?
   `).all(Math.max(1, Math.trunc(limit))) as PublicHuntRow[];
   return { ok: true, items: rows.map((row) => rowToPublicHunt(db, row)) };
+}
+
+function publicHuntParsedText(db: Database.Database, row: PublicHuntRow): ParsedHuntText {
+  const monsters = db.prepare("SELECT monster_name AS name, kill_count AS count FROM public_hunt_session_monsters WHERE public_hunt_session_id = ?")
+    .all(row.id) as Array<{ name: string; count: number }>;
+  return toParsedHuntText({
+    source_session_id: row.source_session_id,
+    source_url: row.source_url,
+    title: row.title,
+    author_label: row.author_label,
+    observed_at: row.observed_at,
+    duration_minutes: row.duration_minutes,
+    party_size: row.party_size,
+    party: parseArray(row.party_json).map((entry) => asRecord(entry) ?? {}).map((entry) => ({ vocation: asText(entry.vocation), level: entry.level === null ? null : asNumber(entry.level, 0) || null })),
+    total_xp: row.total_xp,
+    raw_total_xp: row.raw_total_xp,
+    xp_per_hour: row.xp_per_hour,
+    raw_xp_per_hour: row.raw_xp_per_hour,
+    balance_gold: row.balance_gold,
+    profit_per_hour: row.profit_per_hour,
+    monsters,
+    confidence: row.parsed_confidence,
+    parse_status: row.parse_status === "error" ? "error" : row.parse_status === "partial" ? "partial" : "parsed",
+    parse_error: row.parse_error
+  });
+}
+
+export function searchPublicHuntHuntingPlaces(db: Database.Database, huntIdInput: unknown, query: string): Record<string, unknown> {
+  const huntId = Math.max(0, Math.trunc(asNumber(huntIdInput, 0)));
+  const hunt = db.prepare("SELECT * FROM public_hunt_sessions WHERE id = ?").get(huntId) as PublicHuntRow | undefined;
+  if (!hunt) {
+    return { ok: false, error: "Public hunt not found.", items: [] };
+  }
+  const normalizedQuery = normalizePublicName(query).replace(/%/g, "").trim();
+  const like = `%${normalizedQuery}%`;
+  const rows = db.prepare(`
+    SELECT
+      place.id,
+      place.name,
+      place.normalized_name,
+      place.location,
+      place.min_level,
+      place.max_level,
+      place.detail_status,
+      COALESCE((
+        SELECT COUNT(*)
+        FROM public_hunting_place_creatures creature
+        WHERE creature.hunting_place_id = place.id
+      ), 0) AS creature_count
+    FROM public_hunting_places place
+    WHERE ? = '' OR place.normalized_name LIKE ? OR LOWER(COALESCE(place.location, '')) LIKE ?
+    ORDER BY
+      CASE WHEN place.normalized_name = ? THEN 0 ELSE 1 END,
+      place.name
+    LIMIT 80
+  `).all(normalizedQuery, like, like, normalizedQuery) as Array<Record<string, unknown>>;
+  const parsed = publicHuntParsedText(db, hunt);
+  const characterLevel = parseArray(hunt.party_json)
+    .map((entry) => asRecord(entry) ?? {})
+    .map((entry) => entry.level === null ? null : asNumber(entry.level, 0) || null)
+    .filter((value): value is number => value !== null)
+    .sort((a, b) => a - b)[0] ?? null;
+  const items = rows
+    .map((row) => {
+      const candidate = scoreHuntingPlaceForHunt(db, asNumber(row.id, 0), parsed, {
+        locationName: hunt.title,
+        characterLevel,
+        sourceType: "public_hunt_import"
+      });
+      return { row, candidate };
+    })
+    .sort((a, b) => (b.candidate?.confidence ?? 0) - (a.candidate?.confidence ?? 0) || asText(a.row.name).localeCompare(asText(b.row.name)))
+    .slice(0, 30)
+    .map(({ row, candidate }) => ({
+      id: asNumber(row.id, 0),
+      name: asText(row.name),
+      normalized_name: asText(row.normalized_name),
+      location: asText(row.location) || null,
+      min_level: row.min_level === null || row.min_level === undefined ? null : asNumber(row.min_level, 0),
+      max_level: row.max_level === null || row.max_level === undefined ? null : asNumber(row.max_level, 0),
+      detail_status: asText(row.detail_status) || "pending",
+      creature_count: asNumber(row.creature_count, 0),
+      confidence: candidate?.confidence ?? 0,
+      confidence_detail: candidate?.confidence_detail ?? buildConfidence(0, { estimated: true }),
+      matched_monsters: candidate?.matched_monsters ?? [],
+      missing_monsters: candidate?.missing_monsters ?? []
+    }));
+  return { ok: true, items };
 }
 
 export function reviewPublicHunt(db: Database.Database, idInput: unknown, payload: unknown): Record<string, unknown> {

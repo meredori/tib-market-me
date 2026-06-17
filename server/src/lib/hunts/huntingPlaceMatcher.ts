@@ -79,9 +79,17 @@ function textSimilarity(a: string, b: string): number {
   }
   let overlap = 0;
   for (const token of aTokens) {
-    if (bTokens.has(token)) {
-      overlap += 1;
+    let tokenScore = 0;
+    for (const candidate of bTokens) {
+      if (candidate === token) {
+        tokenScore = 1;
+        break;
+      }
+      if (candidate.startsWith(token) || token.startsWith(candidate)) {
+        tokenScore = Math.max(tokenScore, 0.82);
+      }
     }
+    overlap += tokenScore;
   }
   return overlap / Math.max(aTokens.size, bTokens.size);
 }
@@ -300,6 +308,34 @@ function scorePlace(
   };
 }
 
+export function scoreHuntingPlaceForHunt(
+  db: Database.Database,
+  placeId: number,
+  parsed: ParsedHuntText | null,
+  options: {
+    locationName?: string | null;
+    characterLevel?: number | null;
+    sourceType?: "personal_hunt" | "public_hunt_import";
+  } = {}
+): HuntingPlaceCandidate | null {
+  const signature = huntMonsterSignature(parsed?.monsters ?? []);
+  const huntMonsters = signature.core;
+  if (!huntMonsters.length) {
+    return null;
+  }
+  let rows: PlaceRow[] = [];
+  try {
+    rows = loadPlaceRows(db);
+  } catch {
+    return null;
+  }
+  const row = rows.find((entry) => entry.id === Math.trunc(placeId));
+  if (!row || !parseJsonArray(row.creatures_json).length) {
+    return null;
+  }
+  return scorePlace(row, huntMonsters, options.locationName ?? null, options.characterLevel ?? null, options.sourceType ?? "personal_hunt");
+}
+
 function manualPlaceCandidate(row: PlaceRow, confidence = 1): HuntingPlaceCandidate {
   const placeRef = entityRef("hunting_place", { id: row.id, name: row.name, normalized_name: row.normalized_name });
   const matchProvenance = [
@@ -465,7 +501,9 @@ export function matchHuntToHuntingPlaces(
 
   const best = candidates[0] ?? null;
   const runnerUp = candidates[1] ?? null;
-  const auto = Boolean(best && best.confidence >= AUTO_CONFIDENCE && best.confidence - (runnerUp?.confidence ?? 0) >= AUTO_MARGIN);
+  const runnerUpConfidence = runnerUp?.confidence ?? 0;
+  const onlyHighCandidate = Boolean(best && best.confidence >= 0.75 && runnerUpConfidence < 0.75);
+  const auto = Boolean(best && best.confidence >= AUTO_CONFIDENCE && (best.confidence - runnerUpConfidence >= AUTO_MARGIN || onlyHighCandidate));
 
   return {
     selected_hunting_place_id: auto && best ? best.id : null,

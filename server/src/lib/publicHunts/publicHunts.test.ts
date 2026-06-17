@@ -9,7 +9,8 @@ import {
   parsePublicHuntDetail,
   parsePublicHuntList,
   reprocessPublicHunts,
-  reviewPublicHunt
+  reviewPublicHunt,
+  searchPublicHuntHuntingPlaces
 } from ".";
 
 let db: Database.Database;
@@ -32,6 +33,27 @@ function seedPlace(): void {
       hunting_place_id, creature_id, creature_name, normalized_creature_name, occurrence, payload_json
     ) VALUES (100, 200, 'Dragon', 'dragon', 'common', '{}')
   `).run();
+}
+
+function seedHuntingPlace(id: number, name: string, creatures: string[], location = "Roshamuul", areaNames: string[] = []): void {
+  db.prepare(`
+    INSERT INTO public_hunting_places (
+      id, name, normalized_name, location, min_level, max_level, exp_stars, loot_stars,
+      bestiary_stars, risk_level, last_updated, last_seen, fetched_at, payload_json
+    ) VALUES (?, ?, ?, ?, 200, 600, 4, 4, 3, 'medium', ?, ?, ?, '{}')
+  `).run(id, name, name.toLowerCase(), location, "2026-06-01T00:00:00Z", "2026-06-01T00:00:00Z", "2026-06-01T00:00:00Z");
+  const insertCreature = db.prepare(`
+    INSERT INTO public_hunting_place_creatures (
+      hunting_place_id, creature_id, creature_name, normalized_creature_name, occurrence, payload_json
+    ) VALUES (?, ?, ?, ?, 'common', '{}')
+  `);
+  creatures.forEach((creature, index) => insertCreature.run(id, id * 10 + index, creature, creature.toLowerCase()));
+  const insertArea = db.prepare(`
+    INSERT INTO public_hunting_place_area_summaries (
+      hunting_place_id, area_name, payload_json
+    ) VALUES (?, ?, '{}')
+  `);
+  areaNames.forEach((area) => insertArea.run(id, area));
 }
 
 function listHtml(): string {
@@ -84,6 +106,33 @@ function detailHtmlWithoutMonsters(id = 48541, title = "Empty Hunt Test"): strin
         <div>XP/h:</div><div>1,200,000</div>
         <div>Raw XP/h:</div><div>800,000</div>
         <span class="font-semibold">EK</span> <span class="font-mono text-[10px] font-semibold">120</span>
+      </div>
+    </div>
+  `;
+}
+
+function roshaDetailHtml(id = 48541, title = "Rosha West"): string {
+  return `
+    <div id="hunt_session_${id}">
+      <h1>${title}<a href="/hunt_sessions?hunt_sessions_by=is_public&search=Tester">by Tester</a></h1>
+      <p class="text-sm text-brand-ink-soft">Jun 10, 2026 21:35</p>
+      <div class="ha-panel">
+        <h3>Hunt Summary</h3>
+        <div>Session Duration</div><div>01:00h</div>
+        <div>XP Gain:</div><div>3,200,000</div>
+        <div>Balance:</div><div>250,000</div>
+        <div>XP/h:</div><div>3,200,000</div>
+        <div>Raw XP/h:</div><div>2,800,000</div>
+        <span class="font-semibold">EK</span> <span class="font-mono text-[10px] font-semibold">350</span>
+      </div>
+      <div class="ha-panel">
+        <h2>Monster Killed</h2>
+        <table>
+          <tr><th>#</th><th>Monster</th><th>Killed</th></tr>
+          <tr><td>#1</td><td><img alt="Guzzlemaw" />Guzzlemaw</td><td>90</td></tr>
+          <tr><td>#2</td><td><img alt="Frazzlemaw" />Frazzlemaw</td><td>70</td></tr>
+          <tr><td>#3</td><td><img alt="Silencer" />Silencer</td><td>20</td></tr>
+        </table>
       </div>
     </div>
   `;
@@ -323,6 +372,35 @@ describe("public hunt import", () => {
     expect(ignored.ok).toBe(true);
     expect(getPublicHuntStatus(db).counts).toMatchObject({ ignored: 1 });
     expect(listPublicHuntReviewQueue(db).items).toHaveLength(0);
+  });
+
+  it("searches public hunt places by typed text but scores confidence from hunt monsters and title", async () => {
+    seedHuntingPlace(201, "Guzzlemaw Valley", ["guzzlemaw", "frazzlemaw", "silencer"]);
+    seedHuntingPlace(202, "Upper Roshamuul", ["guzzlemaw", "frazzlemaw", "silencer"], "Roshamuul", ["Rosha West"]);
+    const pages = new Map<string, string>([
+      ["https://www.hunt-analyser.com/hunt_sessions?hunt_sessions_by=is_public", listHtml()],
+      ["https://www.hunt-analyser.com/hunt_sessions/48541", roshaDetailHtml(48541, "Rosha West")]
+    ]);
+    await checkPublicHunts(db, {
+      limit: 1,
+      throttleMs: 0,
+      fetcher: async (url) => pages.get(url) ?? ""
+    });
+    const hunt = db.prepare("SELECT id FROM public_hunt_sessions WHERE source_session_id = '48541'").get() as { id: number };
+
+    const guzzle = searchPublicHuntHuntingPlaces(db, hunt.id, "guzzle").items as Array<Record<string, unknown>>;
+    const rosha = searchPublicHuntHuntingPlaces(db, hunt.id, "rosha").items as Array<Record<string, unknown>>;
+
+    expect(guzzle[0]).toMatchObject({
+      name: "Guzzlemaw Valley",
+      matched_monsters: expect.arrayContaining(["Guzzlemaw"])
+    });
+    expect(Number(guzzle[0].confidence)).toBeGreaterThan(0.7);
+    expect(rosha[0]).toMatchObject({
+      name: "Upper Roshamuul",
+      matched_monsters: expect.arrayContaining(["Guzzlemaw"])
+    });
+    expect(Number(rosha[0].confidence)).toBeGreaterThanOrEqual(Number(guzzle[0].confidence));
   });
 
   it("reprocess auto-ignores existing public hunts with no monster rows", async () => {

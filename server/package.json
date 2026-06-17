@@ -11,6 +11,7 @@
     "sync:public": "tsx src/index.ts sync-public",
     "enrich:public": "tsx src/index.ts enrich-public",
     "reset:public": "tsx src/index.ts reset-public",
+    "reprocess:public-hunts": "tsx src/index.ts reprocess-public-hunts",
     "migrate": "tsx src/index.ts migrate",
     "stage:items": "tsx src/tools/stagePublicItems.ts"
   },
