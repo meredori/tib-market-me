@@ -5,6 +5,7 @@ import {
   Database,
   Eye,
   ExternalLink,
+  Pencil,
   RefreshCw,
   Trash2,
   X,
@@ -29,7 +30,6 @@ const props = defineProps({
   publicHuntStatus: { type: Object, default: () => ({ counts: {}, jobs: {}, freshness: {}, policy: {} }) },
   publicHuntInfo: { type: String, default: '' },
   publicHuntBusy: { type: Boolean, default: false },
-  publicHuntBatchLimit: { type: Number, default: 20 },
   publicHuntReviewItems: { type: Array, default: () => [] },
   itemPriceMode: { type: String, default: 'conservative_min' },
   itemPriceInfo: { type: String, default: '' },
@@ -66,7 +66,6 @@ function jobGroup(jobs, type) {
 
 const emit = defineEmits([
   'update:itemPriceMode',
-  'update:publicHuntBatchLimit',
   'refresh',
   'sync-public-reference',
   'enrich-public-reference',
@@ -302,16 +301,8 @@ function pct(value) {
           <span class="pill">Suspicious {{ publicHuntStatus.counts?.suspicious || 0 }}</span>
         </div>
         <FreshnessBadge :freshness="publicHuntStatus.freshness" />
-        <label class="compact-field">
-          Batch Size
-          <input
-            type="number"
-            min="1"
-            max="100"
-            :value="publicHuntBatchLimit"
-            @input="$emit('update:publicHuntBatchLimit', Number($event.target.value || 20))"
-          />
-        </label>
+        <CompactMetricRow label="Import run" value="All public pages" />
+        <CompactMetricRow label="Detail loading" value="Concurrent" />
         <CompactMetricRow label="Policy" :value="publicHuntStatus.policy?.manual_only ? 'Manual factual import, no training use' : 'Manual import'" />
         <JobStatusPanel title="Public Hunt Import" :jobs="jobGroup(publicHuntStatus.jobs, 'public-hunt-import')" />
         <p v-if="publicHuntInfo" class="muted">{{ publicHuntInfo }}</p>
@@ -352,11 +343,14 @@ function pct(value) {
                     {{ item.matched_hunting_place.name }}
                     <div class="muted compact-note">{{ item.matched_hunting_place.location || '' }}</div>
                   </div>
-                  <span v-else class="muted">{{ (item.match?.candidates || [])[0]?.name || 'No matched area' }}</span>
+                  <span v-else class="muted">{{ item.current_hunting_place?.name || 'No matched area' }}</span>
                 </td>
                 <td class="action-col">
-                  <button class="icon-btn" :disabled="publicHuntBusy" title="Review details" @click="selectPublicHunt(item)">
-                    <Eye :size="15" />
+                  <button class="icon-btn" :disabled="publicHuntBusy || !item.current_hunting_place?.id" title="Approve current match" @click="$emit('review-public-hunt', item, 'accept_match')">
+                    <Check :size="15" />
+                  </button>
+                  <button class="icon-btn" :disabled="publicHuntBusy" title="Edit match" @click="selectPublicHunt(item)">
+                    <Pencil :size="15" />
                   </button>
                   <button class="icon-btn danger" :disabled="publicHuntBusy" title="Ignore" @click="$emit('review-public-hunt', item, 'ignore')">
                     <X :size="15" />
@@ -378,9 +372,9 @@ function pct(value) {
               <ExternalLink :size="15" />
               Open
             </a>
-            <button class="ghost-action" :disabled="publicHuntBusy" @click="reviewSelectedPublicHunt('accept_match')">
+            <button class="ghost-action" :disabled="publicHuntBusy || !selectedPublicHunt.current_hunting_place?.id" @click="reviewSelectedPublicHunt('accept_match')">
               <Check :size="15" />
-              Accept
+              Approve Current
             </button>
             <button class="ghost-action danger" :disabled="publicHuntBusy" @click="reviewSelectedPublicHunt('ignore')">
               <X :size="15" />
@@ -410,6 +404,9 @@ function pct(value) {
             </div>
           </div>
           <div class="status-row mt-10">
+            <span v-if="selectedPublicHunt.current_hunting_place?.name" class="status-badge">
+              Current: {{ selectedPublicHunt.current_hunting_place.name }}
+            </span>
             <span v-for="member in selectedPublicHunt.party || []" :key="`${member.vocation}-${member.level}`" class="status-badge">
               {{ member.vocation || '?' }} {{ member.level || '' }}
             </span>

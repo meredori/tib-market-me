@@ -11,9 +11,8 @@ import { normalizePublicName } from "../tibiadata/publicReference";
 const SOURCE = "hunt-analyser";
 const BASE_URL = "https://www.hunt-analyser.com";
 const LIST_PATH = "/hunt_sessions?hunt_sessions_by=is_public";
-const DEFAULT_BATCH_LIMIT = 20;
-const MAX_BATCH_LIMIT = 100;
 const DEFAULT_THROTTLE_MS = 900;
+const DEFAULT_DETAIL_CONCURRENCY = 6;
 
 type Fetcher = (url: string) => Promise<string>;
 
@@ -482,47 +481,76 @@ function listUrl(page: number): string {
   return `${BASE_URL}${LIST_PATH}${page > 1 ? `&page=${page}` : ""}`;
 }
 
+function normalizeConcurrency(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value)) {
+    return DEFAULT_DETAIL_CONCURRENCY;
+  }
+  return Math.min(12, Math.max(1, Math.trunc(value)));
+}
+
+async function runConcurrent<T, R>(items: T[], concurrency: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
+  let cursor = 0;
+  async function next(): Promise<void> {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await worker(items[index]);
+    }
+  }
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => next());
+  await Promise.all(workers);
+  return results;
+}
+
 export async function checkPublicHunts(
   db: Database.Database,
-  options: { limit?: number; fetcher?: Fetcher; throttleMs?: number } = {}
+  options: { limit?: number; fetcher?: Fetcher; throttleMs?: number; concurrency?: number } = {}
 ): Promise<{ ok: true; job: JobStatus; imported: number; discovered: number; skipped: number }> {
-  const limit = Math.min(MAX_BATCH_LIMIT, Math.max(1, Math.trunc(options.limit ?? DEFAULT_BATCH_LIMIT)));
+  const limit = options.limit === undefined ? undefined : Math.max(1, Math.trunc(options.limit));
   const fetcher = options.fetcher ?? defaultFetch;
   const throttleMs = options.throttleMs ?? DEFAULT_THROTTLE_MS;
-  const latest = listJobs(db, "public-hunt-import", 1)[0];
-  const startPage = asNumber(latest?.cursor?.next_page, 1) || 1;
+  const concurrency = normalizeConcurrency(options.concurrency);
+  const startPage = 1;
   const job = startJob(db, {
     jobType: "public-hunt-import",
     entityType: "hunt",
-    totalCount: limit,
+    totalCount: limit ?? 0,
     cursor: { next_page: startPage },
-    metadata: { source: SOURCE, manual: true, ai_train: false }
+    metadata: { source: SOURCE, manual: true, ai_train: false, detail_concurrency: concurrency, scope: limit === undefined ? "all_pages" : "limited" }
   });
 
   let imported = 0;
   let skipped = 0;
   let discovered = 0;
+  let attempted = 0;
   let page = startPage;
   let currentJob = job;
   try {
-    while (imported < limit) {
+    while (limit === undefined || imported < limit) {
       const listHtml = await fetcher(listUrl(page));
       const list = parsePublicHuntList(listHtml);
       discovered += list.entries.length;
+      const totalCount = limit ?? list.total_count ?? discovered;
       if (!list.entries.length) {
         break;
       }
 
-      for (const entry of list.entries) {
-        if (imported >= limit) {
-          break;
-        }
+      const entries = limit === undefined
+        ? list.entries
+        : list.entries.slice(0, Math.max(0, limit - imported));
+      const newEntries: PublicHuntListEntry[] = [];
+      for (const entry of entries) {
         const seen = db.prepare("SELECT id FROM public_hunt_sessions WHERE source = ? AND source_session_id = ?")
           .get(SOURCE, entry.source_session_id);
         if (seen) {
           skipped += 1;
           continue;
         }
+        newEntries.push(entry);
+      }
+
+      const importedPage = await runConcurrent(newEntries, concurrency, async (entry) => {
         await delay(throttleMs);
         const detailHtml = await fetcher(entry.source_url);
         const parsed = parsePublicHuntDetail(detailHtml, entry.source_url, entry.source_session_id);
@@ -534,36 +562,41 @@ export async function checkPublicHunts(
           imported_at: at,
           refreshed_at: at
         });
+        return { entry, parsed };
+      });
+
+      for (const item of importedPage) {
         imported += 1;
+        attempted += 1;
         currentJob = updateJobProgress(db, job.id, {
           completedCount: imported,
-          totalCount: limit,
-          currentEntity: { type: "hunt", id: entry.source_session_id, name: parsed.title },
-          cursor: { next_page: page, last_source_session_id: entry.source_session_id },
-          message: `Imported ${parsed.title}`
+          totalCount,
+          currentEntity: { type: "hunt", id: item.entry.source_session_id, name: item.parsed.title },
+          cursor: { next_page: page, last_source_session_id: item.entry.source_session_id },
+          message: `Imported ${item.parsed.title}`
         });
       }
 
-      if (!list.next_page || imported >= limit) {
+      if (!list.next_page || (limit !== undefined && imported >= limit)) {
         page = list.next_page ?? page;
         break;
       }
       page = list.next_page;
       currentJob = updateJobProgress(db, job.id, {
         completedCount: imported,
-        totalCount: limit,
+        totalCount,
         cursor: { next_page: page },
-        metadata: { source_total_count: list.total_count, discovered }
+        metadata: { source_total_count: list.total_count, discovered, skipped, attempted }
       });
       await delay(throttleMs);
     }
     currentJob = finishJob(db, job.id, "success", {
       completedCount: imported,
-      metadata: { imported, skipped, discovered, next_page: page }
+      metadata: { imported, skipped, discovered, next_page: page, detail_concurrency: concurrency, scope: limit === undefined ? "all_pages" : "limited" }
     });
     return { ok: true, job: currentJob, imported, discovered, skipped };
   } catch (error) {
-    currentJob = finishJob(db, job.id, "error", { error, completedCount: imported, metadata: { imported, skipped, discovered, next_page: page } });
+    currentJob = finishJob(db, job.id, "error", { error, completedCount: imported, metadata: { imported, skipped, discovered, next_page: page, detail_concurrency: concurrency } });
     return { ok: true, job: currentJob, imported, discovered, skipped };
   }
 }
@@ -590,6 +623,24 @@ function monstersForPublicHunt(db: Database.Database, id: number): Array<{ name:
 }
 
 function rowToPublicHunt(db: Database.Database, row: PublicHuntRow): Record<string, unknown> {
+  const candidates = parseArray(row.hunting_place_alternates_json);
+  const bestCandidate = asRecord(candidates[0]);
+  const currentHuntingPlace = row.public_hunting_place_id
+    ? {
+      id: row.public_hunting_place_id,
+      name: row.matched_hunting_place_name ?? null,
+      location: row.matched_hunting_place_location ?? null,
+      source: "matched"
+    }
+    : bestCandidate
+      ? {
+        id: asNumber(bestCandidate.id, 0) || null,
+        name: asText(bestCandidate.name) || null,
+        location: asText(bestCandidate.location) || null,
+        confidence: bestCandidate.confidence_detail ?? bestCandidate.confidence ?? null,
+        source: "best_guess"
+      }
+      : null;
   const displayStatus = row.review_status === "ignored"
     ? "ignored"
     : row.suspicious_status === "suspicious"
@@ -610,6 +661,7 @@ function rowToPublicHunt(db: Database.Database, row: PublicHuntRow): Record<stri
       name: row.matched_hunting_place_name ?? null,
       location: row.matched_hunting_place_location ?? null
     } : null,
+    current_hunting_place: currentHuntingPlace,
     match: {
       public_hunting_place_id: row.public_hunting_place_id,
       confidence: buildConfidence(row.hunting_place_confidence, { estimated: true }),
@@ -617,7 +669,7 @@ function rowToPublicHunt(db: Database.Database, row: PublicHuntRow): Record<stri
       readiness: row.hunting_place_match_readiness,
       readiness_reason: row.hunting_place_match_readiness_reason,
       reasons: parseArray(row.hunting_place_match_reasons_json),
-      candidates: parseArray(row.hunting_place_alternates_json),
+      candidates,
       explanations: parseArray(row.hunting_place_match_explanations_json),
       noise_creatures: parseArray(row.hunting_place_noise_creatures_json)
     },
@@ -661,6 +713,8 @@ export function listPublicHuntReviewQueue(db: Database.Database, limit = 500): R
     FROM public_hunt_sessions session
     LEFT JOIN public_hunting_places place
       ON place.id = session.public_hunting_place_id
+    WHERE session.review_status NOT IN ('ignored', 'accepted')
+      AND session.public_hunting_place_id IS NULL
     ORDER BY
       CASE
         WHEN session.review_status = 'needs_review' OR session.suspicious_status = 'suspicious' THEN 0

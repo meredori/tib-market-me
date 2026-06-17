@@ -79,7 +79,6 @@ const publicReferenceInfo = ref('')
 const publicReferenceBusy = ref(false)
 const publicHuntInfo = ref('')
 const publicHuntBusy = ref(false)
-const publicHuntBatchLimit = ref(20)
 const publicHuntReviewItems = ref([])
 const itemPriceMode = ref('conservative_min')
 const itemPriceInfo = ref('')
@@ -536,7 +535,7 @@ async function checkPublicHunts() {
     const out = await api('/api/public-hunts/check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ limit: Number(publicHuntBatchLimit.value || 20) }),
+      body: JSON.stringify({ concurrency: 6 }),
     })
     publicHuntInfo.value = `Imported ${out.imported || 0} public hunt(s), skipped ${out.skipped || 0}.`
     await loadPublicHuntStatus()
@@ -1127,7 +1126,6 @@ onBeforeUnmount(() => {
         :public-hunt-status="publicHuntStatus"
         :public-hunt-info="publicHuntInfo"
         :public-hunt-busy="publicHuntBusy"
-        v-model:public-hunt-batch-limit="publicHuntBatchLimit"
         :public-hunt-review-items="publicHuntReviewItems"
         :item-price-info="itemPriceInfo"
         :item-price-busy="itemPriceBusy"

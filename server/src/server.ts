@@ -301,8 +301,10 @@ export function buildServer(db: Database.Database) {
         ? (request.body as Record<string, unknown>)
         : {};
       const limit = Number(body.limit);
+      const concurrency = Number(body.concurrency);
       const result = await checkPublicHunts(db, {
-        limit: Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : undefined
+        limit: Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : undefined,
+        concurrency: Number.isFinite(concurrency) ? Math.max(1, Math.trunc(concurrency)) : undefined
       });
       reply.code(202);
       return result;
