@@ -175,7 +175,7 @@ function fmtRate(value) {
 }
 
 function pct(value) {
-  const numeric = Number(value)
+  const numeric = Number(typeof value === 'object' && value !== null ? value.score : value)
   return Number.isFinite(numeric) && numeric > 0 ? `${Math.round(numeric * 100)}%` : ''
 }
 
