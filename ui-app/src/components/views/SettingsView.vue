@@ -87,7 +87,7 @@ const activeSettingsTab = ref('general')
 let publicHuntPlaceSearchTimer = null
 
 const selectedPublicHunt = computed(() => {
-  return props.publicHuntReviewItems.find((item) => item.id === selectedPublicHuntId.value) || props.publicHuntReviewItems[0] || null
+  return props.publicHuntReviewItems.find((item) => item.id === selectedPublicHuntId.value) || null
 })
 
 watch(
@@ -98,7 +98,7 @@ watch(
       return
     }
     if (!items.some((item) => item.id === selectedPublicHuntId.value)) {
-      selectedPublicHuntId.value = items[0].id
+      selectedPublicHuntId.value = null
     }
   },
   { immediate: true }
@@ -143,11 +143,21 @@ function reviewSelectedPublicHunt(action, payload = {}) {
   if (!selectedPublicHunt.value) {
     return
   }
-  emit('review-public-hunt', selectedPublicHunt.value, action, payload)
+  reviewPublicHuntItem(selectedPublicHunt.value, action, payload)
 }
 
 function choosePublicHuntPlace(place) {
   reviewSelectedPublicHunt('choose_place', { public_hunting_place_id: place.id })
+}
+
+function reviewPublicHuntItem(item, action, payload = {}) {
+  emit('review-public-hunt', item, action, payload)
+  if (['accept_match', 'choose_place', 'ignore'].includes(action) && selectedPublicHuntId.value === item.id) {
+    selectedPublicHuntId.value = null
+    publicHuntPlaceQuery.value = ''
+    publicHuntPlaceResults.value = []
+    publicHuntPlaceInfo.value = ''
+  }
 }
 
 function fmtNumber(value) {
@@ -307,59 +317,6 @@ function pct(value) {
         <JobStatusPanel title="Public Hunt Import" :jobs="jobGroup(publicHuntStatus.jobs, 'public-hunt-import')" />
         <p v-if="publicHuntInfo" class="muted">{{ publicHuntInfo }}</p>
 
-        <DataTable
-          class="mt-10"
-          :columns="publicHuntColumns"
-          :items="publicHuntReviewItems"
-          row-key="id"
-          empty-title="No public hunts need review"
-          empty-reason="Accepted, ignored, or already-matched public hunts stay out of this queue."
-        >
-          <template #row="{ items }">
-              <tr
-                v-for="item in items"
-                :key="item.id"
-                :class="{ selected: selectedPublicHunt?.id === item.id }"
-              >
-                <td>
-                  <button class="loot-item-link entity-link-pill" @click="selectPublicHunt(item)">
-                    <Eye :size="14" />
-                    <span>{{ item.title }}</span>
-                  </button>
-                  <div class="muted mono">{{ item.source_session_id }}</div>
-                </td>
-                <td>
-                  <span>{{ item.match?.status || 'unmatched' }}</span>
-                  <span v-if="item.match?.confidence?.score !== null" class="muted">
-                    {{ Math.round(Number(item.match.confidence.score || 0) * 100) }}%
-                  </span>
-                </td>
-                <td>
-                  <span class="status-badge">{{ item.display_status || item.review_status }}</span>
-                  <span v-if="item.suspicious_status === 'suspicious'" class="status-badge confidence-low">suspicious</span>
-                </td>
-                <td>
-                  <div v-if="item.matched_hunting_place?.name">
-                    {{ item.matched_hunting_place.name }}
-                    <div class="muted compact-note">{{ item.matched_hunting_place.location || '' }}</div>
-                  </div>
-                  <span v-else class="muted">{{ item.current_hunting_place?.name || 'No matched area' }}</span>
-                </td>
-                <td class="action-col">
-                  <button class="icon-btn" :disabled="publicHuntBusy || !item.current_hunting_place?.id" title="Approve current match" @click="$emit('review-public-hunt', item, 'accept_match')">
-                    <Check :size="15" />
-                  </button>
-                  <button class="icon-btn" :disabled="publicHuntBusy" title="Edit match" @click="selectPublicHunt(item)">
-                    <Pencil :size="15" />
-                  </button>
-                  <button class="icon-btn danger" :disabled="publicHuntBusy" title="Ignore" @click="$emit('review-public-hunt', item, 'ignore')">
-                    <X :size="15" />
-                  </button>
-                </td>
-              </tr>
-          </template>
-        </DataTable>
-
         <div v-if="selectedPublicHunt" class="public-hunt-review-detail mt-10">
           <SectionHeader :title="selectedPublicHunt.title" :subtitle="`Public hunt ${selectedPublicHunt.source_session_id}`">
             <a
@@ -494,6 +451,59 @@ function pct(value) {
             </div>
           </div>
         </div>
+
+        <DataTable
+          class="mt-10"
+          :columns="publicHuntColumns"
+          :items="publicHuntReviewItems"
+          row-key="id"
+          empty-title="No public hunts need review"
+          empty-reason="Accepted, ignored, or already-matched public hunts stay out of this queue."
+        >
+          <template #row="{ items }">
+              <tr
+                v-for="item in items"
+                :key="item.id"
+                :class="{ selected: selectedPublicHunt?.id === item.id }"
+              >
+                <td>
+                  <button class="loot-item-link entity-link-pill" @click="selectPublicHunt(item)">
+                    <Eye :size="14" />
+                    <span>{{ item.title }}</span>
+                  </button>
+                  <div class="muted mono">{{ item.source_session_id }}</div>
+                </td>
+                <td>
+                  <span>{{ item.match?.status || 'unmatched' }}</span>
+                  <span v-if="item.match?.confidence?.score !== null" class="muted">
+                    {{ Math.round(Number(item.match.confidence.score || 0) * 100) }}%
+                  </span>
+                </td>
+                <td>
+                  <span class="status-badge">{{ item.display_status || item.review_status }}</span>
+                  <span v-if="item.suspicious_status === 'suspicious'" class="status-badge confidence-low">suspicious</span>
+                </td>
+                <td>
+                  <div v-if="item.matched_hunting_place?.name">
+                    {{ item.matched_hunting_place.name }}
+                    <div class="muted compact-note">{{ item.matched_hunting_place.location || '' }}</div>
+                  </div>
+                  <span v-else class="muted">{{ item.current_hunting_place?.name || 'No matched area' }}</span>
+                </td>
+                <td class="action-col">
+                  <button class="icon-btn" :disabled="publicHuntBusy || !item.current_hunting_place?.id" title="Approve current match" @click="reviewPublicHuntItem(item, 'accept_match')">
+                    <Check :size="15" />
+                  </button>
+                  <button class="icon-btn" :disabled="publicHuntBusy" title="Edit match" @click="selectPublicHunt(item)">
+                    <Pencil :size="15" />
+                  </button>
+                  <button class="icon-btn danger" :disabled="publicHuntBusy" title="Ignore" @click="reviewPublicHuntItem(item, 'ignore')">
+                    <X :size="15" />
+                  </button>
+                </td>
+              </tr>
+          </template>
+        </DataTable>
       </article>
 
       <article v-if="activeSettingsTab === 'log-imports'" class="panel settings-wide">
