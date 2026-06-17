@@ -41,9 +41,9 @@ const activeJobStatuses = new Set(['queued', 'running', 'paused', 'backoff'])
 
 const publicHuntColumns = [
   { key: 'hunt', label: 'Hunt' },
-  { key: 'match', label: 'Match' },
   { key: 'status', label: 'Status' },
-  { key: 'place', label: 'Hunting Place' },
+  { key: 'place', label: 'Best Match' },
+  { key: 'second_place', label: 'Second Best' },
   { key: 'actions', label: '', class: 'action-col' },
 ]
 
@@ -177,6 +177,23 @@ function fmtRate(value) {
 function pct(value) {
   const numeric = Number(value)
   return Number.isFinite(numeric) && numeric > 0 ? `${Math.round(numeric * 100)}%` : ''
+}
+
+function publicHuntBestMatch(item) {
+  if (item.matched_hunting_place?.name) {
+    return {
+      id: item.matched_hunting_place.id,
+      name: item.matched_hunting_place.name,
+      location: item.matched_hunting_place.location,
+      confidence: item.match?.confidence?.score,
+    }
+  }
+  return item.current_hunting_place || (item.match?.candidates || [])[0] || null
+}
+
+function publicHuntSecondMatch(item) {
+  const bestId = publicHuntBestMatch(item)?.id
+  return (item.match?.candidates || []).find((candidate) => candidate.id !== bestId) || null
 }
 </script>
 
@@ -478,21 +495,24 @@ function pct(value) {
                   <div class="muted mono">{{ item.source_session_id }}</div>
                 </td>
                 <td>
-                  <span>{{ item.match?.status || 'unmatched' }}</span>
-                  <span v-if="item.match?.confidence?.score !== null" class="muted">
-                    {{ Math.round(Number(item.match.confidence.score || 0) * 100) }}%
-                  </span>
-                </td>
-                <td>
-                  <span class="status-badge">{{ item.display_status || item.review_status }}</span>
+                  <span class="status-badge">{{ item.match?.status || item.display_status || item.review_status }}</span>
                   <span v-if="item.suspicious_status === 'suspicious'" class="status-badge confidence-low">suspicious</span>
                 </td>
                 <td>
-                  <div v-if="item.matched_hunting_place?.name">
-                    {{ item.matched_hunting_place.name }}
-                    <div class="muted compact-note">{{ item.matched_hunting_place.location || '' }}</div>
+                  <div v-if="publicHuntBestMatch(item)?.name">
+                    {{ publicHuntBestMatch(item).name }}
+                    <span v-if="pct(publicHuntBestMatch(item).confidence)" class="muted">{{ pct(publicHuntBestMatch(item).confidence) }}</span>
+                    <div class="muted compact-note">{{ publicHuntBestMatch(item).location || '' }}</div>
                   </div>
-                  <span v-else class="muted">{{ item.current_hunting_place?.name || 'No matched area' }}</span>
+                  <span v-else class="muted">No matched area</span>
+                </td>
+                <td>
+                  <div v-if="publicHuntSecondMatch(item)?.name">
+                    {{ publicHuntSecondMatch(item).name }}
+                    <span v-if="pct(publicHuntSecondMatch(item).confidence)" class="muted">{{ pct(publicHuntSecondMatch(item).confidence) }}</span>
+                    <div class="muted compact-note">{{ publicHuntSecondMatch(item).location || '' }}</div>
+                  </div>
+                  <span v-else class="muted">-</span>
                 </td>
                 <td class="action-col">
                   <button class="icon-btn" :disabled="publicHuntBusy || !item.current_hunting_place?.id" title="Approve current match" @click="reviewPublicHuntItem(item, 'accept_match')">
