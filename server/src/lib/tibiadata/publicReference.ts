@@ -786,8 +786,8 @@ function publicReferenceContract(): Record<string, unknown> {
     base_url: DEFAULT_PUBLIC_DATA_BASE_URL,
     operations: {
       catalog_sync: {
-        mode: "bounded batch",
-        default_batch: { creatures: 100, hunting_places: 100 },
+        mode: "run to completion",
+        default_scope: { creatures: "all available pages", hunting_places: "all available rows" },
         endpoints: [
           {
             endpoint: "GET /api/v1/creatures?page={page}&pageSize=100",
@@ -805,8 +805,8 @@ function publicReferenceContract(): Record<string, unknown> {
         ]
       },
       detail_enrichment: {
-        mode: "bounded adaptive batch",
-        default_batch: { creatures: 100_000, hunting_places: 100_000 },
+        mode: "adaptive async run to completion",
+        default_scope: { creatures: "all pending details", hunting_places: "all pending details" },
         default_concurrency: { initial: DEFAULT_REFERENCE_INITIAL_CONCURRENCY, max: DEFAULT_REFERENCE_MAX_CONCURRENCY },
         endpoints: [
           {
@@ -951,8 +951,8 @@ function normalizeLimit(value: number | undefined, fallback: number): number {
   return value === undefined ? fallback : Math.max(0, Math.trunc(value));
 }
 
-function normalizeEnrichmentLimit(value: number | undefined): number {
-  return value === undefined ? 100_000 : Math.max(0, Math.trunc(value));
+function normalizeEnrichmentLimit(value: number | undefined): number | undefined {
+  return value === undefined ? undefined : Math.max(0, Math.trunc(value));
 }
 
 function normalizeConcurrency(value: number | undefined, fallback: number, max: number): number {
@@ -1023,34 +1023,50 @@ function detailPrioritySql(includeStale: boolean): string {
   `;
 }
 
-function creatureEnrichmentRows(db: Database.Database, limit: number, includeStale: boolean): Array<Record<string, unknown>> {
-  if (limit <= 0) {
+function creatureEnrichmentRows(db: Database.Database, limit: number | undefined, includeStale: boolean): Array<Record<string, unknown>> {
+  if (limit !== undefined && limit <= 0) {
     return [];
   }
+  const limitSql = limit === undefined ? "" : "LIMIT ?";
   const sql = `
     SELECT id, name, normalized_name
     FROM public_creatures
     ${detailPrioritySql(includeStale)}
-    LIMIT ?
+    ${limitSql}
   `;
-  return includeStale
-    ? db.prepare(sql).all(cutoffIso(30), limit) as Array<Record<string, unknown>>
-    : db.prepare(sql).all(limit) as Array<Record<string, unknown>>;
+  if (includeStale && limit !== undefined) {
+    return db.prepare(sql).all(cutoffIso(30), limit) as Array<Record<string, unknown>>;
+  }
+  if (includeStale) {
+    return db.prepare(sql).all(cutoffIso(30)) as Array<Record<string, unknown>>;
+  }
+  if (limit !== undefined) {
+    return db.prepare(sql).all(limit) as Array<Record<string, unknown>>;
+  }
+  return db.prepare(sql).all() as Array<Record<string, unknown>>;
 }
 
-function huntingPlaceEnrichmentRows(db: Database.Database, limit: number, includeStale: boolean): Array<Record<string, unknown>> {
-  if (limit <= 0) {
+function huntingPlaceEnrichmentRows(db: Database.Database, limit: number | undefined, includeStale: boolean): Array<Record<string, unknown>> {
+  if (limit !== undefined && limit <= 0) {
     return [];
   }
+  const limitSql = limit === undefined ? "" : "LIMIT ?";
   const sql = `
     SELECT id, name, normalized_name
     FROM public_hunting_places
     ${detailPrioritySql(includeStale)}
-    LIMIT ?
+    ${limitSql}
   `;
-  return includeStale
-    ? db.prepare(sql).all(cutoffIso(30), limit) as Array<Record<string, unknown>>
-    : db.prepare(sql).all(limit) as Array<Record<string, unknown>>;
+  if (includeStale && limit !== undefined) {
+    return db.prepare(sql).all(cutoffIso(30), limit) as Array<Record<string, unknown>>;
+  }
+  if (includeStale) {
+    return db.prepare(sql).all(cutoffIso(30)) as Array<Record<string, unknown>>;
+  }
+  if (limit !== undefined) {
+    return db.prepare(sql).all(limit) as Array<Record<string, unknown>>;
+  }
+  return db.prepare(sql).all() as Array<Record<string, unknown>>;
 }
 
 function createPublicReferenceEnrichmentJob(db: Database.Database, options: PublicReferenceEnrichmentOptions): JobStatus {

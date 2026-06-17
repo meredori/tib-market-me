@@ -257,7 +257,7 @@ Phase 2 now keeps catalog sync and detail enrichment as separate operations. Cat
 
 The enrichment worker now processes external detail imports with bounded adaptive concurrency. It starts conservatively, ramps up after clean batches, backs down after retryable upstream failures, and records concurrency/loot-source metadata on the job. Creature detail enrichment also uses embedded `lootStatistics` from `/api/v1/creatures/{name}` when present, only calling the separate creature loot endpoint when the detail response does not include loot rows.
 
-Reference Data controls now use consistent bounded batches for catalog sync and detail enrichment. Data Health exposes the expected upstream endpoint shapes used by the app, and a reset action/CLI command can clear local public reference and public hunt import data while detaching stale reference links from personal hunts, taskboard entries, and bestiary state.
+Reference Data controls now run to completion from one button press: catalog sync stages all available upstream rows, and detail enrichment starts one adaptive async job that drains all pending detail rows while ramping concurrency. Data Health exposes the expected upstream endpoint shapes used by the app, and a reset action/CLI command can clear local public reference and public hunt import data while detaching stale reference links from personal hunts, taskboard entries, and bestiary state.
 
 ## Build
 

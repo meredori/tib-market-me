@@ -254,8 +254,8 @@ function pct(value) {
         <CompactMetricRow label="Place creature rows" :value="publicReferenceStatus.data_health?.staged?.hunting_place_creatures || 0" />
         <CompactMetricRow label="Last catalog sync" :value="publicReferenceStatus.data_health?.last_catalog_sync || 'n/a'" />
         <CompactMetricRow label="Last enrichment" :value="publicReferenceStatus.data_health?.last_enrichment_run || 'n/a'" />
-        <CompactMetricRow label="Catalog batch" value="100 creatures, 100 places" />
-        <CompactMetricRow label="Enrichment batch" value="100 creatures, 100 places" />
+        <CompactMetricRow label="Catalog run" value="All available rows" />
+        <CompactMetricRow label="Enrichment run" value="All pending details" />
         <CompactMetricRow
           label="Enrichment concurrency"
           :value="`${publicReferenceStatus.reference_contract?.operations?.detail_enrichment?.default_concurrency?.initial || 2} -> ${publicReferenceStatus.reference_contract?.operations?.detail_enrichment?.default_concurrency?.max || 6}`"

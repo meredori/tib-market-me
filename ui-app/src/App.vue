@@ -196,14 +196,6 @@ function publicReferencePendingDetails(data = publicReferenceStatus) {
   return Number(data.data_health?.pending?.creatures || 0) + Number(data.data_health?.pending?.hunting_places || 0)
 }
 
-function publicReferenceBatchPayload(extra = {}) {
-  return {
-    creature_limit: 100,
-    hunting_place_limit: 100,
-    ...extra,
-  }
-}
-
 async function loadMarketDashboard() {
   marketDashboardBusy.value = true
   try {
@@ -441,9 +433,7 @@ async function syncPublicReferenceData() {
     const out = await api('/api/public-reference/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...publicReferenceBatchPayload(),
-      }),
+      body: JSON.stringify({}),
     })
     await loadPublicReferenceStatus()
     publicReferenceInfo.value = `Synced ${out.creatures || 0} creature catalog row(s) and ${out.hunting_places || 0} hunting place catalog row(s).`
@@ -464,11 +454,11 @@ async function startPublicReferenceEnrichmentBatch() {
   return api('/api/public-reference/enrich', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(publicReferenceBatchPayload({
+    body: JSON.stringify({
       include_stale: false,
       initial_concurrency: 2,
       max_concurrency: 6,
-    })),
+    }),
   })
 }
 

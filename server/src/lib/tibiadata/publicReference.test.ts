@@ -511,7 +511,7 @@ describe("public Tibia reference data", () => {
       reference_contract: {
         operations: {
           catalog_sync: {
-            mode: "bounded batch",
+            mode: "run to completion",
             endpoints: [
               expect.objectContaining({
                 endpoint: "GET /api/v1/creatures?page={page}&pageSize=100",
@@ -526,7 +526,7 @@ describe("public Tibia reference data", () => {
             ]
           },
           detail_enrichment: {
-            mode: "bounded adaptive batch",
+            mode: "adaptive async run to completion",
             endpoints: expect.arrayContaining([
               expect.objectContaining({
                 endpoint: "GET /api/v1/creatures/{name-or-id}",
@@ -755,6 +755,38 @@ describe("public Tibia reference data", () => {
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v1/hunting-places/201"), expect.anything());
   });
 
+  it("respects the upstream creature page size limit while syncing every catalog page", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url);
+      const path = parsed.pathname;
+      const page = Number(parsed.searchParams.get("page") || 1);
+      const pageSize = Number(parsed.searchParams.get("pageSize") || 0);
+      if (path === "/api/v1/creatures") {
+        const items = page === 1
+          ? Array.from({ length: 100 }, (_, index) => ({ id: 1000 + index, name: `Creature ${index + 1}` }))
+          : [{ id: 1100, name: "Creature 101" }];
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ page, pageSize, totalCount: 101, items })
+        };
+      }
+      return {
+        ok: path === "/api/v1/hunting-places/list",
+        status: path === "/api/v1/hunting-places/list" ? 200 : 404,
+        json: async () => ({ huntingPlaces: [] })
+      };
+    });
+    setPublicReferenceFetchForTests(fetchMock as unknown as typeof fetch);
+
+    const result = await syncPublicReferenceData(db);
+
+    expect(result).toMatchObject({ creatures: 101, hunting_places: 0 });
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/v1/creatures?page=1&pageSize=100"), expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/v1/creatures?page=2&pageSize=100"), expect.anything());
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("pageSize=101"), expect.anything());
+  });
+
   it("queues enriched creatures with missing loot for another enrichment pass", () => {
     upsertPublicCreature(db, { id: 101, name: "Dragon" }, "2026-06-10T00:00:00Z");
     upsertPublicCreature(db, { id: 102, name: "Demon" }, "2026-06-10T00:00:00Z");
@@ -873,7 +905,7 @@ describe("public Tibia reference data", () => {
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v1/hunting-places/203"), expect.anything());
   });
 
-  it("runs public reference detail enrichment with bounded adaptive concurrency", async () => {
+  it("runs public reference detail enrichment to completion with adaptive concurrency", async () => {
     upsertPublicCreature(db, { id: 101, name: "Dragon" }, "2026-06-10T00:00:00Z");
     upsertPublicCreature(db, { id: 102, name: "Demon" }, "2026-06-11T00:00:00Z");
     upsertPublicCreature(db, { id: 103, name: "Rat" }, "2026-06-12T00:00:00Z");
@@ -902,7 +934,6 @@ describe("public Tibia reference data", () => {
     setPublicReferenceFetchForTests(fetchMock as unknown as typeof fetch);
 
     const result = await enrichPublicReferenceData(db, {
-      creatureLimit: 3,
       huntingPlaceLimit: 0,
       initialConcurrency: 2,
       maxConcurrency: 3
