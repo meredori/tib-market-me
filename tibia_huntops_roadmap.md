@@ -1,4 +1,4 @@
-# Tibia HuntLens / HuntOps Roadmap
+# Tibia HuntOps Roadmap
 
 ## Product Direction
 
@@ -13,6 +13,25 @@ Its purpose is to turn personal hunt history, market data, character context, an
 - What should I do next?
 
 The roadmap is feature-focused. Testing, migrations, build checks, and regression coverage are expected as part of every phase rather than treated as separate product phases.
+
+---
+
+## Documentation Contract
+
+Keep the project documentation small and current:
+
+- `README.md` is the setup, command, and day-to-day workflow reference.
+- `tibia_huntops_roadmap.md` is the product direction, active roadmap, definition of done, and agent guidance.
+- `docs/UI_STYLE_GUIDE.md` is the shared UI rulebook.
+
+Old migration plans and schema sketches should be removed once they stop describing the current system. The migration source of truth is the ordered SQL files in `server/db/migrations/`, plus the server code that reads and writes those tables.
+
+## Current Roadmap Status
+
+- Phases 1-7 are completed and form the current baseline: shared intelligence, public reference enrichment, location matching repair, Loot Inbox, Taskboard, Bestiary, and hunting-place intelligence.
+- Phase 12 is completed for manual, provenance-labelled public Hunt Analyser imports.
+- Phase 8, market-weighted hunt recommendations, is the next major product phase unless a narrower maintenance or data-quality task takes priority.
+- Phases 9-11 and 13-14 remain future work.
 
 ---
 
@@ -79,7 +98,9 @@ The following functionality already exists and should not be rebuilt as future r
 
 - Matching infrastructure exists.
 - Match confidence, reasons, alternate candidates, and manual corrections are structurally supported.
-- Practical matching is not reliable yet and must be repaired after public detail enrichment.
+- Practical matching has been repaired around enriched public reference data.
+- Hunt locations clearly distinguish custom text from linked imported hunting spots.
+- Retroactive matching and manual correction workflows preserve user choices.
 
 ### Shared Intelligence Foundation
 

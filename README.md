@@ -1,33 +1,35 @@
-# Tibia Market Helper (Victoris)
+# Tibia HuntOps
 
-This project now uses a Node + TypeScript backend for market sync and API serving.
+Tibia HuntOps is a local-first Tibia operations tool for market decisions, hunt analysis, loot selling, taskboard planning, bestiary progress, and hunting-place intelligence.
 
-Current migration slice scope:
-- pull market + metadata + world freshness from TibiaMarket API
-- compute snapshot pricing
-- persist to local SQLite
-- generate the Tibia client `itemprices.json` export on demand
+The app runs as a Vue frontend, Fastify backend, and local SQLite database. Market, hunt, character, public reference, and public hunt data stay local unless a sync/import action explicitly fetches from an external source.
 
-Supported generated pricing output:
-- `itemprices.json`: configurable Tibia client value export (`conservative_min` or `sell_offer`)
+## Documentation
 
-Internal inspection:
-- pricing status, item search, and history come from the local SQLite database
+- `tibia_huntops_roadmap.md` is the product roadmap, current phase tracker, definition of done, and agent guidance.
+- `docs/UI_STYLE_GUIDE.md` is the frontend UI rulebook for shared layout, tables, badges, metrics, and screen priority.
+- This README is the practical setup and workflow reference.
 
-Current item image workflow:
-- full item sprite generation now goes to `assets/generated/items-archive/`
-- only DB-needed item IDs are copied into `ui-app/public/items/`
-- manual tracked IDs in `assets/manual-item-images.json` are always included
+Keep documentation sparse. Update one of these files when a durable rule, workflow, or product direction changes; avoid adding new planning docs unless the existing anchors cannot hold the information cleanly.
 
-Planning and migration docs:
-- `docs/IMPLEMENTATION_PLAN.md`
-- `docs/SQLITE_SCHEMA.md`
+## Current Capabilities
+
+- Market sync from TibiaMarket into local SQLite.
+- Snapshot pricing, item lookup, watchlist/favorites, item details, and `itemprices.json` export.
+- Hunt Analyser import, saved hunts, hunt history, editing/deletion, character context, and item overrides.
+- Loot Inbox guidance for sell, hold, NPC/vendor, watch, review, and unknown-price decisions.
+- Public reference catalog sync and detail enrichment with Data Health status.
+- Hunt-to-hunting-place matching with linked/custom location handling and manual correction.
+- Taskboard helper for weekly creature and delivery item offers.
+- Bestiary checklist and charm progress support.
+- Hunting-place intelligence pages with public/reference data, personal linked hunts, public hunt imports, area breakdowns, and taskboard/bestiary hooks.
 
 ## Install
 
 ```bash
 npm install
 npm --prefix server install
+npm --prefix ui-app install
 ```
 
 ## Local Asset Setup
@@ -40,28 +42,33 @@ This repository does not track the copied Tibia client asset dump.
 - Run `npm run stage:items` to copy only market item IDs (plus manual tracked IDs) into `ui-app/public/items/`.
 - Manual tracked item IDs are defined in `assets/manual-item-images.json` (defaults include coins: `3043`, `3048`, `3052`).
 
-## Generate Prices (Victoris)
+## Common Commands
 
 ```bash
+# Run frontend and backend together
+npm run dev
+
+# Build backend and frontend
+npm --prefix server run build
+npm --prefix ui-app run build
+
+# Run database migrations
+npm --prefix server run migrate
+
+# Sync market data and generate pricing
 npm run sync:be
+
+# Generate Tibia client item prices
+curl -X POST http://127.0.0.1:8787/api/itemprices/generate
 ```
 
-The sync command stores:
-- local run start/finish timestamps
-- world last update timestamp from `world_data`
-- raw market payloads and normalized fields in SQLite
+On Windows PowerShell, use `npm.cmd` in place of `npm` if execution policy blocks `npm.ps1`.
 
-## Local UI
-
-Run a local web UI to:
-- search specific items from local detailed data
-- upload scaffolded hunt summaries
-- compare uploaded hunts by xpm and gpm in a previous-hunts checker
-- manage run status/refresh and generate `itemprices.json` in Settings
+## Local App
 
 Architecture:
-- Vite + Vue frontend in `ui-app/`
 - Fastify backend in `server/`
+- Vite + Vue frontend in `ui-app/`
 - SQLite via `better-sqlite3`
 - During dev, Vite proxies `/api` to Fastify at `127.0.0.1:8787`
 
@@ -81,35 +88,19 @@ Then open:
 - FE dev server: http://127.0.0.1:5173
 - BE direct (optional): http://127.0.0.1:8787
 
-## Notes
-
-- API source: https://api.tibiamarket.top/docs#/
-- Snapshot pricing is the only pricing model in this migration slice.
-- Hunt recommendation endpoint is not implemented in this slice.
-
 ## Suggested Workflow
 
 1. Run `npm run dev` for the full web UI + API workflow.
-2. Refresh prices from the UI/API (`/api/refresh`) when needed.
-3. Use `/api/search` for item lookup against the latest synced run.
-4. Save hunt summary scaffolds in the Hunt Analyser tab and compare results in Previous Hunts.
-5. Generate `itemprices.json` from Settings or API (`POST /api/itemprices/generate`) with mode `conservative_min` or `sell_offer`.
+2. Refresh/sync market data when you need newer prices.
+3. Paste Hunt Analyser output into the Hunts workflow and save useful sessions.
+4. Use Loot Inbox after hunts to decide what to sell, hold, NPC/vendor, watch, or review.
+5. Keep public reference data healthy from Settings when working on Taskboard, Bestiary, Places, or matching.
+6. Generate `itemprices.json` from Settings when you want to update the Tibia client export.
 
-## Roadmap
+## External Data Sources
 
-### 3) Hunt Analyser (Potential Profit + Loot Per Hour)
-- Parse large hunt logs with timestamps and loot entries.
-- Compute potential profit using local fair/list/NPC valuations.
-- Infer hunt duration from first and last kill timestamps.
-- Report per-hunt totals plus loot per hour and expected net per hour.
+- TibiaMarket API for market values, metadata, world freshness, and pricing inputs.
+- TibiaData/public reference endpoints for creatures, hunting places, character lookup, and related reference details.
+- Public Hunt Analyser pages only through the manual, provenance-labelled public hunt import workflow described in the roadmap.
 
-### 4) Local Hunt Database
-- Persist hunt analyser outputs locally as structured records.
-- Support lookup and filtering by date range, creature, and tags.
-- Keep raw log text plus normalized parsed records for reprocessing.
-
-### 5) Location/Boost Normalization
-- Add mandatory location tagging when saving hunt records.
-- Track boosts and modifiers (bonus exp, boosts, prey, stamina state).
-- Normalize metrics so xp/h and gpm can be compared between hunts.
-- Surface aggregated location performance across historical hunts.
+Imported public/reference data must not change personal hunt totals, character totals, personal trends, streaks, or dashboard metrics unless a future feature explicitly designs and labels that behavior.

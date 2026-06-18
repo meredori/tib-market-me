@@ -57,8 +57,8 @@ This guide is the source of truth for shared UI conventions in the Vue app. New 
 - When a new component sets a standard for a pattern, update this guide in the same change.
 - Prefer direct consistency rewrites over compatibility aliases. Fix call sites to the current API.
 
-## Current Audit Notes
+## Maintenance Notes
 
-- Dashboard, Market, Loot Inbox, Bestiary, Places, Taskboard, Settings, and Hunt History all contain table or metric patterns that should converge on `DataTable`, `MetricGrid`, `Panel`, and `Toolbar`.
-- Taskboard and Places carry the largest local styling drift today. Continue reducing local table/card CSS there before adding new feature UI.
+- When touching an existing screen, run the Screen Priority checklist before visual polish.
+- Continue moving repeated table, metric, panel, toolbar, badge, and empty-state patterns into shared primitives.
 - Modals should keep using the shared badges, section headers, entity links, and table rules; avoid modal-specific copies of those primitives.
