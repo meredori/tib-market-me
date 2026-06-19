@@ -4,6 +4,7 @@ import {
   AreaChart,
   BookOpen,
   ClipboardList,
+  Compass,
   LayoutDashboard,
   MapPin,
   PackageOpen,
@@ -23,6 +24,7 @@ import HuntingPlaceDetailView from './components/views/HuntingPlaceDetailView.vu
 import HuntsWorkspaceView from './components/views/HuntsWorkspaceView.vue'
 import LootInboxView from './components/views/LootInboxView.vue'
 import MarketView from './components/views/MarketView.vue'
+import RecommendationsView from './components/views/RecommendationsView.vue'
 import SettingsView from './components/views/SettingsView.vue'
 import TaskboardView from './components/views/TaskboardView.vue'
 import { useHunts } from './composables/useHunts'
@@ -53,6 +55,7 @@ const sections = [
   { id: 'hunts', label: 'Hunt Details', icon: Swords, group: 'hunts' },
   { id: 'history', label: 'Hunt History', icon: AreaChart, group: 'hunts' },
   { id: 'place', label: 'Places', icon: MapPin, group: 'hunts' },
+  { id: 'recommendations', label: 'Recommendations', icon: Compass, group: 'hunts' },
   { id: 'market', label: 'Market', icon: Search, group: 'items' },
   { id: 'loot', label: 'Loot Inbox', icon: PackageOpen, group: 'items' },
   { id: 'taskboard', label: 'Taskboard', icon: ClipboardList, group: 'tools' },
@@ -118,6 +121,7 @@ const savedLocationKindFilter = ref('')
 const savedHuntSort = ref('date_desc')
 const isNewHuntModalOpen = ref(false)
 const newHuntRawText = ref('')
+const newHuntContext = ref(null)
 const isAssignItemModalOpen = ref(false)
 const assignItemTarget = ref(null)
 const assignItemId = ref('')
@@ -849,11 +853,19 @@ async function savePreviousHuntEditAndReturn() {
 function startNewHunt() {
   isNewHuntModalOpen.value = true
   newHuntRawText.value = ''
+  newHuntContext.value = null
+}
+
+function startRecommendedHunt(recommendation) {
+  isNewHuntModalOpen.value = true
+  newHuntRawText.value = ''
+  newHuntContext.value = recommendation || null
 }
 
 function closeNewHuntModal() {
   isNewHuntModalOpen.value = false
   newHuntRawText.value = ''
+  newHuntContext.value = null
 }
 
 async function parseNewHuntFromModal() {
@@ -867,6 +879,10 @@ async function parseNewHuntFromModal() {
   hunts.huntForm.raw_text = newHuntRawText.value
   await hunts.parseHuntText([])
   if (hunts.huntPreview.value) {
+    if (newHuntContext.value?.place?.name) {
+      hunts.huntDraftLocation.value = newHuntContext.value.place.name
+      hunts.huntDraftHuntingPlaceId.value = newHuntContext.value.place.id || ''
+    }
     closeNewHuntModal()
   }
 }
@@ -1261,6 +1277,13 @@ onBeforeUnmount(() => {
         @refresh="loadHuntingPlaceDetail"
       />
 
+      <RecommendationsView
+        v-else-if="activeSection === 'recommendations'"
+        :format-value="formatValue"
+        @open-hunting-place="openHuntingPlace"
+        @start-hunt="startRecommendedHunt"
+      />
+
       <HuntsWorkspaceView
         v-else-if="activeSection === 'hunts'"
         v-model:workspace-tab="workspaceTab"
@@ -1336,6 +1359,7 @@ onBeforeUnmount(() => {
       v-if="isNewHuntModalOpen"
       v-model:raw-text="newHuntRawText"
       :busy="hunts.huntParseBusy.value"
+      :context="newHuntContext"
       @close="closeNewHuntModal"
       @parse="parseNewHuntFromModal"
     />

@@ -9,6 +9,7 @@ import {
 defineProps({
   rawText: { type: String, default: '' },
   busy: { type: Boolean, default: false },
+  context: { type: Object, default: null },
 })
 
 defineEmits(['update:rawText', 'close', 'parse'])
@@ -23,6 +24,9 @@ defineEmits(['update:rawText', 'close', 'parse'])
           <p class="muted">Paste a Tibia Hunt Analyser export. Parsed hunts are loaded unsaved so you can review them before saving.</p>
         </div>
         <button class="icon-btn" @click="$emit('close')"><X :size="17" /></button>
+      </div>
+      <div v-if="context?.place?.name" class="status-badge mt-10">
+        Recommended place: {{ context.place.name }}
       </div>
       <label class="block-label">
         Hunt analyser text

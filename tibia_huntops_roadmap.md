@@ -30,7 +30,7 @@ Old migration plans and schema sketches should be removed once they stop describ
 
 - Phases 1-7 are completed and form the current baseline: shared intelligence, public reference enrichment, location matching repair, Loot Inbox, Taskboard, Bestiary, and hunting-place intelligence.
 - Phase 12 is completed for manual, provenance-labelled public Hunt Analyser imports.
-- Phase 8, market-weighted hunt recommendations, is the next major product phase unless a narrower maintenance or data-quality task takes priority.
+- Phase 8 is completed for a shippable market-weighted recommendation workflow with feedback capture.
 - Phases 9-11 and 13-14 remain future work.
 
 ---
@@ -813,11 +813,15 @@ Hunting-place pages should be linked from:
 
 # Phase 8: Market-Weighted Hunt Recommendations
 
+**Status: Completed.**
+
 ## Goal
 
 Recommend hunting areas based on character context, personal hunt history, public reference data, and current market prices.
 
 Recommendations should be explainable and confidence-aware, not black-box rankings.
+
+The implemented Phase 8 slice adds a dedicated Recommendations screen, a backend recommendation engine, stored feedback signals, labelled estimate ranges, and shared confidence/freshness/explanation metadata. Access is intentionally limited to feedback-based warnings until Phase 9 introduces first-class access tracking.
 
 ## Build
 

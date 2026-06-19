@@ -61,6 +61,7 @@ import {
   startPublicHuntImport
 } from "./lib/publicHunts";
 import { registerTaskboardRoutes } from "./lib/taskboard/routes";
+import { registerRecommendationRoutes } from "./lib/recommendations/routes";
 
 export function buildServer(db: Database.Database) {
   const app = Fastify({ logger: true });
@@ -79,6 +80,7 @@ export function buildServer(db: Database.Database) {
   registerTaskboardRoutes(app, db);
   registerBestiaryRoutes(app, db);
   registerHuntingPlaceRoutes(app, db);
+  registerRecommendationRoutes(app, db);
 
   app.get("/api/public-reference/status", async () => getPublicReferenceStatus(db));
 
