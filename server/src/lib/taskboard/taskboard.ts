@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { config } from "../../config";
+import { getAccessSummary } from "../access";
 import { confidence, entityRef, explanation, freshness, provenance } from "../intelligence/metadata";
 import type { InsightExplanation, Provenance } from "../intelligence/types";
 import { asNumber, asNumberOrNull, asRecord, asText, normalizeLootItemName, nowIso } from "../hunts/utils";
@@ -405,7 +406,10 @@ function combineHints(entry: TaskboardEntryRow, allEntries: TaskboardEntryRow[],
 function creatureGuidance(db: Database.Database, entry: TaskboardEntryRow, allEntries: TaskboardEntryRow[]) {
   const places = listCreaturePlaces(db, entry.public_creature_id, entry.normalized_name);
   const paceRows = personalPaceRows(db, entry.normalized_name);
-  const placeOptions = creaturePlaceOptions(places, paceRows);
+  const placeOptions = creaturePlaceOptions(places, paceRows).map((place) => ({
+    ...place,
+    access: getAccessSummary(db, { entity_id: place.id })
+  }));
   const bestPersonal = paceRows[0] ?? null;
   const best = placeOptions[0] ?? bestSpawn(places, paceRows);
   const sourceRef = entityRef("creature", { id: entry.public_creature_id, name: entryDisplayName(entry), normalized_name: entry.normalized_name });
@@ -461,6 +465,10 @@ function itemGuidance(db: Database.Database, entry: TaskboardEntryRow, allEntrie
   const drops = droppingCreatures(db, entry, itemId);
   const bestDrop = drops[0] ?? null;
   const places = placesForDropCreatures(db, drops);
+  const placeOptions = places.map((place) => ({
+    ...place,
+    access: getAccessSummary(db, { entity_id: place.id })
+  }));
   const quantity = Math.max(1, entry.required_quantity ?? 1);
   const unitPrice = Math.max(0, asNumber(market?.client_value, 0));
   const buyCost = unitPrice > 0 ? unitPrice * quantity : null;
@@ -519,7 +527,7 @@ function itemGuidance(db: Database.Database, entry: TaskboardEntryRow, allEntrie
     best_drop_creature: bestDrop,
     break_even_unit_price: breakEvenUnitPrice,
     dropping_creatures: drops,
-    hunting_places: places,
+    hunting_places: placeOptions,
     combine_hints: combineHints(entry, allEntries, places, drops),
     confidence: confidence(market && estimatedKills !== null ? 0.82 : market || estimatedKills !== null ? 0.55 : 0.2, {
       estimated: true,

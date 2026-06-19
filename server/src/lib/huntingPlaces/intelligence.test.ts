@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { config } from "../../config";
+import { saveAccessState } from "../access";
 import { applyMigrations } from "../db/migrations";
 import { getHuntingPlaceDetail, listHuntingPlaces, updateHuntingPlaceAreaOrder } from "./intelligence";
 
@@ -290,6 +291,30 @@ describe("hunting place intelligence", () => {
       best_xp_per_hour: 100000,
       best_profit_per_hour: 40000
     });
+    expect(detail.access).toMatchObject({
+      state: "unknown",
+      label: "Access unknown"
+    });
+  });
+
+  it("returns manual access summaries with hunting-place detail", () => {
+    seedPlace();
+    saveAccessState(db, {
+      entity_type: "hunting_place",
+      entity_id: 100,
+      state: "unavailable",
+      notes: "Need quest access"
+    });
+
+    const detail = getHuntingPlaceDetail(db, 100);
+
+    expect(detail.ok).toBe(true);
+    if (!detail.ok) {
+      return;
+    }
+    expect(detail.access.state).toBe("unavailable");
+    expect(detail.access.blockers[0].label).toBe("access unavailable");
+    expect(detail.access.provenance[0].type).toBe("manual_input");
   });
 
   it("persists corrected area summary ordering", () => {

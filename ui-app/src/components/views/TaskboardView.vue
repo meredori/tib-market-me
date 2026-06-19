@@ -99,6 +99,16 @@ function placePace(place) {
   return Number.isFinite(pace) && pace > 0 ? `${compactNumber(pace)} kills/h` : '-'
 }
 
+function accessLabel(place) {
+  return place?.access?.label || 'Access unknown'
+}
+
+function accessTone(place) {
+  if (place?.access?.state === 'available' || place?.access?.state === 'not_relevant') return 'available'
+  if (place?.access?.state === 'unavailable') return 'blocked'
+  return 'unknown'
+}
+
 function cleanReferenceText(value) {
   return String(value || '')
     .replace(/\[https?:\/\/[^\s\]]+\s+([^\]]+)\]/gi, '$1')
@@ -271,6 +281,7 @@ onMounted(loadEntries)
                       {{ place.name }}
                     </InlineLink>
                     <small>{{ cleanReferenceText(place.location || place.occurrence) || 'Reference details only' }}</small>
+                    <span class="status-badge access-badge" :class="`access-${accessTone(place)}`">{{ accessLabel(place) }}</span>
                   </td>
                   <td>{{ floorLevel(place) }}</td>
                   <td>{{ levelRange(place) }}</td>
@@ -320,13 +331,18 @@ onMounted(loadEntries)
           </div>
 
           <div v-if="entry.entry_type === 'item' && (entry.guidance?.known_hunting_places?.length || entry.guidance?.hunting_places?.length)" class="entity-strip">
-            <EntityLinkPill
+            <span
               v-for="place in (entry.guidance.known_hunting_places || entry.guidance.hunting_places || []).slice(0, 5)"
               :key="place.id"
-              :entity="{ type: 'hunting_place', id: place.id, name: place.name }"
-              clickable
-              @activate="emit('open-hunting-place', place)"
-            />
+              class="taskboard-place-chip"
+            >
+              <EntityLinkPill
+                :entity="{ type: 'hunting_place', id: place.id, name: place.name }"
+                clickable
+                @activate="emit('open-hunting-place', place)"
+              />
+              <span class="status-badge access-badge" :class="`access-${accessTone(place)}`">{{ accessLabel(place) }}</span>
+            </span>
           </div>
 
           <div v-if="entry.guidance?.dropping_creatures?.length" class="entity-strip">
@@ -432,6 +448,30 @@ onMounted(loadEntries)
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.access-badge {
+  width: fit-content;
+  margin-top: 4px;
+}
+
+.taskboard-place-chip {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.access-available {
+  border-color: rgba(45, 212, 191, 0.45);
+}
+
+.access-blocked {
+  border-color: rgba(248, 113, 113, 0.55);
+}
+
+.access-unknown {
+  border-color: rgba(250, 204, 21, 0.45);
 }
 
 .guidance-grid {

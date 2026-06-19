@@ -31,7 +31,8 @@ Old migration plans and schema sketches should be removed once they stop describ
 - Phases 1-7 are completed and form the current baseline: shared intelligence, public reference enrichment, location matching repair, Loot Inbox, Taskboard, Bestiary, and hunting-place intelligence.
 - Phase 12 is completed for manual, provenance-labelled public Hunt Analyser imports.
 - Phase 8 is completed for a shippable market-weighted recommendation workflow with feedback capture.
-- Phases 9-11 and 13-14 remain future work.
+- Phase 9 is completed for manual access/unlock tracking across hunting places, recommendations, and taskboard guidance.
+- Phases 10-11 and 13-14 remain future work.
 
 ---
 
@@ -905,6 +906,8 @@ Allow user to:
 ---
 
 # Phase 9: Access And Unlock Tracking
+
+**Status: Completed.** Phase 9 adds manual, provenance-labelled hunting-place access requirements and access states, embeds access controls on hunting-place details, exposes access labels and quick actions in recommendations, and carries access summaries into taskboard hunting-place suggestions. It remains intentionally manual-first and does not attempt to import or model a full quest database.
 
 ## Goal
 

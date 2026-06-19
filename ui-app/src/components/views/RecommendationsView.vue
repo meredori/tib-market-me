@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ExternalLink, Play, RefreshCw, ThumbsDown, Bookmark, ShieldAlert, Ban, EyeOff } from '@lucide/vue'
+import { ExternalLink, Play, RefreshCw, ThumbsDown, Bookmark, ShieldAlert, Ban, EyeOff, CheckCircle2, HelpCircle, LockKeyhole } from '@lucide/vue'
 import ConfidenceBadge from '../common/ConfidenceBadge.vue'
 import DataTable from '../common/DataTable.vue'
 import FreshnessBadge from '../common/FreshnessBadge.vue'
@@ -51,6 +51,7 @@ const loading = ref(false)
 const error = ref('')
 const info = ref('')
 const feedbackBusy = ref('')
+const accessBusy = ref('')
 
 const summaryMetrics = computed(() => [
   { label: 'Returned', value: props.formatValue(summary.value.returned || recommendations.value.length || 0), tone: 'good' },
@@ -111,9 +112,15 @@ function signalLabels(item) {
   return [
     item.bestiary_relevance?.creatures?.length ? item.bestiary_relevance.label : '',
     item.taskboard_relevance?.entries?.length ? item.taskboard_relevance.label : '',
-    item.access_warning === 'unavailable' ? 'Access unavailable' : 'Access unknown',
+    item.access?.label || 'Access unknown',
     ...(item.missing_data || []).slice(0, 2),
   ].filter(Boolean)
+}
+
+function accessTone(item) {
+  if (item.access?.state === 'available' || item.access?.state === 'not_relevant') return 'available'
+  if (item.access?.state === 'unavailable') return 'blocked'
+  return 'unknown'
 }
 
 async function sendFeedback(item, action) {
@@ -139,6 +146,30 @@ async function sendFeedback(item, action) {
     info.value = `Feedback failed: ${err.message}`
   } finally {
     feedbackBusy.value = ''
+  }
+}
+
+async function saveAccessState(item, state) {
+  accessBusy.value = `${item.signature}:${state}`
+  info.value = ''
+  try {
+    const out = await api('/api/access/states', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entity_type: 'hunting_place',
+        entity_id: item.place.id,
+        state,
+        character_name: filters.character_name || null,
+      }),
+    })
+    if (!out.ok) throw new Error(out.error || 'Access update failed')
+    info.value = 'Access state saved.'
+    await loadRecommendations()
+  } catch (err) {
+    info.value = `Access update failed: ${err.message}`
+  } finally {
+    accessBusy.value = ''
   }
 }
 
@@ -213,7 +244,14 @@ onMounted(loadRecommendations)
               <span class="muted">{{ item.place.location || 'Unknown location' }} · {{ levelRange(item.place) }}</span>
               <p>{{ item.primary_reason }}</p>
               <div class="recommendation-tags">
-                <span v-for="label in signalLabels(item)" :key="label" class="status-badge">{{ label }}</span>
+                <span
+                  v-for="label in signalLabels(item)"
+                  :key="label"
+                  class="status-badge"
+                  :class="label === item.access?.label ? `access-${accessTone(item)}` : ''"
+                >
+                  {{ label }}
+                </span>
               </div>
             </div>
           </td>
@@ -256,6 +294,15 @@ onMounted(loadRecommendations)
               </button>
               <button class="icon-btn" :disabled="feedbackBusy === `${item.signature}:access_unavailable`" title="Access unavailable" @click="sendFeedback(item, 'access_unavailable')">
                 <Ban :size="15" />
+              </button>
+              <button class="icon-btn" :disabled="accessBusy === `${item.signature}:available`" title="Have access" @click="saveAccessState(item, 'available')">
+                <CheckCircle2 :size="15" />
+              </button>
+              <button class="icon-btn" :disabled="accessBusy === `${item.signature}:unavailable`" title="No access" @click="saveAccessState(item, 'unavailable')">
+                <LockKeyhole :size="15" />
+              </button>
+              <button class="icon-btn" :disabled="accessBusy === `${item.signature}:unknown`" title="Access unknown" @click="saveAccessState(item, 'unknown')">
+                <HelpCircle :size="15" />
               </button>
             </div>
           </td>
@@ -305,6 +352,18 @@ onMounted(loadRecommendations)
   gap: 6px;
   justify-content: flex-end;
   min-width: 132px;
+}
+
+.access-available {
+  border-color: rgba(45, 212, 191, 0.45);
+}
+
+.access-blocked {
+  border-color: rgba(248, 113, 113, 0.55);
+}
+
+.access-unknown {
+  border-color: rgba(250, 204, 21, 0.45);
 }
 
 .icon-label {

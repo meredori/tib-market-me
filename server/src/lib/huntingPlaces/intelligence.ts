@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { config } from "../../config";
+import { getAccessSummary, type AccessSummary } from "../access";
 import {
   confidence as buildConfidence,
   entityRef,
@@ -376,6 +377,7 @@ export type HuntingPlaceDetail = {
     warning_labels: string[];
     positive_labels: string[];
   };
+  access: AccessSummary;
   integrations: {
     bestiary: IntegrationSection;
     taskboard: IntegrationSection;
@@ -1600,6 +1602,7 @@ export function getHuntingPlaceDetail(db: Database.Database, publicHuntingPlaceI
       summary: publicSessionSummary
     },
     suitability: suitabilitySignals,
+    access: getAccessSummary(db, { entity_id: publicHuntingPlaceId }),
     integrations: {
       bestiary: bestiaryRelevance(db, publicHuntingPlaceId),
       taskboard: taskboardRelevance(db, publicHuntingPlaceId)

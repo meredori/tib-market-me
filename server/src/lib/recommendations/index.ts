@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { config } from "../../config";
+import { getAccessSummary } from "../access";
 import { confidence as buildConfidence, entityRef, explanation, freshness as buildFreshness, provenance } from "../intelligence/metadata";
 import type { InsightExplanation } from "../intelligence/types";
 import type {
@@ -443,6 +444,11 @@ export function listHuntRecommendations(db: Database.Database, rawQuery: Record<
     const xp = creatureXpValue(creatures);
     const personal = huntsByPlace.get(place.id);
     const feedback = feedbackPenalty(feedbackByPlace.get(place.id) ?? [], query.mode);
+    const access = getAccessSummary(db, {
+      entity_id: place.id,
+      character_name: query.character_name,
+      legacyUnavailable: feedback.blockedAccess
+    });
     const bestiaryResult = bestiaryMatch(creatures, bestiaryStates);
     const taskboardMatchResult = taskboardMatch(creatures, taskboard);
     const fit = levelFit(place, query.character_level);
@@ -488,10 +494,14 @@ export function listHuntRecommendations(db: Database.Database, rawQuery: Record<
       }));
     }
     for (const reason of feedback.reasons) {
+      if (reason.includes("access") && access.state === "unavailable") {
+        continue;
+      }
       explanations.push(explanation(reason, reason.includes("access") ? "blocked" : "warning", `Feedback says this place was ${reason}.`, {
         blocker: reason.includes("access")
       }));
     }
+    explanations.push(...access.warnings, ...access.blockers);
     if (bestiaryResult.names.length) {
       explanations.push(explanation("bestiary overlap", "positive", "This place contains creatures still relevant to your Bestiary checklist."));
     }
@@ -499,7 +509,7 @@ export function listHuntRecommendations(db: Database.Database, rawQuery: Record<
       explanations.push(explanation("taskboard overlap", "positive", "This place overlaps with active Taskboard entries."));
     }
 
-    const score = scoreForMode({
+    const baseScore = scoreForMode({
       mode: query.mode,
       place,
       levelFitScore: fit,
@@ -511,6 +521,9 @@ export function listHuntRecommendations(db: Database.Database, rawQuery: Record<
       risk,
       feedback: feedback.score
     });
+    const score = access.state === "unavailable"
+      ? Number(Math.max(0, baseScore - 0.7).toFixed(4))
+      : baseScore;
     const confidenceParts = [
       place.creature_count ? 0.2 : 0,
       loot.confidence !== null ? 0.25 * loot.confidence : 0,
@@ -577,7 +590,7 @@ export function listHuntRecommendations(db: Database.Database, rawQuery: Record<
       },
       known_risks: [place.risk_level ? `${place.risk_level} risk` : "Risk unknown"].concat(feedback.reasons.filter((item) => item.includes("risky"))),
       missing_data: Array.from(new Set(missingData)),
-      access_warning: feedback.blockedAccess ? "unavailable" : "unknown",
+      access,
       personal_history: {
         hunt_count: personal?.hunt_count ?? 0,
         last_hunted_at: personal?.last_hunted_at ?? null,

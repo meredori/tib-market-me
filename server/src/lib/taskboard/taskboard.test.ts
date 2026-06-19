@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { saveAccessState } from "../access";
 import { applyMigrations } from "../db/migrations";
 import {
   createTaskboardEntry,
@@ -188,6 +189,25 @@ describe("weekly taskboard helper", () => {
     ]);
     expect(created.guidance.known_hunting_places[0].personal_pace).toMatchObject({ kills_per_hour: 120 });
     expect(created.guidance.known_hunting_places[1]).toMatchObject({ floor_level: 150, difficulty_level: 300, personal_pace: null });
+    expect(created.guidance.known_hunting_places[0].access).toMatchObject({ state: "unknown", label: "Access unknown" });
+  });
+
+  it("surfaces access labels on taskboard hunting-place suggestions", () => {
+    insertCreature({ id: 10, name: "Dragon" });
+    insertPlaceForCreature({ creatureId: 10, creatureName: "Dragon", placeId: 20, placeName: "Dragon Lair" });
+    saveAccessState(db, {
+      entity_type: "hunting_place",
+      entity_id: 20,
+      state: "unavailable"
+    });
+
+    const created = createTaskboardEntry(db, {
+      entry_type: "creature",
+      name: "Dragon"
+    }).item as Record<string, any>;
+
+    expect(created.guidance.best_spawn.access).toMatchObject({ state: "unavailable", label: "Access unavailable" });
+    expect(created.guidance.known_hunting_places[0].access.blockers[0].label).toBe("access unavailable");
   });
 
   it("estimates buy-vs-farm for item entries from price and drop chance", () => {
@@ -212,7 +232,7 @@ describe("weekly taskboard helper", () => {
     expect(created.guidance.estimated_kills_needed).toBe(1000);
     expect(created.guidance.recommendation).toBe("Buy from market");
     expect(created.guidance.best_drop_creature).toMatchObject({ name: "Nomad", chance_percent: 2.5 });
-    expect(created.guidance.hunting_places[0]).toMatchObject({ name: "Nomad Cave" });
+    expect(created.guidance.hunting_places[0]).toMatchObject({ name: "Nomad Cave", access: expect.objectContaining({ state: "unknown" }) });
   });
 
   it("finds a rough farming break-even from personal profit per kill", () => {

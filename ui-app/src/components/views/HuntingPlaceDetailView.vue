@@ -2,12 +2,16 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   BookOpen,
+  CheckCircle2,
   ClipboardList,
   Crosshair,
   ExternalLink,
   GripVertical,
+  HelpCircle,
+  LockKeyhole,
   MapPin,
   PackageSearch,
+  Plus,
   RefreshCw,
   Search,
   ShieldAlert,
@@ -50,12 +54,23 @@ const areaOrderOriginal = ref([])
 const draggedAreaIndex = ref(null)
 const areaOrderBusy = ref(false)
 const areaOrderError = ref('')
+const activeAreaName = ref('')
+const accessBusy = ref(false)
+const accessError = ref('')
 const placeFilters = reactive({
   q: '',
   hasPersonalHunts: false,
   hasPublicHunts: false,
   currentLevel: '',
   sort: 'personal',
+})
+const accessForm = reactive({
+  notes: '',
+})
+const requirementForm = reactive({
+  requirement_type: 'quest',
+  label: '',
+  notes: '',
 })
 
 let placeSearchTimer = null
@@ -90,6 +105,18 @@ const placeColumns = [
   { key: 'public', label: 'Public' },
 ]
 
+const requirementTypes = [
+  { value: 'quest', label: 'Quest' },
+  { value: 'questline_stage', label: 'Questline stage' },
+  { value: 'key_item', label: 'Key/item' },
+  { value: 'premium', label: 'Premium' },
+  { value: 'level', label: 'Level' },
+  { value: 'team', label: 'Team' },
+  { value: 'boss_access', label: 'Boss access' },
+  { value: 'area_access', label: 'Area access' },
+  { value: 'manual_unknown', label: 'Unknown' },
+]
+
 const sortedExpectedLoot = computed(() => {
   return [...(props.detail?.reference?.expected_loot || [])].sort(compareLootValue)
 })
@@ -106,6 +133,21 @@ const sortedCreatures = computed(() => {
 
 const sortedAreaSummaries = computed(() => {
   return areaOrderDraft.value.length ? areaOrderDraft.value : [...(props.detail?.reference?.area_summaries || [])]
+})
+
+const activeArea = computed(() => {
+  if (!activeAreaName.value) return null
+  return sortedAreaSummaries.value.find((area) => area.area_name === activeAreaName.value) || null
+})
+
+const areaFilteredLoot = computed(() => {
+  return activeArea.value ? areaLootItems(activeArea.value) : sortedExpectedLoot.value
+})
+
+const areaFilteredCreatures = computed(() => {
+  if (!activeArea.value) return sortedCreatures.value
+  const creatureNames = new Set((activeArea.value.creatures || []).map(areaCreatureKey).filter(Boolean))
+  return sortedCreatures.value.filter((creature) => creatureNames.has(areaCreatureKey(creature)))
 })
 
 const placeSummaryItems = computed(() => {
@@ -144,6 +186,7 @@ const filteredPlaceRows = computed(() => {
 
 const visiblePlaceCards = computed(() => filteredPlaceRows.value.slice(0, visiblePlaceLimit.value))
 const hasMorePlaceCards = computed(() => visiblePlaceLimit.value < filteredPlaceRows.value.length)
+const accessRequirements = computed(() => props.detail?.access?.requirements || [])
 
 const areaOrderChanged = computed(() => {
   const current = areaOrderDraft.value.map((area) => area.area_name).join('\u001f')
@@ -165,6 +208,20 @@ function signedGp(value) {
   if (value === null || value === undefined) return 'n/a'
   const numeric = Math.round(Number(value) || 0)
   return `${numeric >= 0 ? '+' : ''}${props.formatValue(numeric)}`
+}
+
+function accessLabel(access) {
+  return access?.label || 'Access unknown'
+}
+
+function accessTone(access) {
+  if (access?.state === 'available' || access?.state === 'not_relevant') return 'available'
+  if (access?.state === 'unavailable') return 'blocked'
+  return 'unknown'
+}
+
+function requirementTypeLabel(value) {
+  return requirementTypes.find((item) => item.value === value)?.label || value || 'Requirement'
 }
 
 function dateLabel(value) {
@@ -239,6 +296,10 @@ function areaCreatureKey(creature) {
   return String(creature?.normalized_creature_name || creature?.name || '').toLowerCase()
 }
 
+function setActiveArea(areaName) {
+  activeAreaName.value = activeAreaName.value === areaName ? '' : areaName
+}
+
 function areaLootItems(area, limit = null) {
   const creatureNames = new Set((area?.creatures || []).map(areaCreatureKey).filter(Boolean))
   const items = sortedExpectedLoot.value.filter((item) => {
@@ -259,6 +320,9 @@ function syncAreaOrderDraft(areas) {
   const next = [...(areas || [])]
   areaOrderDraft.value = next
   areaOrderOriginal.value = next.map((area) => area.area_name)
+  if (activeAreaName.value && !next.some((area) => area.area_name === activeAreaName.value)) {
+    activeAreaName.value = ''
+  }
   draggedAreaIndex.value = null
   areaOrderError.value = ''
 }
@@ -308,6 +372,58 @@ async function saveAreaOrder() {
     areaOrderError.value = String(error?.message || error)
   } finally {
     areaOrderBusy.value = false
+  }
+}
+
+async function saveAccessState(state, requirement = null) {
+  if (!props.detail?.public_hunting_place_id) return
+  accessBusy.value = true
+  accessError.value = ''
+  try {
+    const out = await api('/api/access/states', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entity_type: 'hunting_place',
+        entity_id: props.detail.public_hunting_place_id,
+        requirement_id: requirement?.id || null,
+        state,
+        notes: requirement ? requirement.state?.notes || null : accessForm.notes || null,
+      }),
+    })
+    if (!out.ok) throw new Error(out.error || 'Access state failed')
+    emit('refresh')
+  } catch (error) {
+    accessError.value = String(error?.message || error)
+  } finally {
+    accessBusy.value = false
+  }
+}
+
+async function addAccessRequirement() {
+  if (!props.detail?.public_hunting_place_id || !requirementForm.label.trim()) return
+  accessBusy.value = true
+  accessError.value = ''
+  try {
+    const out = await api('/api/access/requirements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entity_type: 'hunting_place',
+        entity_id: props.detail.public_hunting_place_id,
+        requirement_type: requirementForm.requirement_type,
+        label: requirementForm.label,
+        notes: requirementForm.notes || null,
+      }),
+    })
+    if (!out.ok) throw new Error(out.error || 'Access requirement failed')
+    requirementForm.label = ''
+    requirementForm.notes = ''
+    emit('refresh')
+  } catch (error) {
+    accessError.value = String(error?.message || error)
+  } finally {
+    accessBusy.value = false
   }
 }
 
@@ -390,6 +506,10 @@ watch(() => [placeFilters.currentLevel, placeFilters.sort], () => {
   visiblePlaceLimit.value = 40
 })
 watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immediate: true })
+watch(() => props.detail?.public_hunting_place_id, () => {
+  accessForm.notes = ''
+  accessError.value = ''
+}, { immediate: true })
 </script>
 
 <template>
@@ -573,7 +693,7 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
       </article>
 
       <div class="dashboard-grid hunting-place-grid">
-        <article class="panel">
+        <article class="panel place-panel-your">
           <SectionHeader title="Your Results" :subtitle="`${detail.personal?.summary?.hunt_count || 0} linked hunts`" />
           <div class="metric-strip">
             <div>
@@ -628,7 +748,7 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
           </div>
         </article>
 
-        <article class="panel">
+        <article class="panel place-panel-public">
           <SectionHeader title="Public Observations" :subtitle="`${detail.public_sessions?.summary?.session_count || 0} accepted imports`">
             <ConfidenceBadge :confidence="detail.public_sessions?.summary?.confidence" />
           </SectionHeader>
@@ -679,13 +799,31 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
           </div>
         </article>
 
-        <article class="panel table-panel">
+        <article class="panel table-panel place-panel-area">
           <SectionHeader title="Area Breakdown" :subtitle="`${detail.reference?.area_summaries?.length || 0} areas`">
             <button class="ghost-action" :disabled="areaOrderBusy || !areaOrderChanged" @click="saveAreaOrder">
               <GripVertical :size="15" />
               Save Order
             </button>
           </SectionHeader>
+          <div v-if="sortedAreaSummaries.length" class="area-filter-strip">
+            <button
+              class="ghost-action"
+              :class="{ active: !activeAreaName }"
+              @click="activeAreaName = ''"
+            >
+              All areas
+            </button>
+            <button
+              v-for="area in sortedAreaSummaries"
+              :key="area.area_name"
+              class="ghost-action"
+              :class="{ active: activeAreaName === area.area_name }"
+              @click="setActiveArea(area.area_name)"
+            >
+              {{ area.area_name }}
+            </button>
+          </div>
           <p v-if="areaOrderError" class="error">{{ areaOrderError }}</p>
           <DataTable
             :columns="areaColumns"
@@ -711,7 +849,9 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
                   <div class="area-name-cell">
                     <GripVertical :size="15" class="drag-handle" />
                     <div>
-                      <strong>{{ area.area_name }}</strong>
+                      <button class="inline-link area-name-button" @click="setActiveArea(area.area_name)">
+                        {{ area.area_name }}
+                      </button>
                       <div class="muted compact-note">Order {{ index + 1 }} | {{ area.creature_count ?? area.creatures?.length ?? 0 }} creature(s)</div>
                     </div>
                   </div>
@@ -765,11 +905,14 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
           </DataTable>
         </article>
 
-        <article class="panel table-panel">
-          <SectionHeader title="Known Creatures" :subtitle="`${detail.reference?.creatures?.length || 0} creatures`" />
+        <article class="panel table-panel place-panel-creatures">
+          <SectionHeader
+            title="Known Creatures"
+            :subtitle="activeArea ? `${areaFilteredCreatures.length}/${detail.reference?.creatures?.length || 0} in ${activeArea.area_name}` : `${detail.reference?.creatures?.length || 0} creatures`"
+          />
           <DataTable
             :columns="creatureColumns"
-            :items="sortedCreatures"
+            :items="areaFilteredCreatures"
             :page-size="50"
             row-key="normalized_creature_name"
             min-width="760px"
@@ -815,13 +958,83 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
           </DataTable>
         </article>
 
-        <article class="panel table-panel">
-          <SectionHeader title="Expected Loot" :subtitle="`${detail.reference?.market_weighted_loot_value?.priced_item_count || 0}/${detail.reference?.market_weighted_loot_value?.total_item_count || 0} priced`">
+        <article class="panel access-panel place-panel-access">
+          <SectionHeader title="Access" :subtitle="accessLabel(detail.access)">
+            <span class="status-badge" :class="`access-${accessTone(detail.access)}`">
+              {{ detail.access?.state || 'unknown' }}
+            </span>
+          </SectionHeader>
+          <div class="access-actions">
+            <button class="ghost-action" :disabled="accessBusy" @click="saveAccessState('available')">
+              <CheckCircle2 :size="15" />
+              Have access
+            </button>
+            <button class="ghost-action" :disabled="accessBusy" @click="saveAccessState('unavailable')">
+              <LockKeyhole :size="15" />
+              No access
+            </button>
+            <button class="ghost-action" :disabled="accessBusy" @click="saveAccessState('unknown')">
+              <HelpCircle :size="15" />
+              Unknown
+            </button>
+          </div>
+          <label class="access-note">
+            Notes
+            <input v-model="accessForm.notes" placeholder="optional access note" @keydown.enter="saveAccessState(detail.access?.state || 'unknown')" />
+          </label>
+          <div class="requirement-form">
+            <label>
+              Type
+              <select v-model="requirementForm.requirement_type">
+                <option v-for="type in requirementTypes" :key="type.value" :value="type.value">{{ type.label }}</option>
+              </select>
+            </label>
+            <label>
+              Requirement
+              <input v-model="requirementForm.label" placeholder="quest, key, team, premium" @keydown.enter="addAccessRequirement" />
+            </label>
+            <label>
+              Notes
+              <input v-model="requirementForm.notes" placeholder="optional" @keydown.enter="addAccessRequirement" />
+            </label>
+            <button class="ghost-action" :disabled="accessBusy || !requirementForm.label.trim()" @click="addAccessRequirement">
+              <Plus :size="15" />
+              Add
+            </button>
+          </div>
+          <p v-if="accessError" class="error">{{ accessError }}</p>
+          <div v-if="accessRequirements.length" class="access-requirements">
+            <div v-for="requirement in accessRequirements" :key="requirement.id" class="access-requirement-row">
+              <div>
+                <strong>{{ requirement.label }}</strong>
+                <span class="muted">{{ requirementTypeLabel(requirement.requirement_type) }}</span>
+              </div>
+              <span class="status-badge" :class="`access-${accessTone(requirement.state)}`">
+                {{ requirement.state?.state || 'unknown' }}
+              </span>
+              <button class="icon-btn" title="Requirement available" :disabled="accessBusy" @click="saveAccessState('available', requirement)">
+                <CheckCircle2 :size="14" />
+              </button>
+              <button class="icon-btn" title="Requirement unavailable" :disabled="accessBusy" @click="saveAccessState('unavailable', requirement)">
+                <LockKeyhole :size="14" />
+              </button>
+              <button class="icon-btn" title="Requirement unknown" :disabled="accessBusy" @click="saveAccessState('unknown', requirement)">
+                <HelpCircle :size="14" />
+              </button>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel table-panel place-panel-loot">
+          <SectionHeader
+            title="Expected Loot"
+            :subtitle="activeArea ? `${areaFilteredLoot.length}/${detail.reference?.expected_loot?.length || 0} item(s) in ${activeArea.area_name}` : `${detail.reference?.market_weighted_loot_value?.priced_item_count || 0}/${detail.reference?.market_weighted_loot_value?.total_item_count || 0} priced`"
+          >
             <FreshnessBadge :freshness="detail.reference?.market_weighted_loot_value?.freshness" />
           </SectionHeader>
           <DataTable
             :columns="lootColumns"
-            :items="sortedExpectedLoot"
+            :items="areaFilteredLoot"
             :page-size="50"
             :row-key="(item) => item.item_id || item.normalized_item_name"
             min-width="640px"
@@ -847,7 +1060,7 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
           </DataTable>
         </article>
 
-        <article class="panel">
+        <article class="panel place-panel-reference">
           <SectionHeader title="Reference Facts" subtitle="public data only" />
           <div class="facts-grid">
             <div>
@@ -954,8 +1167,127 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
   font-size: 1.05rem;
 }
 
+.access-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 12px;
+  background: rgba(11, 22, 34, 0.48);
+}
+
+.access-head,
+.access-actions,
+.requirement-form,
+.access-requirement-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.access-head {
+  justify-content: space-between;
+}
+
+.access-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.access-note,
+.requirement-form label {
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.access-note input,
+.requirement-form input,
+.requirement-form select {
+  width: 100%;
+}
+
+.access-requirements {
+  display: grid;
+  gap: 8px;
+}
+
+.access-requirement-row {
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+}
+
+.access-requirement-row > div {
+  display: grid;
+  gap: 2px;
+  min-width: 160px;
+  margin-right: auto;
+}
+
+.access-available {
+  border-color: rgba(45, 212, 191, 0.45);
+}
+
+.access-blocked {
+  border-color: rgba(248, 113, 113, 0.55);
+}
+
+.access-unknown {
+  border-color: rgba(250, 204, 21, 0.45);
+}
+
 .hunting-place-grid {
   align-items: start;
+}
+
+.place-panel-area {
+  order: 1;
+}
+
+.place-panel-loot {
+  order: 2;
+}
+
+.place-panel-creatures {
+  order: 3;
+}
+
+.place-panel-public {
+  order: 4;
+}
+
+.place-panel-your {
+  order: 5;
+}
+
+.place-panel-access {
+  order: 6;
+}
+
+.place-panel-reference {
+  order: 7;
+}
+
+.area-filter-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.area-filter-strip .active {
+  border-color: rgba(45, 212, 191, 0.65);
+  color: var(--text);
+}
+
+.area-name-button {
+  padding: 0;
+  text-align: left;
+  font-weight: 750;
 }
 
 .places-toolbar {

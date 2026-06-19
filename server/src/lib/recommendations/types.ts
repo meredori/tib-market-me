@@ -1,4 +1,5 @@
 import type { Confidence, Freshness, InsightExplanation, Provenance } from "../intelligence/types";
+import type { AccessSummary } from "../access";
 
 export type RecommendationMode =
   | "profit"
@@ -67,7 +68,7 @@ export type HuntRecommendation = {
   };
   known_risks: string[];
   missing_data: string[];
-  access_warning: "unknown" | "unavailable";
+  access: AccessSummary;
   personal_history: {
     hunt_count: number;
     last_hunted_at: string | null;

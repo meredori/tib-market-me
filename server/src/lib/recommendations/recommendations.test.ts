@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { config } from "../../config";
 import { applyMigrations } from "../db/migrations";
+import { saveAccessState } from "../access";
 import { listHuntRecommendations, saveRecommendationFeedback } from "./index";
 import type { RecommendationMode } from "./types";
 
@@ -186,7 +187,33 @@ describe("hunt recommendations", () => {
 
     const after = listHuntRecommendations(db, { mode: "profit", character_level: 220 }) as Record<string, any>;
     const demon = after.items.find((item: Record<string, any>) => item.place.name === "Demon Forge");
-    expect(demon.access_warning).toBe("unavailable");
+    expect(demon.access.state).toBe("unavailable");
     expect(after.items[0].place.name).not.toBe("Demon Forge");
+  });
+
+  it("uses manual access tracking to penalize unavailable recommendations", () => {
+    seedBaseline();
+    saveAccessState(db, {
+      entity_type: "hunting_place",
+      entity_id: 30,
+      character_name: "Knight One",
+      state: "unavailable"
+    });
+
+    const result = listHuntRecommendations(db, { mode: "profit", character_level: 220, character_name: "Knight One" }) as Record<string, any>;
+    const demon = result.items.find((item: Record<string, any>) => item.place.name === "Demon Forge");
+    expect(demon.access.state).toBe("unavailable");
+    expect(demon.explanations.blockers.some((item: Record<string, any>) => item.label === "access unavailable")).toBe(true);
+    expect(result.items[0].place.name).not.toBe("Demon Forge");
+
+    saveAccessState(db, {
+      entity_type: "hunting_place",
+      entity_id: 30,
+      character_name: "Knight One",
+      state: "available"
+    });
+    const available = listHuntRecommendations(db, { mode: "profit", character_level: 220, character_name: "Knight One" }) as Record<string, any>;
+    const availableDemon = available.items.find((item: Record<string, any>) => item.place.name === "Demon Forge");
+    expect(availableDemon.access.state).toBe("available");
   });
 });
