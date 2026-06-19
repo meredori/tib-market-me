@@ -959,6 +959,125 @@ const profitPerHour = computed(() => totalDuration.value > 0 ? Math.round(totalP
 const xpPerHour = computed(() => totalDuration.value > 0 ? Math.round(totalXp.value / (totalDuration.value / 60)) : 0)
 const topLootRows = computed(() => hunts.globalLootRows.value.slice(0, 6))
 const favoriteItemIds = computed(() => new Set((marketDashboard.value.watchlist || []).map((item) => item.item_id || item.id)))
+
+function latestHuntDate(row) {
+  return String(row?.started_at || row?.uploaded_at || row?.ended_at || '')
+}
+
+const latestCharacterLevel = computed(() => {
+  const row = hunts.huntRows.value.find((entry) => entry.character_level !== null && entry.character_level !== undefined)
+  return row?.character_level ?? null
+})
+
+const lootDecisionSummary = computed(() => {
+  const summary = lootInbox.value?.summary || {}
+  const buckets = summary.buckets || {}
+  return {
+    itemCount: Number(summary.item_count || lootInbox.value?.items?.length || 0),
+    estimatedValue: Number(summary.total_estimated_value || 0),
+    sellNow: Number(buckets.sell_now || 0),
+    vendor: Number(buckets.npc_vendor || 0),
+    review: Number(buckets.review_price || 0) + Number(buckets.unknown_price || 0),
+    holdWatch: Number(buckets.hold || 0) + Number(buckets.watch || 0),
+  }
+})
+
+const huntDecisionRows = computed(() => {
+  const xpSorted = [...hunts.huntingAreas.value]
+    .sort((a, b) => Number(b.average_xp_per_hour || 0) - Number(a.average_xp_per_hour || 0))
+  const gpSorted = [...hunts.huntingAreas.value]
+    .sort((a, b) => Number(b.average_gp_per_hour || 0) - Number(a.average_gp_per_hour || 0))
+  const xpRanks = new Map(xpSorted.map((area, index) => [area.location_name, index + 1]))
+  const gpRanks = new Map(gpSorted.map((area, index) => [area.location_name, index + 1]))
+
+  return hunts.huntingAreas.value.map((area) => {
+    const areaHunts = hunts.huntRows.value
+      .filter((row) => row.location_name === area.location_name)
+      .sort((a, b) => latestHuntDate(b).localeCompare(latestHuntDate(a)))
+    const latest = areaHunts[0] || null
+    const huntCount = Number(area.hunt_count || areaHunts.length || 0)
+    const xpRank = xpRanks.get(area.location_name) || null
+    const gpRank = gpRanks.get(area.location_name) || null
+    const xpRate = Number(area.average_xp_per_hour || 0)
+    const gpRate = Number(area.average_gp_per_hour || 0)
+    const confidence = huntCount >= 3 ? 'high' : huntCount >= 2 ? 'medium' : 'low'
+    const repeatLabel = gpRank === 1
+      ? 'Best profit'
+      : xpRank === 1
+        ? 'Best XP'
+        : huntCount >= 3
+          ? 'Known route'
+          : 'More samples'
+
+    return {
+      id: latest?.hunting_place_match?.selected_hunting_place_id || latest?.public_hunting_place_id || area.public_hunting_place_id || area.location_name,
+      locationName: area.location_name || 'Unassigned',
+      levelRange: latest?.character_level ? `last level ${latest.character_level}` : 'Level unknown',
+      huntCount,
+      averageXpPerHour: xpRate,
+      averageGpPerHour: gpRate,
+      bestXpPerHour: Number(area.best_xp_per_hour || xpRate || 0),
+      bestGpPerHour: Number(area.best_gp_per_hour || gpRate || 0),
+      lastHunted: latestHuntDate(latest),
+      latestHunt: latest,
+      placeId: latest?.hunting_place_match?.selected_hunting_place_id || area.public_hunting_place_id || null,
+      xpRank,
+      gpRank,
+      confidence,
+      repeatLabel,
+      score: (gpRate * 1.4) + xpRate + (huntCount * 5000),
+    }
+  })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+})
+
+const decisionHighlights = computed(() => {
+  const rows = huntDecisionRows.value
+  const byXp = [...rows].sort((a, b) => b.averageXpPerHour - a.averageXpPerHour)[0] || null
+  const byGp = [...rows].sort((a, b) => b.averageGpPerHour - a.averageGpPerHour)[0] || null
+  const balanced = rows[0] || null
+  const loot = lootDecisionSummary.value
+  return [
+    {
+      key: 'xp',
+      label: 'Best hunt for XP',
+      title: byXp?.locationName || 'No hunt data',
+      value: byXp ? `${formatValue(byXp.averageXpPerHour)} XP/H` : 'Save a hunt',
+      detail: byXp ? `${byXp.huntCount} hunt(s) | ${byXp.confidence} confidence` : 'Import hunts to compare routes.',
+      tone: 'xp',
+      row: byXp,
+    },
+    {
+      key: 'profit',
+      label: 'Best hunt for profit',
+      title: byGp?.locationName || 'No profit data',
+      value: byGp ? `${formatValue(byGp.averageGpPerHour)} GP/H` : 'Save a hunt',
+      detail: byGp ? `${byGp.huntCount} hunt(s) | ${byGp.confidence} confidence` : 'Profit leaders appear after saved hunts.',
+      tone: 'positive',
+      row: byGp,
+    },
+    {
+      key: 'balanced',
+      label: 'Best balanced repeat',
+      title: balanced?.locationName || 'No repeat yet',
+      value: balanced ? `${formatValue(balanced.averageGpPerHour)} GP/H` : 'No route',
+      detail: balanced ? `${formatValue(balanced.averageXpPerHour)} XP/H | ${balanced.repeatLabel}` : 'Needs saved hunts with locations.',
+      tone: 'blue',
+      row: balanced,
+    },
+    {
+      key: 'loot',
+      label: 'Loot to handle',
+      title: `${formatValue(loot.itemCount)} inbox items`,
+      value: `${formatValue(loot.estimatedValue)} gp`,
+      detail: `${formatValue(loot.sellNow)} sell | ${formatValue(loot.vendor)} vendor | ${formatValue(loot.review)} review`,
+      tone: loot.review > 0 ? 'loot' : 'teal',
+      row: null,
+    },
+  ]
+})
+
 function trendPoints(rows, key) {
   const values = rows.map((row) => Number(row[key] || 0))
   const min = Math.min(...values)
@@ -1058,6 +1177,10 @@ onBeforeUnmount(() => {
         v-if="activeSection === 'dashboard'"
         :recent-hunts="recentHunts"
         :hunting-areas="hunts.huntingAreas.value"
+        :hunt-decision-rows="huntDecisionRows"
+        :decision-highlights="decisionHighlights"
+        :loot-decision-summary="lootDecisionSummary"
+        :latest-character-level="latestCharacterLevel"
         :top-loot-rows="topLootRows"
         :total-profit="totalProfit"
         :profit-per-hour="profitPerHour"
@@ -1071,6 +1194,7 @@ onBeforeUnmount(() => {
         :format-signed="formatSigned"
         :item-image-path="itemImagePath"
         @open-history="openHuntHistory"
+        @open-hunting-place="openHuntingPlace"
         @open-hunt="openPreviousHunt"
         @open-item="openItemDetails"
         @open-loot-inbox="openLootInbox"

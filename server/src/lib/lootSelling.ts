@@ -65,6 +65,9 @@ type MarketLootRow = {
   trend_score: number;
   liquidity: number;
   confidence: number;
+  month_average_sell: number;
+  month_highest_sell: number;
+  day_highest_sell: number;
   month_sold: number;
   day_sold: number;
   sell_offers: number;
@@ -90,6 +93,7 @@ type LootInboxItem = {
   total_estimated_value: number;
   current_market_value: number;
   max_list_price: number;
+  fair_sale_price: number;
   min_list_price: number;
   historical_reference_price: number | null;
   low_band: number | null;
@@ -224,6 +228,9 @@ function marketRowForItem(db: Database.Database, runId: number, itemId: number):
         mip.trend_score,
         mip.liquidity,
         mip.confidence,
+        mif.month_average_sell,
+        mif.month_highest_sell,
+        mif.day_highest_sell,
         mif.month_sold,
         mif.day_sold,
         mif.sell_offers,
@@ -569,6 +576,7 @@ function toInboxItem(db: Database.Database, run: LatestRun | null, runFreshness:
     total_estimated_value: totalEstimatedValue,
     current_market_value: Math.max(0, Math.round(row?.client_value ?? lookup?.client_value ?? 0)),
     max_list_price: Math.round(lootLogic?.max_list_price ?? -1),
+    fair_sale_price: unitValue,
     min_list_price: Math.round(lootLogic?.min_list_price ?? -1),
     historical_reference_price: row?.historical_reference_price ?? null,
     low_band: low,

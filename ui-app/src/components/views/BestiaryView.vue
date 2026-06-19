@@ -135,6 +135,7 @@ onMounted(loadBestiary)
       <DataTable
         :columns="checklistColumns"
         :items="bestiary.groups?.checklist || []"
+        :page-size="80"
         row-key="normalized_creature_name"
         min-width="760px"
         empty-title="Checklist clear"
@@ -184,6 +185,7 @@ onMounted(loadBestiary)
         class="completed-table"
         :columns="completedColumns"
         :items="bestiary.groups?.completed || []"
+        :page-size="50"
         row-key="normalized_creature_name"
         min-width="760px"
         empty-title="No completed creatures"

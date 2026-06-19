@@ -51,6 +51,7 @@ const navEntries = computed(() => {
 })
 
 const activeGroup = computed(() => props.sections.find((section) => section.id === props.activeSection)?.group || null)
+const activeSectionLabel = computed(() => props.sections.find((section) => section.id === props.activeSection)?.label || 'Dashboard')
 
 watch(activeGroup, (group) => {
   if (group && Object.prototype.hasOwnProperty.call(openGroups, group)) {
@@ -60,6 +61,18 @@ watch(activeGroup, (group) => {
 
 function toggleGroup(groupId) {
   openGroups[groupId] = !openGroups[groupId]
+}
+
+function compactDate(value) {
+  if (!value) return 'not loaded'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }
 </script>
 
@@ -74,6 +87,10 @@ function toggleGroup(groupId) {
     </div>
 
     <nav class="nav-stack" aria-label="Primary">
+      <div class="mobile-active-section">
+        <span>Current</span>
+        <strong>{{ activeSectionLabel }}</strong>
+      </div>
       <template v-for="entry in navEntries" :key="entry.type === 'group' ? entry.id : entry.section.id">
         <AppNavItem
           v-if="entry.type === 'section'"
@@ -114,7 +131,7 @@ function toggleGroup(groupId) {
       <span class="status-dot"></span>
       <div>
         <strong>Data Update</strong>
-        <span>{{ status.world_data?.last_update || 'not loaded' }}</span>
+        <span :title="status.world_data?.last_update || ''">{{ compactDate(status.world_data?.last_update) }}</span>
       </div>
     </div>
   </aside>

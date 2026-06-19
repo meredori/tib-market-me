@@ -31,6 +31,7 @@ function insertItem(runId: number, item: {
   id: number;
   name: string;
   value: number;
+  suggested?: number;
   reference?: number;
   sourceRuns?: number;
   confidence?: number;
@@ -66,7 +67,7 @@ function insertItem(runId: number, item: {
     runId,
     item.id,
     item.value,
-    item.value,
+    item.suggested ?? item.value,
     item.value,
     item.liquidity ?? 0.7,
     item.confidence ?? 0.85,
@@ -130,7 +131,7 @@ afterEach(() => {
 describe("loot selling inbox", () => {
   it("classifies recently looted items into sell and hold actions", () => {
     const runId = insertRun(2);
-    insertItem(runId, { id: 100, name: "Hot Fang", value: 150, reference: 100, sourceRuns: 10 });
+    insertItem(runId, { id: 100, name: "Hot Fang", value: 150, suggested: 210, reference: 100, sourceRuns: 10 });
     insertItem(runId, { id: 101, name: "Cold Gem", value: 60, reference: 120, sourceRuns: 10 });
     insertHunt("Loot Hunt", [
       { name: "Hot Fang", quantity: 5 },
@@ -141,6 +142,8 @@ describe("loot selling inbox", () => {
     const items = inbox.items as Array<Record<string, unknown>>;
 
     expect((inbox.summary as Record<string, unknown>).total_estimated_value).toBe(990);
+    expect(items.find((item) => item.name === "Hot Fang")?.fair_sale_price).toBe(150);
+    expect(items.find((item) => item.name === "Hot Fang")?.max_list_price).toBe(210);
     expect(items.find((item) => item.name === "Hot Fang")?.action).toBe("sell_now");
     expect(items.find((item) => item.name === "Hot Fang")?.reason_labels).toContain("above historical band");
     expect(items.find((item) => item.name === "Cold Gem")?.action).toBe("hold");

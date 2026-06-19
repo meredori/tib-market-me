@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue'
 import {
   AlertTriangle,
   Star,
@@ -36,7 +37,7 @@ const lootColumns = [
   { key: 'signal', label: 'Signal' },
 ]
 
-defineProps({
+const props = defineProps({
   marketDashboard: { type: Object, default: () => ({}) },
   marketDashboardBusy: { type: Boolean, default: false },
   watchlistBusy: { type: Boolean, default: false },
@@ -46,6 +47,56 @@ defineProps({
   favoriteItemIds: { type: Object, default: () => new Set() },
   formatValue: { type: Function, required: true },
   itemImagePath: { type: Function, required: true },
+})
+
+const hasSecondarySignals = computed(() => {
+  const dashboard = props.marketDashboard || {}
+  return Boolean(
+    dashboard.watchlist?.length
+      || dashboard.notableMovers?.length
+      || dashboard.quietItems?.length
+  )
+})
+
+const signalSummary = computed(() => {
+  const dashboard = props.marketDashboard || {}
+  return [
+    { label: 'Watchlist', value: dashboard.watchlist?.length || 0 },
+    { label: 'Movers', value: dashboard.notableMovers?.length || 0 },
+    { label: 'Quiet', value: dashboard.quietItems?.length || 0 },
+    { label: 'Priced items', value: props.formatValue(dashboard.freshness?.priced_item_count) },
+  ]
+})
+
+const snapshotDecision = computed(() => {
+  const freshness = props.marketDashboard?.freshness || {}
+  const age = Number(freshness.age_hours)
+  if (!Number.isFinite(age)) {
+    return {
+      label: 'Refresh data',
+      detail: 'No snapshot age',
+      className: 'freshness-missing',
+    }
+  }
+  if (age <= 48) {
+    return {
+      label: 'Prices usable',
+      detail: `${freshness.server || 'world'} | ${age.toFixed(1)}h old`,
+      className: 'freshness-fresh',
+    }
+  }
+  if (age <= 168) {
+    return {
+      label: 'Review prices',
+      detail: `${freshness.server || 'world'} | ${age.toFixed(1)}h old`,
+      className: 'freshness-aging',
+    }
+  }
+  return {
+    label: 'Refresh data',
+    detail: `${freshness.server || 'world'} | ${age.toFixed(1)}h old`,
+    className: 'freshness-stale',
+  }
 })
 
 defineEmits([
@@ -71,10 +122,12 @@ defineEmits([
             @input="$emit('update:searchQuery', $event.target.value); $emit('search-input')"
           />
         </label>
+        <div class="market-snapshot-decision">
+          <span class="status-badge" :class="snapshotDecision.className">{{ snapshotDecision.label }}</span>
+          <span>{{ snapshotDecision.detail }}</span>
+        </div>
         <div class="inline-status market-inline-status">
           <FreshnessBadge :freshness="marketDashboard.freshness" />
-          <span>{{ marketDashboard.freshness?.server || 'n/a' }}</span>
-          <span>{{ marketDashboard.freshness?.age_hours ?? 'n/a' }}h old</span>
         </div>
         <button class="ghost-action" :disabled="marketDashboardBusy" @click="$emit('refresh-market-dashboard')">
           Refresh view
@@ -174,7 +227,25 @@ defineEmits([
       </article>
     </div>
 
-    <div class="dashboard-grid market-secondary-grid">
+    <article v-if="!hasSecondarySignals" class="panel market-empty-signals-panel">
+      <SectionHeader title="Market Signals" subtitle="watchlist, movers, quiet items, and snapshot health" />
+      <div class="ui-fact-grid">
+        <div v-for="item in signalSummary" :key="item.label" class="ui-fact">
+          <span class="muted">{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </div>
+      </div>
+      <p class="muted snapshot-copy">
+        No watchlist, notable mover, or quiet-market rows in this local snapshot. Favorite items or sync more history to expand these signals.
+      </p>
+      <div class="inline-status">
+        <FreshnessBadge :freshness="marketDashboard.freshness" />
+        <span>{{ marketDashboard.freshness?.server || 'n/a' }}</span>
+        <span>{{ marketDashboard.freshness?.age_hours ?? 'n/a' }}h old</span>
+      </div>
+    </article>
+
+    <div v-else class="dashboard-grid market-secondary-grid">
       <article class="panel table-panel">
         <SectionHeader title="Favorites Watchlist" :subtitle="`${marketDashboard.watchlist?.length || 0} items`" />
         <div class="market-card-list">

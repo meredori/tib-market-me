@@ -43,8 +43,8 @@ const listingColumns = [
   { key: 'qty', label: 'Qty' },
   { key: 'min', label: 'Min' },
   { key: 'max', label: 'Max' },
+  { key: 'fair', label: 'Fair' },
   { key: 'total', label: 'Total' },
-  { key: 'band', label: 'Band / NPC' },
   { key: 'quality', label: 'Quality' },
   { key: 'reasons', label: 'Reasons' },
   { key: 'actions', label: '', class: 'action-col' },
@@ -66,6 +66,14 @@ function summarizeHunts(item) {
 
 function huntTitle(item) {
   return (item?.hunts || []).map((hunt) => `${hunt.label} (${hunt.quantity})`).join('\n')
+}
+
+function fairSalePrice(item) {
+  return item?.fair_sale_price ?? item?.unit_value
+}
+
+function fairTotal(item) {
+  return Math.max(0, Number(fairSalePrice(item)) || 0) * Math.max(0, Number(item?.quantity) || 0)
 }
 </script>
 
@@ -95,10 +103,19 @@ function huntTitle(item) {
         </button>
         <span v-if="lootInboxInfo" class="muted">{{ lootInboxInfo }}</span>
       </div>
+      <div class="metric-strip loot-metric-strip compact-metric-strip loot-work-queue">
+        <MetricCard label="Inbox Items" :value="formatValue(lootInbox.summary?.item_count)" tone="blue" />
+        <MetricCard label="Estimated Value" :value="formatValue(lootInbox.summary?.total_estimated_value)" tone="positive" />
+        <MetricCard label="Sell Now" :value="formatValue(bucketValue(lootInbox.summary, 'sell_now'))" tone="positive" />
+        <MetricCard label="NPC/vendor" :value="formatValue(bucketValue(lootInbox.summary, 'npc_vendor'))" tone="teal" />
+        <MetricCard label="Review" :value="formatValue(bucketValue(lootInbox.summary, 'review_price') + bucketValue(lootInbox.summary, 'unknown_price'))" tone="loot" />
+        <MetricCard label="Hold/Watch" :value="formatValue(bucketValue(lootInbox.summary, 'hold') + bucketValue(lootInbox.summary, 'watch'))" />
+      </div>
       <DataTable
         class="loot-inbox-table"
         :columns="listingColumns"
         :items="lootInbox.items || []"
+        :page-size="50"
         row-key="normalized_name"
         min-width="1120px"
         empty-title="No loot in the inbox"
@@ -135,14 +152,8 @@ function huntTitle(item) {
               <td>{{ formatValue(item.quantity) }}</td>
               <td>{{ formatValue(item.min_list_price) }}</td>
               <td>{{ formatValue(item.max_list_price) }}</td>
-              <td>{{ formatValue(item.total_estimated_value) }}</td>
-              <td>
-                <span class="muted">Band</span>
-                {{ formatValue(item.low_band) }} - {{ formatValue(item.high_band) }}
-                <br />
-                <span class="muted">NPC</span>
-                {{ formatValue(item.npc_value) }}
-              </td>
+              <td>{{ formatValue(fairSalePrice(item)) }}</td>
+              <td>{{ formatValue(fairTotal(item)) }}</td>
               <td>
                 <ConfidenceBadge :confidence="item.confidence_detail" />
                 <small>{{ item.market?.month_sold ?? 'n/a' }} sold/mo</small>
@@ -163,14 +174,5 @@ function huntTitle(item) {
         </template>
       </DataTable>
     </article>
-
-    <div class="metric-strip loot-metric-strip compact-metric-strip">
-      <MetricCard label="Inbox Items" :value="formatValue(lootInbox.summary?.item_count)" tone="blue" />
-      <MetricCard label="Estimated Value" :value="formatValue(lootInbox.summary?.total_estimated_value)" tone="positive" />
-      <MetricCard label="Sell Now" :value="formatValue(bucketValue(lootInbox.summary, 'sell_now'))" tone="positive" />
-      <MetricCard label="NPC/vendor" :value="formatValue(bucketValue(lootInbox.summary, 'npc_vendor'))" tone="teal" />
-      <MetricCard label="Review" :value="formatValue(bucketValue(lootInbox.summary, 'review_price') + bucketValue(lootInbox.summary, 'unknown_price'))" tone="loot" />
-      <MetricCard label="Hold/Watch" :value="formatValue(bucketValue(lootInbox.summary, 'hold') + bucketValue(lootInbox.summary, 'watch'))" />
-    </div>
   </section>
 </template>

@@ -1425,4 +1425,5 @@ When an AI coding agent works this roadmap phase by phase:
 7. Use ranges, labels, and explanations for uncertain recommendations.
 8. Preserve manual corrections and overrides.
 9. Keep UI workflows practical and decision-focused.
-10. Each phase should leave the app in a shippable state.
+10. For CSS, layout, modal, table, or screen-order work, use `docs/AGENT_UI_INSPECTION.md` to inspect the local UI with Playwright MCP, the Codex Browser plugin, or another available browser tool.
+11. Each phase should leave the app in a shippable state.

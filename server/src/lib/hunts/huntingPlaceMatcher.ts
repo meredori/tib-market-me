@@ -243,7 +243,9 @@ function scorePlace(
   const missing = huntMonsters.filter((monster) => !placeCreatures.has(monster.normalized_name));
   const overlapWeight = matched.reduce((sum, monster) => sum + monster.weight, 0);
   const matchedRatio = huntMonsters.length ? matched.length / huntMonsters.length : 0;
-  const monsterScore = Math.min(1, overlapWeight * 0.72 + matchedRatio * 0.28);
+  const monsterScore = missing.length === 0 && matched.length > 0
+    ? 1
+    : Math.min(1, overlapWeight * 0.72 + matchedRatio * 0.28);
 
   const areaNames = parseJsonArray(row.area_names_json);
   const names = [row.name, row.location ?? "", ...areaNames].filter(Boolean);

@@ -8,6 +8,7 @@ The app runs as a Vue frontend, Fastify backend, and local SQLite database. Mark
 
 - `tibia_huntops_roadmap.md` is the product roadmap, current phase tracker, definition of done, and agent guidance.
 - `docs/UI_STYLE_GUIDE.md` is the frontend UI rulebook for shared layout, tables, badges, metrics, and screen priority.
+- `docs/AGENT_UI_INSPECTION.md` explains how agents can inspect the local UI with Playwright MCP or another browser tool.
 - This README is the practical setup and workflow reference.
 
 Keep documentation sparse. Update one of these files when a durable rule, workflow, or product direction changes; avoid adding new planning docs unless the existing anchors cannot hold the information cleanly.
@@ -48,6 +49,9 @@ This repository does not track the copied Tibia client asset dump.
 # Run frontend and backend together
 npm run dev
 
+# Run frontend and backend on stable local inspection hosts
+npm run dev:inspect
+
 # Build backend and frontend
 npm --prefix server run build
 npm --prefix ui-app run build
@@ -77,6 +81,14 @@ Run frontend + backend together:
 ```bash
 npm run dev
 ```
+
+Agent/browser-inspection workflow:
+
+```bash
+npm run dev:inspect
+```
+
+Then point Playwright MCP or another browser tool at `http://127.0.0.1:5173`. See `docs/AGENT_UI_INSPECTION.md` for MCP config and visual QA expectations.
 
 Manual backend only:
 

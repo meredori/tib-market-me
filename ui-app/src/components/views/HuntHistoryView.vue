@@ -61,6 +61,68 @@ function linkedHuntingPlaceId(row) {
 
 <template>
   <section class="history-grid">
+    <div class="history-leaders">
+      <article class="panel leader-card">
+        <div class="panel-title">Best XP/H Hunt</div>
+        <button
+          v-for="(row, index) in topXpHunts"
+          :key="`xp-hunt-${row.id}`"
+          class="leader-row"
+          @click="$emit('open-hunt', row)"
+        >
+          <span>{{ index + 1 }}. {{ row.label || `Hunt ${row.id}` }}</span>
+          <strong>{{ formatValue(row.xp_per_hour) }}</strong>
+          <small>{{ row.location_name || 'Unassigned' }}</small>
+        </button>
+        <p v-if="!topXpHunts.length" class="muted">No hunts yet.</p>
+      </article>
+
+      <article class="panel leader-card">
+        <div class="panel-title">Best GP/H Hunt</div>
+        <button
+          v-for="(row, index) in topGpHunts"
+          :key="`gp-hunt-${row.id}`"
+          class="leader-row"
+          @click="$emit('open-hunt', row)"
+        >
+          <span>{{ index + 1 }}. {{ row.label || `Hunt ${row.id}` }}</span>
+          <strong>{{ formatValue(row.gold_per_hour) }}</strong>
+          <small>{{ row.location_name || 'Unassigned' }}</small>
+        </button>
+        <p v-if="!topGpHunts.length" class="muted">No hunts yet.</p>
+      </article>
+
+      <article class="panel leader-card">
+        <div class="panel-title">Best XP/H Location</div>
+        <button
+          v-for="(area, index) in topXpAreas"
+          :key="`xp-area-${area.location_name}`"
+          class="leader-row"
+          @click="$emit('open-history', area.location_name)"
+        >
+          <span>{{ index + 1 }}. {{ area.location_name }}</span>
+          <strong>{{ formatValue(area.average_xp_per_hour) }}</strong>
+          <small>{{ area.hunt_count }} hunt(s) average</small>
+        </button>
+        <p v-if="!topXpAreas.length" class="muted">No areas yet.</p>
+      </article>
+
+      <article class="panel leader-card">
+        <div class="panel-title">Best GP/H Location</div>
+        <button
+          v-for="(area, index) in topGpAreas"
+          :key="`gp-area-${area.location_name}`"
+          class="leader-row"
+          @click="$emit('open-history', area.location_name)"
+        >
+          <span>{{ index + 1 }}. {{ area.location_name }}</span>
+          <strong>{{ formatValue(area.average_gp_per_hour) }}</strong>
+          <small>{{ area.hunt_count }} hunt(s) average</small>
+        </button>
+        <p v-if="!topGpAreas.length" class="muted">No areas yet.</p>
+      </article>
+    </div>
+
     <article class="panel table-panel">
       <SectionHeader
         title="Hunt History"
@@ -101,6 +163,7 @@ function linkedHuntingPlaceId(row) {
       <DataTable
         :columns="huntHistoryColumns"
         :items="filteredHuntRows"
+        :page-size="50"
         row-key="id"
         min-width="860px"
         empty-title="No hunts match"
@@ -169,66 +232,5 @@ function linkedHuntingPlaceId(row) {
       <p v-if="!hunts.huntingAreas.value.length" class="muted">No saved hunts with locations yet.</p>
     </aside>
 
-    <div class="history-leaders">
-      <article class="panel leader-card">
-        <div class="panel-title">Best XP/H Hunt</div>
-        <button
-          v-for="(row, index) in topXpHunts"
-          :key="`xp-hunt-${row.id}`"
-          class="leader-row"
-          @click="$emit('open-hunt', row)"
-        >
-          <span>{{ index + 1 }}. {{ row.label || `Hunt ${row.id}` }}</span>
-          <strong>{{ formatValue(row.xp_per_hour) }}</strong>
-          <small>{{ row.location_name || 'Unassigned' }}</small>
-        </button>
-        <p v-if="!topXpHunts.length" class="muted">No hunts yet.</p>
-      </article>
-
-      <article class="panel leader-card">
-        <div class="panel-title">Best GP/H Hunt</div>
-        <button
-          v-for="(row, index) in topGpHunts"
-          :key="`gp-hunt-${row.id}`"
-          class="leader-row"
-          @click="$emit('open-hunt', row)"
-        >
-          <span>{{ index + 1 }}. {{ row.label || `Hunt ${row.id}` }}</span>
-          <strong>{{ formatValue(row.gold_per_hour) }}</strong>
-          <small>{{ row.location_name || 'Unassigned' }}</small>
-        </button>
-        <p v-if="!topGpHunts.length" class="muted">No hunts yet.</p>
-      </article>
-
-      <article class="panel leader-card">
-        <div class="panel-title">Best XP/H Location</div>
-        <button
-          v-for="(area, index) in topXpAreas"
-          :key="`xp-area-${area.location_name}`"
-          class="leader-row"
-          @click="$emit('open-history', area.location_name)"
-        >
-          <span>{{ index + 1 }}. {{ area.location_name }}</span>
-          <strong>{{ formatValue(area.average_xp_per_hour) }}</strong>
-          <small>{{ area.hunt_count }} hunt(s) average</small>
-        </button>
-        <p v-if="!topXpAreas.length" class="muted">No areas yet.</p>
-      </article>
-
-      <article class="panel leader-card">
-        <div class="panel-title">Best GP/H Location</div>
-        <button
-          v-for="(area, index) in topGpAreas"
-          :key="`gp-area-${area.location_name}`"
-          class="leader-row"
-          @click="$emit('open-history', area.location_name)"
-        >
-          <span>{{ index + 1 }}. {{ area.location_name }}</span>
-          <strong>{{ formatValue(area.average_gp_per_hour) }}</strong>
-          <small>{{ area.hunt_count }} hunt(s) average</small>
-        </button>
-        <p v-if="!topGpAreas.length" class="muted">No areas yet.</p>
-      </article>
-    </div>
   </section>
 </template>

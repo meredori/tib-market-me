@@ -29,6 +29,7 @@ This guide is the source of truth for shared UI conventions in the Vue app. New 
 - Use `MetricGrid` for groups of stat cards. Each metric item should have `label`, `value`, and optional `tone`.
 - Use `CompactMetricRow` for label/value facts in status panels where cards would be too heavy.
 - Tones should stay semantic: `positive`, `danger`, `blue`, `teal`, `loot`, and `xp`.
+- Use decision strips only when each card answers an action question, such as best XP hunt, best profit hunt, repeat route, or loot work queue. Put the table or workflow that supports those decisions directly below the strip.
 
 ## Tables
 
@@ -37,6 +38,7 @@ This guide is the source of truth for shared UI conventions in the Vue app. New 
 - Keep table headings short and uppercase through the global table style.
 - Put entity names in the first column and numeric/action columns to the right. Use `action-col` for icon-only command columns.
 - Set `minWidth` only when the table genuinely needs horizontal scrolling.
+- For long local collections, use `DataTable` pagination with a screen-appropriate `pageSize` rather than rendering hundreds of rows at once. Use lazy "show more" cards for mobile-only card lists.
 
 ## Labels And Empty States
 

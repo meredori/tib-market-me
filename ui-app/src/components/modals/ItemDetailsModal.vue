@@ -39,23 +39,12 @@ const lootRelevance = computed(() => {
 const itemDetail = computed(() => props.item?.item_detail || {})
 const maxListPrice = computed(() => firstPositive(
   props.item?.loot_logic?.max_list_price,
-  props.item?.month_highest_sell,
-  props.item?.history?.max_sell_offer,
-  props.item?.month_average_sell,
-  props.item?.suggested_list_price,
-  props.item?.client_value,
 ))
 const fairSalePrice = computed(() => firstPositive(
   props.item?.loot_logic?.fair_sale_price,
-  props.item?.fair_price,
-  props.item?.client_value,
-  props.item?.month_average_sell,
 ))
 const minPrice = computed(() => firstPositive(
   props.item?.loot_logic?.min_list_price,
-  props.item?.final_adjusted_price,
-  props.item?.fair_price,
-  props.item?.npc_buy,
 ))
 const primaryValueLabel = computed(() => {
   if (usesNpcValue.value) {

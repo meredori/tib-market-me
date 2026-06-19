@@ -41,7 +41,13 @@ export function coerceOverrideMode(value: unknown): ItemValueOverrideMode {
 export function buildLootLogicPreview(row: Record<string, unknown>): LootLogicPreview {
   const suggestedListPrice = asInt(row.suggested_list_price, -1);
   const fairPrice = asInt(row.fair_price, -1);
-  const maxListEvidence = firstPositive(row.month_highest_sell, row.day_highest_sell, suggestedListPrice);
+  const maxListEvidence = firstPositive(
+    row.month_highest_sell,
+    row.day_highest_sell,
+    suggestedListPrice,
+    row.month_average_sell,
+    row.sell_offer
+  );
   const marketSellOffer = asInt(row.sell_offer, -1);
   const trend = asText(row.trend) || "unknown";
   const liquidity = typeof row.liquidity === "number" ? row.liquidity : 0;
@@ -51,7 +57,7 @@ export function buildLootLogicPreview(row: Record<string, unknown>): LootLogicPr
   const npcBuy = asInt(row.npc_buy, 0);
   const marketFairSalePrice = firstPositive(fairPrice, row.client_value, suggestedListPrice);
   const fairSalePrice = withNpcSaleFloor(marketFairSalePrice, npcBuy);
-  const maxListPrice = firstPositive(Math.max(maxListEvidence, fairSalePrice), fairSalePrice);
+  const maxListPrice = maxListEvidence > 0 ? withNpcSaleFloor(maxListEvidence, npcBuy) : -1;
   const minListPrice = fairSalePrice > 0
     ? withNpcSaleFloor(Math.max(1, Math.floor(fairSalePrice * 0.9)), npcBuy)
     : (npcBuy > 0 ? npcBuy : -1);
@@ -121,7 +127,13 @@ function applyLootLogicOverride(
     return { ...base, override_mode: "auto" };
   }
 
-  const listPrice = firstPositive(row.month_highest_sell, row.day_highest_sell, row.suggested_list_price);
+  const listPrice = firstPositive(
+    row.month_highest_sell,
+    row.day_highest_sell,
+    row.suggested_list_price,
+    row.month_average_sell,
+    row.sell_offer
+  );
   const fairPrice = firstPositive(row.fair_price, row.client_value, row.suggested_list_price);
   const npcBuy = asInt(row.npc_buy, 0);
   const marketSellOffer = asInt(row.sell_offer, -1);
@@ -161,7 +173,7 @@ function applyLootLogicOverride(
   }
 
   const marketValue = withNpcSaleFloor(fairPrice, npcBuy);
-  const maxMarketValue = firstPositive(Math.max(listPrice, marketValue), marketValue);
+  const maxMarketValue = listPrice > 0 ? withNpcSaleFloor(listPrice, npcBuy) : -1;
   const minMarketValue = marketValue > 0 ? withNpcSaleFloor(Math.max(1, Math.floor(marketValue * 0.9)), npcBuy) : -1;
   return {
     ...base,

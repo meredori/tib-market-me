@@ -5,6 +5,12 @@ server/dist/
 .env
 .env.*
 *.log
+.codex/
+payload.json
+schema.json
+*screenshot*.png
+playwright-report/
+test-results/
 *.db
 *.sqlite
 *.sqlite3

@@ -187,6 +187,19 @@ function pct(value) {
   return Number.isFinite(numeric) && numeric > 0 ? `${Math.round(numeric * 100)}%` : ''
 }
 
+function compactDate(value) {
+  if (!value) return 'n/a'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
 function publicHuntBestMatch(item) {
   if (item.matched_hunting_place?.name) {
     return {
@@ -219,7 +232,7 @@ function aliasExamples(alias) {
     </div>
 
     <div class="settings-grid">
-      <article v-if="activeSettingsTab === 'general'" class="panel">
+      <article v-if="activeSettingsTab === 'general'" class="panel settings-action-panel">
         <h2>Generate itemprices.json</h2>
         <p class="muted">Create a Tibia item price file from latest market data using a selectable valuation mode.</p>
         <label>
@@ -235,7 +248,7 @@ function aliasExamples(alias) {
         </div>
       </article>
 
-      <article v-if="activeSettingsTab === 'general'" class="panel">
+      <article v-if="activeSettingsTab === 'general'" class="panel settings-status-panel">
         <h2>Run Status</h2>
         <div class="button-row mt-10">
           <button :disabled="isRefreshing" @click="$emit('refresh')">Refresh From Server</button>
@@ -246,10 +259,24 @@ function aliasExamples(alias) {
             <span class="pill">Server {{ status.server }}</span>
             <span class="pill">Items {{ status.item_count }}</span>
           </div>
-          <div class="muted"><strong>Local run started:</strong> <span class="mono">{{ status.local_run?.started_at || 'n/a' }}</span></div>
-          <div class="muted"><strong>Local run finished:</strong> <span class="mono">{{ status.local_run?.finished_at || 'n/a' }}</span></div>
-          <div class="muted"><strong>World last update:</strong> <span class="mono">{{ status.world_data?.last_update || 'n/a' }}</span></div>
-          <div class="muted"><strong>World queried at:</strong> <span class="mono">{{ status.world_data?.queried_at || 'n/a' }}</span></div>
+          <div class="settings-status-list">
+            <div>
+              <span class="muted">Local run started</span>
+              <strong class="mono" :title="status.local_run?.started_at || ''">{{ compactDate(status.local_run?.started_at) }}</strong>
+            </div>
+            <div>
+              <span class="muted">Local run finished</span>
+              <strong class="mono" :title="status.local_run?.finished_at || ''">{{ compactDate(status.local_run?.finished_at) }}</strong>
+            </div>
+            <div>
+              <span class="muted">World last update</span>
+              <strong class="mono" :title="status.world_data?.last_update || ''">{{ compactDate(status.world_data?.last_update) }}</strong>
+            </div>
+            <div>
+              <span class="muted">World queried at</span>
+              <strong class="mono" :title="status.world_data?.queried_at || ''">{{ compactDate(status.world_data?.queried_at) }}</strong>
+            </div>
+          </div>
         </template>
         <template v-else>
           <div class="muted mt-10">Loading status...</div>
@@ -489,6 +516,7 @@ function aliasExamples(alias) {
           class="mt-10"
           :columns="publicHuntColumns"
           :items="publicHuntReviewItems"
+          :page-size="50"
           row-key="id"
           empty-title="No public hunts need review"
           empty-reason="Accepted, ignored, or already-matched public hunts stay out of this queue."
@@ -545,6 +573,7 @@ function aliasExamples(alias) {
           class="mt-10"
           :columns="publicHuntAliasColumns"
           :items="publicHuntTitleAliases"
+          :page-size="50"
           row-key="phrase"
           empty-title="No known title aliases"
           empty-reason="Accepted public hunt matches will populate this list."
@@ -577,6 +606,7 @@ function aliasExamples(alias) {
         <DataTable
           :columns="logImportColumns"
           :items="hunts.huntImportCandidates.value"
+          :page-size="50"
           row-key="import_key"
           empty-title="No pending log imports"
           empty-reason="Scan logs to review pending imports."

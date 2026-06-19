@@ -99,6 +99,18 @@ function placePace(place) {
   return Number.isFinite(pace) && pace > 0 ? `${compactNumber(pace)} kills/h` : '-'
 }
 
+function cleanReferenceText(value) {
+  return String(value || '')
+    .replace(/\[https?:\/\/[^\s\]]+\s+([^\]]+)\]/gi, '$1')
+    .replace(/\{\{\s*Mapper Coords\|[^}]*\}\}/gi, '')
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[,\s]+$/g, '')
+    .trim()
+}
+
 function entryIcon(entry) {
   return entry.entry_type === 'item' ? PackageSearch : Swords
 }
@@ -242,6 +254,7 @@ onMounted(loadEntries)
             <DataTable
               :columns="placeColumns"
               :items="entry.guidance?.known_hunting_places || []"
+              :page-size="25"
               row-key="id"
               min-width="680px"
               empty-title="No hunting places matched"
@@ -257,7 +270,7 @@ onMounted(loadEntries)
                     <InlineLink class="place-name" @click="emit('open-hunting-place', place)">
                       {{ place.name }}
                     </InlineLink>
-                    <small>{{ place.location || place.occurrence || 'Reference details only' }}</small>
+                    <small>{{ cleanReferenceText(place.location || place.occurrence) || 'Reference details only' }}</small>
                   </td>
                   <td>{{ floorLevel(place) }}</td>
                   <td>{{ levelRange(place) }}</td>

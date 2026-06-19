@@ -6,6 +6,7 @@ import {
   Crosshair,
   ExternalLink,
   GripVertical,
+  MapPin,
   PackageSearch,
   RefreshCw,
   Search,
@@ -43,6 +44,7 @@ const emit = defineEmits([
 const placesBusy = ref(false)
 const placesError = ref('')
 const places = ref({ items: [], summary: {} })
+const visiblePlaceLimit = ref(40)
 const areaOrderDraft = ref([])
 const areaOrderOriginal = ref([])
 const draggedAreaIndex = ref(null)
@@ -52,6 +54,8 @@ const placeFilters = reactive({
   q: '',
   hasPersonalHunts: false,
   hasPublicHunts: false,
+  currentLevel: '',
+  sort: 'personal',
 })
 
 let placeSearchTimer = null
@@ -103,6 +107,43 @@ const sortedCreatures = computed(() => {
 const sortedAreaSummaries = computed(() => {
   return areaOrderDraft.value.length ? areaOrderDraft.value : [...(props.detail?.reference?.area_summaries || [])]
 })
+
+const placeSummaryItems = computed(() => {
+  const summary = places.value?.summary || {}
+  return [
+    { label: 'Visible spots', value: filteredPlaceRows.value.length || summary.total || places.value?.items?.length || 0 },
+    { label: 'With levels', value: summary.with_level_range || 0 },
+    { label: 'With loot', value: summary.with_expected_loot || 0 },
+    { label: 'Personal', value: summary.with_personal_hunts || 0 },
+    { label: 'Public', value: summary.with_public_hunts || 0 },
+  ]
+})
+
+const filteredPlaceRows = computed(() => {
+  const level = Number(placeFilters.currentLevel)
+  const hasLevel = Number.isFinite(level) && level > 0
+  const rows = (places.value?.items || []).filter((place) => {
+    if (!hasLevel) return true
+    const minLevel = Number(place?.min_level || 0)
+    const maxLevel = Number(place?.max_level || 0)
+    return minLevel <= level && (!maxLevel || maxLevel >= level)
+  })
+  return [...rows].sort((a, b) => {
+    if (placeFilters.sort === 'level') {
+      return numericValue(a?.min_level, 9999) - numericValue(b?.min_level, 9999)
+    }
+    if (placeFilters.sort === 'public') {
+      return numericValue(b?.public_hunt_count) - numericValue(a?.public_hunt_count)
+    }
+    if (placeFilters.sort === 'loot') {
+      return numericValue(b?.expected_loot_count) - numericValue(a?.expected_loot_count)
+    }
+    return numericValue(b?.personal_hunt_count) - numericValue(a?.personal_hunt_count)
+  })
+})
+
+const visiblePlaceCards = computed(() => filteredPlaceRows.value.slice(0, visiblePlaceLimit.value))
+const hasMorePlaceCards = computed(() => visiblePlaceLimit.value < filteredPlaceRows.value.length)
 
 const areaOrderChanged = computed(() => {
   const current = areaOrderDraft.value.map((area) => area.area_name).join('\u001f')
@@ -272,6 +313,7 @@ async function saveAreaOrder() {
 
 function cleanText(value) {
   return String(value || '')
+    .replace(/\[https?:\/\/[^\s\]]+\s+([^\]]+)\]/gi, '$1')
     .replace(/\{\{\s*Mapper Coords\|[^}]*\}\}/gi, '')
     .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
     .replace(/\[\[([^\]]+)\]\]/g, '$1')
@@ -279,6 +321,14 @@ function cleanText(value) {
     .replace(/\s{2,}/g, ' ')
     .replace(/[,\s]+$/g, '')
     .trim()
+}
+
+function placeCoverageClass(place) {
+  return {
+    'has-personal-coverage': Number(place?.personal_hunt_count || 0) > 0,
+    'has-public-coverage': Number(place?.public_hunt_count || 0) > 0,
+    'has-loot-coverage': Number(place?.expected_loot_count || 0) >= 80,
+  }
 }
 
 function queryString() {
@@ -295,11 +345,16 @@ async function loadPlaces() {
   placesError.value = ''
   try {
     places.value = await api(`/api/hunting-places?${queryString()}`)
+    visiblePlaceLimit.value = 40
   } catch (error) {
     placesError.value = String(error?.message || error)
   } finally {
     placesBusy.value = false
   }
+}
+
+function showMorePlaces() {
+  visiblePlaceLimit.value = Math.min(visiblePlaceLimit.value + 40, filteredPlaceRows.value.length)
 }
 
 function onPlaceSearchInput() {
@@ -331,6 +386,9 @@ function creatureLootValue(creature) {
 onMounted(loadPlaces)
 
 watch(() => [placeFilters.hasPersonalHunts, placeFilters.hasPublicHunts], loadPlaces)
+watch(() => [placeFilters.currentLevel, placeFilters.sort], () => {
+  visiblePlaceLimit.value = 40
+})
 watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immediate: true })
 </script>
 
@@ -369,14 +427,81 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
           <input v-model="placeFilters.hasPublicHunts" type="checkbox" />
           Has public hunts
         </label>
+        <label class="compact-field">
+          Your level
+          <input v-model="placeFilters.currentLevel" inputmode="numeric" placeholder="optional" />
+        </label>
+        <label class="compact-field">
+          Sort
+          <select v-model="placeFilters.sort">
+            <option value="personal">Personal hunts</option>
+            <option value="public">Public hunts</option>
+            <option value="level">Level fit</option>
+            <option value="loot">Loot coverage</option>
+          </select>
+        </label>
       </Toolbar>
 
+      <div class="places-summary-strip">
+        <div v-for="item in placeSummaryItems" :key="item.label" class="ui-fact">
+          <span class="muted">{{ item.label }}</span>
+          <strong>{{ formatValue(item.value) }}</strong>
+        </div>
+      </div>
+
       <p v-if="placesError" class="error">{{ placesError }}</p>
+
+      <div class="places-card-list">
+        <button
+          v-for="place in visiblePlaceCards"
+          :key="place.public_hunting_place_id"
+          class="ui-list-card place-card"
+          :class="placeCoverageClass(place)"
+          @click="$emit('open-hunting-place', place.public_hunting_place_id)"
+        >
+          <div class="ui-list-head">
+            <MapPin :size="17" />
+            <div>
+              <strong>{{ place.name }}</strong>
+              <span class="muted">{{ cleanText(place.location) || 'location n/a' }}</span>
+            </div>
+            <span class="status-badge">{{ levelRange(place) }}</span>
+          </div>
+          <div class="ui-fact-grid">
+            <div class="ui-fact">
+              <span class="muted">Risk</span>
+              <strong>{{ place.risk_level || '-' }}</strong>
+            </div>
+            <div class="ui-fact">
+              <span class="muted">Creatures</span>
+              <strong>{{ formatValue(place.creature_count) }}</strong>
+            </div>
+            <div class="ui-fact">
+              <span class="muted">Loot</span>
+              <strong>{{ formatValue(place.expected_loot_count) }}</strong>
+            </div>
+            <div class="ui-fact">
+              <span class="muted">Hunts</span>
+              <strong>{{ formatValue(place.personal_hunt_count) }} / {{ formatValue(place.public_hunt_count) }}</strong>
+            </div>
+          </div>
+        </button>
+        <button
+          v-if="hasMorePlaceCards"
+          class="ghost-action place-card-more"
+          :disabled="placesBusy"
+          @click="showMorePlaces"
+        >
+          Show 40 more
+          <span class="muted">{{ visiblePlaceLimit }} / {{ filteredPlaceRows.length }}</span>
+        </button>
+      </div>
 
       <DataTable
         class="places-table"
         :columns="placeColumns"
-        :items="places.items || []"
+        :items="filteredPlaceRows"
+        :page-size="75"
         row-key="public_hunting_place_id"
         min-width="820px"
         :loading="placesBusy"
@@ -384,7 +509,11 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
         empty-reason="Adjust the search or personal/public hunt filters."
       >
         <template #row="{ items }">
-            <tr v-for="place in items" :key="place.public_hunting_place_id">
+            <tr
+              v-for="place in items"
+              :key="place.public_hunting_place_id"
+              :class="placeCoverageClass(place)"
+            >
               <td>
                 <button class="inline-link place-name-link" @click="$emit('open-hunting-place', place.public_hunting_place_id)">
                   {{ place.name }}
@@ -400,13 +529,6 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
             </tr>
         </template>
       </DataTable>
-
-      <div class="status-row mt-10">
-        <span class="status-badge">{{ places.summary?.with_level_range || 0 }} with level range</span>
-        <span class="status-badge">{{ places.summary?.with_expected_loot || 0 }} with loot</span>
-        <span class="status-badge">{{ places.summary?.with_personal_hunts || 0 }} with personal hunts</span>
-        <span class="status-badge">{{ places.summary?.with_public_hunts || 0 }} with public hunts</span>
-      </div>
     </article>
 
     <template v-else>
@@ -648,6 +770,7 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
           <DataTable
             :columns="creatureColumns"
             :items="sortedCreatures"
+            :page-size="50"
             row-key="normalized_creature_name"
             min-width="760px"
             empty-title="No creatures enriched"
@@ -699,6 +822,7 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
           <DataTable
             :columns="lootColumns"
             :items="sortedExpectedLoot"
+            :page-size="50"
             :row-key="(item) => item.item_id || item.normalized_item_name"
             min-width="640px"
             empty-title="No expected loot"
@@ -840,6 +964,46 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
   gap: 10px;
   align-items: center;
   margin-top: 12px;
+}
+
+.places-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.places-card-list {
+  display: none;
+  gap: 10px;
+}
+
+.place-card {
+  width: 100%;
+  color: var(--text);
+  text-align: left;
+}
+
+.place-card .ui-list-head span {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.place-card-more {
+  justify-self: stretch;
+}
+
+:deep(.places-table tr.has-personal-coverage td:first-child),
+:deep(.places-table tr.has-public-coverage td:first-child),
+.place-card.has-personal-coverage,
+.place-card.has-public-coverage {
+  border-left: 3px solid rgba(45, 212, 191, 0.78);
+}
+
+:deep(.places-table tr.has-loot-coverage td:nth-child(5)) {
+  color: #7fd19c;
+  font-weight: 750;
 }
 
 .search-field {
@@ -988,6 +1152,24 @@ watch(() => props.detail?.reference?.area_summaries, syncAreaOrderDraft, { immed
 
 @media (max-width: 820px) {
   .places-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .places-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .places-card-list {
+    display: grid;
+  }
+
+  .places-table {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .places-summary-strip {
     grid-template-columns: 1fr;
   }
 }
