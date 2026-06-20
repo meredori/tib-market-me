@@ -32,7 +32,7 @@ Old migration plans and schema sketches should be removed once they stop describ
 - Phase 12 is completed for manual, provenance-labelled public Hunt Analyser imports.
 - Phase 8 is completed for a shippable market-weighted recommendation workflow with feedback capture.
 - Phase 9 is completed for manual access/unlock tracking across hunting places, recommendations, and taskboard guidance.
-- Phases 10-11 and 13-14 remain future work.
+- Phases 13-14 remain future work.
 
 ---
 
@@ -1055,6 +1055,8 @@ Design data structures so later Wheel of Destiny, spell, and equipment data can 
 ---
 
 # Phase 11: Advanced Market Operations
+
+**Status: Completed.** Phase 11 adds configurable snapshot-based watch rules, triggered market alerts, manual trade logging, realized-sale comparison, stronger liquidity/spread quality labels, and a denser Market review workflow. Existing favorites remain the base watchlist, while watch rules add explicit item-specific conditions. Trade-log outcomes are provenance-labelled manual records and do not overwrite local market data or item value overrides.
 
 ## Goal
 

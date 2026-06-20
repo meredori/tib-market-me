@@ -3,9 +3,16 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { applyMigrations } from "./db/migrations";
 import {
   addMarketWatchlistItem,
+  createMarketTradeLogEntry,
+  createMarketWatchRule,
+  deleteMarketTradeLogEntry,
   getMarketDashboardSummary,
+  listMarketTradeLog,
+  listMarketWatchRules,
   getMarketWatchlist,
-  removeMarketWatchlistItem
+  removeMarketWatchlistItem,
+  updateMarketTradeLogEntry,
+  updateMarketWatchRule
 } from "./marketDashboard";
 
 let db: Database.Database;
@@ -153,6 +160,50 @@ describe("market dashboard summary", () => {
     expect(getMarketWatchlist(db).items).toHaveLength(0);
   });
 
+  it("persists watch rules and reports triggered snapshot alerts", () => {
+    const runId = insertRun(24 * 16);
+    insertItem(runId, {
+      id: 350,
+      name: "Rule Loot",
+      clientValue: 60,
+      reference: 100,
+      divergence: -40,
+      sourceRuns: 8,
+      monthSold: 2,
+      confidence: 0.3
+    });
+
+    const below = createMarketWatchRule(db, {
+      item_id: 350,
+      rule_type: "price_below",
+      threshold_value: 75,
+      note: "Buy when cheap"
+    }).rule;
+    createMarketWatchRule(db, { item_id: 350, rule_type: "outside_historical_band" });
+    createMarketWatchRule(db, { item_id: 350, rule_type: "low_volume", threshold_value: 3 });
+    createMarketWatchRule(db, { item_id: 350, rule_type: "significant_move", threshold_value: 25 });
+    createMarketWatchRule(db, { item_id: 350, rule_type: "stale_data", threshold_value: 24 });
+
+    updateMarketWatchRule(db, Number(below.id), { enabled: false });
+    const rules = listMarketWatchRules(db);
+
+    expect(rules.rules).toHaveLength(5);
+    expect(rules.alerts.map((alert) => alert.rule_type)).toEqual(expect.arrayContaining([
+      "outside_historical_band",
+      "low_volume",
+      "significant_move",
+      "stale_data"
+    ]));
+    expect(rules.alerts.map((alert) => alert.rule_type)).not.toContain("price_below");
+
+    const summary = getMarketDashboardSummary(db);
+    expect((summary.watchAlerts as Array<Record<string, unknown>>).map((alert) => alert.label)).toContain("Low recent volume");
+    expect((summary.watchRules as Array<Record<string, unknown>>)[0].item).toMatchObject({
+      name: "Rule Loot",
+      quality_labels: expect.arrayContaining(["thin volume", "low confidence"])
+    });
+  });
+
   it("ranks looted items by stored hunt loot and latest snapshot value", () => {
     const runId = insertRun(2);
     insertItem(runId, { id: 400, name: "Valuable Fang", clientValue: 1000, reference: 900, divergence: 11, sourceRuns: 5 });
@@ -178,5 +229,45 @@ describe("market dashboard summary", () => {
     expect(hotLooted[0].name).toBe("Valuable Fang");
     expect(hotLooted[0].looted_value).toBe(2000);
     expect(hotLooted[0].reason_labels).toContain("high looted value");
+  });
+
+  it("stores trade log entries and calculates realized profit without mutating market or override data", () => {
+    const runId = insertRun(2);
+    insertItem(runId, { id: 500, name: "Sold Loot", clientValue: 100, reference: 95, divergence: 5, sourceRuns: 6 });
+    db.prepare("INSERT INTO item_value_overrides (item_id, override_mode, updated_at) VALUES (?, ?, ?)").run(500, "npc", isoHoursAgo(1));
+
+    const created = createMarketTradeLogEntry(db, {
+      item_id: 500,
+      item_name: "Sold Loot",
+      quantity: 3,
+      listed_price: 120,
+      sold_price: 110,
+      listed_at: isoHoursAgo(5),
+      sold_at: isoHoursAgo(1),
+      notes: "Sold from depot"
+    }).item;
+
+    expect(created).toMatchObject({
+      item_name: "Sold Loot",
+      listed_total: 360,
+      sold_total: 330,
+      snapshot_total: 300,
+      realized_vs_listed: -30,
+      realized_vs_snapshot: 30,
+      status: "sold"
+    });
+
+    updateMarketTradeLogEntry(db, Number(created.id), { sold_price: 130 });
+    const log = listMarketTradeLog(db);
+    expect(log.summary).toMatchObject({
+      sold_count: 1,
+      sold_total: 390,
+      realized_vs_snapshot: 90
+    });
+    expect(db.prepare("SELECT client_value FROM market_item_prices WHERE item_id = ?").get(500)).toMatchObject({ client_value: 100 });
+    expect(db.prepare("SELECT override_mode FROM item_value_overrides WHERE item_id = ?").get(500)).toMatchObject({ override_mode: "npc" });
+
+    expect(deleteMarketTradeLogEntry(db, Number(created.id)).deleted_id).toBe(Number(created.id));
+    expect(listMarketTradeLog(db).items).toHaveLength(0);
   });
 });

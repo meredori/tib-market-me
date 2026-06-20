@@ -94,6 +94,10 @@ const showAdvancedItemDetails = ref(false)
 const marketDashboard = ref({
   freshness: {},
   watchlist: [],
+  watchRules: [],
+  watchAlerts: [],
+  tradeLog: [],
+  realizedProfit: {},
   historicallyCheap: [],
   notableMovers: [],
   hotLootedItems: [],
@@ -255,6 +259,10 @@ async function loadMarketDashboard() {
     marketDashboard.value = {
       freshness: out.freshness || {},
       watchlist: out.watchlist || [],
+      watchRules: out.watchRules || [],
+      watchAlerts: out.watchAlerts || [],
+      tradeLog: out.tradeLog || [],
+      realizedProfit: out.realizedProfit || {},
       historicallyCheap: out.historicallyCheap || [],
       notableMovers: out.notableMovers || [],
       hotLootedItems: out.hotLootedItems || [],
@@ -470,6 +478,84 @@ async function toggleFavoriteItem(item) {
     }
   } finally {
     watchlistBusy.value = false
+  }
+}
+
+async function saveMarketWatchRule(payload) {
+  marketDashboardBusy.value = true
+  try {
+    const id = Number(payload?.id)
+    await api(id > 0 ? `/api/market-watch-rules/${id}` : '/api/market-watch-rules', {
+      method: id > 0 ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    })
+    await loadMarketDashboard()
+  } catch (error) {
+    marketDashboard.value = {
+      ...marketDashboard.value,
+      warnings: [`Watch rule update failed: ${error.message}`],
+    }
+  } finally {
+    marketDashboardBusy.value = false
+  }
+}
+
+async function deleteMarketWatchRule(rule) {
+  const id = Number(rule?.id)
+  if (!Number.isFinite(id) || id <= 0) {
+    return
+  }
+  marketDashboardBusy.value = true
+  try {
+    await api(`/api/market-watch-rules/${Math.trunc(id)}`, { method: 'DELETE' })
+    await loadMarketDashboard()
+  } catch (error) {
+    marketDashboard.value = {
+      ...marketDashboard.value,
+      warnings: [`Watch rule delete failed: ${error.message}`],
+    }
+  } finally {
+    marketDashboardBusy.value = false
+  }
+}
+
+async function saveMarketTradeLog(payload) {
+  marketDashboardBusy.value = true
+  try {
+    const id = Number(payload?.id)
+    await api(id > 0 ? `/api/market-trade-log/${id}` : '/api/market-trade-log', {
+      method: id > 0 ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    })
+    await loadMarketDashboard()
+  } catch (error) {
+    marketDashboard.value = {
+      ...marketDashboard.value,
+      warnings: [`Trade log update failed: ${error.message}`],
+    }
+  } finally {
+    marketDashboardBusy.value = false
+  }
+}
+
+async function deleteMarketTradeLog(entry) {
+  const id = Number(entry?.id)
+  if (!Number.isFinite(id) || id <= 0) {
+    return
+  }
+  marketDashboardBusy.value = true
+  try {
+    await api(`/api/market-trade-log/${Math.trunc(id)}`, { method: 'DELETE' })
+    await loadMarketDashboard()
+  } catch (error) {
+    marketDashboard.value = {
+      ...marketDashboard.value,
+      warnings: [`Trade log delete failed: ${error.message}`],
+    }
+  } finally {
+    marketDashboardBusy.value = false
   }
 }
 
@@ -1232,6 +1318,10 @@ onBeforeUnmount(() => {
         @open-loot-inbox="openLootInbox"
         @toggle-favorite="toggleFavoriteItem"
         @refresh-market-dashboard="loadMarketDashboard"
+        @save-watch-rule="saveMarketWatchRule"
+        @delete-watch-rule="deleteMarketWatchRule"
+        @save-trade-log="saveMarketTradeLog"
+        @delete-trade-log="deleteMarketTradeLog"
       />
 
       <LootInboxView

@@ -44,9 +44,17 @@ import { getKnownCharacter, lookupTibiaCharacter, searchKnownCharacters, updateC
 import { getPublicReferenceStatus, queuePublicReferenceMissingCreatureLoot, resetPublicReferenceData, startPublicReferenceEnrichment, syncPublicReferenceData } from "./lib/tibiadata/publicReference";
 import {
   addMarketWatchlistItem,
+  createMarketTradeLogEntry,
+  createMarketWatchRule,
+  deleteMarketTradeLogEntry,
+  deleteMarketWatchRule,
   getMarketDashboardSummary,
+  listMarketTradeLog,
+  listMarketWatchRules,
   getMarketWatchlist,
-  removeMarketWatchlistItem
+  removeMarketWatchlistItem,
+  updateMarketTradeLogEntry,
+  updateMarketWatchRule
 } from "./lib/marketDashboard";
 import { getLootInbox, markLootInboxItemState } from "./lib/lootSelling";
 import { registerBestiaryRoutes } from "./lib/bestiary/routes";
@@ -111,6 +119,68 @@ export function buildServer(db: Database.Database) {
   });
 
   app.get("/api/market-watchlist", async () => getMarketWatchlist(db));
+
+  app.get("/api/market-watch-rules", async () => listMarketWatchRules(db));
+
+  app.post("/api/market-watch-rules", async (request, reply) => {
+    try {
+      return createMarketWatchRule(db, objectBody(request.body));
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.put("/api/market-watch-rules/:id", async (request, reply) => {
+    try {
+      const id = parsePositiveId((request.params as Record<string, string>).id, "watch rule id");
+      return updateMarketWatchRule(db, id, objectBody(request.body));
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.delete("/api/market-watch-rules/:id", async (request, reply) => {
+    try {
+      const id = parsePositiveId((request.params as Record<string, string>).id, "watch rule id");
+      return deleteMarketWatchRule(db, id);
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.get("/api/market-trade-log", async () => listMarketTradeLog(db));
+
+  app.post("/api/market-trade-log", async (request, reply) => {
+    try {
+      return createMarketTradeLogEntry(db, objectBody(request.body));
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.put("/api/market-trade-log/:id", async (request, reply) => {
+    try {
+      const id = parsePositiveId((request.params as Record<string, string>).id, "trade log id");
+      return updateMarketTradeLogEntry(db, id, objectBody(request.body));
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.delete("/api/market-trade-log/:id", async (request, reply) => {
+    try {
+      const id = parsePositiveId((request.params as Record<string, string>).id, "trade log id");
+      return deleteMarketTradeLogEntry(db, id);
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
 
   app.post("/api/market-watchlist/:itemId", async (request, reply) => {
     try {
