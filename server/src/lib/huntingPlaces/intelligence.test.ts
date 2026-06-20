@@ -361,6 +361,20 @@ describe("hunting place intelligence", () => {
     expect(detail.personal.hunts[0].provenance.map((entry) => entry.type)).toEqual(["personal_hunt"]);
   });
 
+  it("calculates personal expected loot as a duration-weighted loot per hour", () => {
+    seedPlace();
+    seedHunt({ id: 1, duration: 30, loot: 100000, supplies: 0, startedAt: isoHoursAgo(4) });
+    seedHunt({ id: 2, duration: 120, loot: 120000, supplies: 0, startedAt: isoHoursAgo(2) });
+
+    const detail = getHuntingPlaceDetail(db, 100);
+
+    expect(detail.ok).toBe(true);
+    if (!detail.ok) {
+      return;
+    }
+    expect(detail.personal.summary.weighted_loot_per_hour).toBe(88000);
+  });
+
   it("exposes market-weighted loot confidence and freshness", () => {
     seedPlace();
     seedCreature();

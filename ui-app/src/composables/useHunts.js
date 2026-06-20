@@ -98,7 +98,22 @@ export function useHunts() {
   const historyLoadingByItemId = reactive({})
   const huntForm = reactive({ raw_text: '' })
   const hasUnsavedHuntChanges = ref(false)
+  const defaultCharacterName = ref('')
   let huntingPlaceSearchToken = 0
+
+  function setDefaultCharacterName(name) {
+    const normalized = String(name || '').trim()
+    defaultCharacterName.value = normalized
+    if (!huntDraftCharacter.value) huntDraftCharacter.value = normalized
+    if (!importHuntDraftCharacter.value) importHuntDraftCharacter.value = normalized
+    if (previousHuntPreview.value && !previousHuntDraftCharacter.value) {
+      previousHuntDraftCharacter.value = normalized
+    }
+  }
+
+  function defaultCharacterValue() {
+    return defaultCharacterName.value || ''
+  }
 
   function markUnsavedHuntChanges() {
     if (activeHuntPreview.value) {
@@ -230,7 +245,7 @@ export function useHunts() {
     huntDraftLabel.value = ''
     huntDraftTags.value = ''
     huntDraftLocation.value = ''
-    huntDraftCharacter.value = ''
+    huntDraftCharacter.value = defaultCharacterValue()
     huntDraftHuntingPlaceId.value = ''
     huntDraftMatchMode.value = 'auto'
     clearHuntingPlaceSearch()
@@ -304,7 +319,7 @@ export function useHunts() {
       huntDraftLabel.value = hadPreview && huntDraftLabel.value ? huntDraftLabel.value : out.suggested_label || ''
       huntDraftTags.value = hadPreview ? huntDraftTags.value : ''
       huntDraftLocation.value = hadPreview ? cleanDisplayText(huntDraftLocation.value) : cleanDisplayText(out.location?.suggested_name || '')
-      huntDraftCharacter.value = hadPreview ? huntDraftCharacter.value : ''
+      huntDraftCharacter.value = hadPreview ? huntDraftCharacter.value : defaultCharacterValue()
       huntDraftHuntingPlaceId.value = hadPreview ? huntDraftHuntingPlaceId.value : ''
       huntDraftMatchMode.value = hadPreview ? huntDraftMatchMode.value : 'auto'
       huntInfo.value = 'Parsed hunt data. Review label and tags, then save.'
@@ -539,7 +554,7 @@ export function useHunts() {
     importHuntDraftLabel.value = candidate.preview.suggested_label || ''
     importHuntDraftTags.value = ''
     importHuntDraftLocation.value = cleanDisplayText(candidate.preview.location?.suggested_name || '')
-    importHuntDraftCharacter.value = ''
+    importHuntDraftCharacter.value = defaultCharacterValue()
     importHuntDraftHuntingPlaceId.value = ''
     importHuntDraftMatchMode.value = candidate.preview.location?.hunting_place_match?.status === 'mixed_route' ? 'mixed_route' : 'auto'
     searchHuntingPlaces(importHuntDraftLocation.value)
@@ -557,7 +572,7 @@ export function useHunts() {
     importHuntDraftLabel.value = ''
     importHuntDraftTags.value = ''
     importHuntDraftLocation.value = ''
-    importHuntDraftCharacter.value = ''
+    importHuntDraftCharacter.value = defaultCharacterValue()
     importHuntDraftHuntingPlaceId.value = ''
     importHuntDraftMatchMode.value = 'auto'
     clearHuntingPlaceSearch()
@@ -678,7 +693,7 @@ export function useHunts() {
       previousHuntDraftLabel.value = out.saved_hunt?.label || out.suggested_label || ''
       previousHuntDraftTags.value = (row.tags || []).join(',')
       previousHuntDraftLocation.value = cleanDisplayText(row.location_name || selectedHuntingPlaceName(out) || out.location?.selected_name || out.location?.suggested_name || '')
-      previousHuntDraftCharacter.value = row.character_name || out.saved_hunt?.character_name || ''
+      previousHuntDraftCharacter.value = row.character_name || out.saved_hunt?.character_name || defaultCharacterValue()
       previousHuntDraftHuntingPlaceId.value = String(
         out.saved_hunt?.hunting_place_match?.selected_hunting_place_id
         || out.location?.hunting_place_match?.selected_hunting_place_id
@@ -907,6 +922,7 @@ export function useHunts() {
     historyLoadingByItemId,
     huntForm,
     hasUnsavedHuntChanges,
+    defaultCharacterName,
     huntRows,
     locationOptions,
     activeHuntPreview,
@@ -916,6 +932,7 @@ export function useHunts() {
     loadHuntingAreas,
     loadGlobalLootSummary,
     refreshHuntCollections,
+    setDefaultCharacterName,
     submitHuntScaffold,
     parseHuntText,
     clearHuntPreview,

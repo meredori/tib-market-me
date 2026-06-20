@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import type Database from "better-sqlite3";
 import { config } from "../../config";
+import { getKnownCharacter } from "../tibiadata/characters";
 import {
   extractHuntTextsFromLogFile,
   huntSessionSignatureFromRaw,
@@ -311,7 +312,7 @@ export function deleteHuntLogImportFile(db: Database.Database, payload: unknown)
   return { ok: true, deleted_file: file.path, import_key: importKey };
 }
 
-function buildHuntInput(payload: unknown): HuntInput {
+function buildHuntInput(db: Database.Database, payload: unknown): HuntInput {
   const row = asRecord(payload) ?? {};
   const rawText = asText(row.raw_text).replace(/<\/??hunt>/gi, "").trim();
   const parsedText = rawText.trim() ? parseHuntSessionText(rawText) : null;
@@ -329,6 +330,10 @@ function buildHuntInput(payload: unknown): HuntInput {
     processed_at: nowIso()
   });
   const manualHuntingPlaceId = positiveIdOrNull(row.public_hunting_place_id ?? row.hunting_place_id);
+  const characterName = asText(row.character_name).trim() || null;
+  const characterVocation = asText(row.character_vocation).trim();
+  const characterWorld = asText(row.character_world).trim();
+  const knownCharacter = characterName ? getKnownCharacter(db, characterName) : null;
 
   return {
     label: asText(row.label).trim() || parsedText?.label || "Untitled Hunt",
@@ -340,11 +345,11 @@ function buildHuntInput(payload: unknown): HuntInput {
     started_at: parsedText?.started_at ?? toIsoOrNull(row.started_at),
     ended_at: parsedText?.ended_at ?? toIsoOrNull(row.ended_at),
     location_name: asText(row.location_name).trim() || null,
-    character_name: asText(row.character_name).trim() || null,
-    character_vocation: asText(row.character_vocation).trim() || null,
-    character_level: asNumberOrNull(row.character_level),
-    character_world: asText(row.character_world).trim() || null,
-    character_lookup_at: toIsoOrNull(row.character_lookup_at),
+    character_name: knownCharacter?.name ?? characterName,
+    character_vocation: characterVocation || (knownCharacter?.vocation ?? null),
+    character_level: asNumberOrNull(row.character_level) ?? knownCharacter?.level ?? null,
+    character_world: characterWorld || (knownCharacter?.world ?? null),
+    character_lookup_at: toIsoOrNull(row.character_lookup_at) ?? knownCharacter?.fetched_at ?? null,
     public_hunting_place_id: manualHuntingPlaceId,
     hunting_place_confidence: 0,
     hunting_place_match_status: manualHuntingPlaceId ? "manual" : "unmatched",
@@ -397,7 +402,7 @@ function applyHuntingPlaceMatch(db: Database.Database, input: HuntInput): HuntIn
 }
 
 export function createHuntUpload(db: Database.Database, payload: unknown): Record<string, unknown> {
-  const input = applyHuntingPlaceMatch(db, buildHuntInput(payload));
+  const input = applyHuntingPlaceMatch(db, buildHuntInput(db, payload));
   const row = asRecord(payload) ?? {};
 
   if (asText(row.source) === "log_import") {
@@ -500,7 +505,7 @@ export function updateHuntUpload(
     throw new Error("Invalid hunt id");
   }
 
-  const input = applyHuntingPlaceMatch(db, buildHuntInput(payload));
+  const input = applyHuntingPlaceMatch(db, buildHuntInput(db, payload));
   const updated = db
     .prepare(
       `

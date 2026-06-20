@@ -87,6 +87,9 @@ const publicHuntTitleAliases = ref([])
 const itemPriceMode = ref('conservative_min')
 const itemPriceInfo = ref('')
 const itemPriceBusy = ref(false)
+const defaultCharacterName = ref('')
+const defaultCharacterInfo = ref('')
+const defaultCharacterBusy = ref(false)
 const selectedItemOverrideMode = ref('auto')
 const itemOverrideInfo = ref('')
 const itemOverrideBusy = ref(false)
@@ -219,6 +222,38 @@ async function loadPublicHuntTitleAliases() {
     publicHuntTitleAliases.value = data.items || []
   } catch (error) {
     publicHuntInfo.value = `Public hunt aliases error: ${error.message}`
+  }
+}
+
+async function loadAppSettings() {
+  try {
+    const out = await api('/api/settings')
+    defaultCharacterName.value = out.settings?.default_character_name || ''
+    hunts.setDefaultCharacterName(defaultCharacterName.value)
+  } catch (error) {
+    defaultCharacterInfo.value = `Settings load failed: ${error.message}`
+  }
+}
+
+async function saveDefaultCharacter(name) {
+  defaultCharacterBusy.value = true
+  defaultCharacterInfo.value = ''
+  try {
+    const out = await api('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ default_character_name: name || null }),
+    })
+    if (!out.ok) throw new Error(out.error || 'Default character update failed')
+    defaultCharacterName.value = out.settings?.default_character_name || ''
+    hunts.setDefaultCharacterName(defaultCharacterName.value)
+    defaultCharacterInfo.value = defaultCharacterName.value
+      ? `Default character set to ${defaultCharacterName.value}.`
+      : 'Default character cleared.'
+  } catch (error) {
+    defaultCharacterInfo.value = `Default character failed: ${error.message}`
+  } finally {
+    defaultCharacterBusy.value = false
   }
 }
 
@@ -1242,6 +1277,7 @@ onMounted(async () => {
     loadPublicHuntStatus(),
     loadPublicHuntReviewQueue(),
     loadPublicHuntTitleAliases(),
+    loadAppSettings(),
     loadMarketDashboard(),
     loadLootInbox(),
     hunts.refreshHuntCollections(),
@@ -1432,6 +1468,9 @@ onBeforeUnmount(() => {
         :public-hunt-title-aliases="publicHuntTitleAliases"
         :item-price-info="itemPriceInfo"
         :item-price-busy="itemPriceBusy"
+        :default-character-name="defaultCharacterName"
+        :default-character-info="defaultCharacterInfo"
+        :default-character-busy="defaultCharacterBusy"
         :hunts="hunts"
         @refresh="refreshData"
         @sync-public-reference="syncPublicReferenceData"
@@ -1442,6 +1481,7 @@ onBeforeUnmount(() => {
         @reprocess-public-hunts="reprocessPublicHunts"
         @review-public-hunt="reviewPublicHunt"
         @generate-prices="generateItemPrices"
+        @save-default-character="saveDefaultCharacter"
         @review-import="reviewHuntLogImport"
       />
 

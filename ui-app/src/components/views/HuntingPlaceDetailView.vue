@@ -187,6 +187,10 @@ const filteredPlaceRows = computed(() => {
 const visiblePlaceCards = computed(() => filteredPlaceRows.value.slice(0, visiblePlaceLimit.value))
 const hasMorePlaceCards = computed(() => visiblePlaceLimit.value < filteredPlaceRows.value.length)
 const accessRequirements = computed(() => props.detail?.access?.requirements || [])
+const expectedLootMetric = computed(() => {
+  const personalLootRate = props.detail?.personal?.summary?.weighted_loot_per_hour
+  return personalLootRate ?? props.detail?.reference?.market_weighted_loot_value?.total_estimated_value ?? null
+})
 
 const areaOrderChanged = computed(() => {
   const current = areaOrderDraft.value.map((area) => area.area_name).join('\u001f')
@@ -673,7 +677,7 @@ watch(() => props.detail?.public_hunting_place_id, () => {
           </div>
           <div>
             <span class="muted">Expected Loot</span>
-            <strong>{{ gp(detail.reference?.market_weighted_loot_value?.total_estimated_value) }}</strong>
+            <strong>{{ gp(expectedLootMetric) }}</strong>
           </div>
           <div>
             <span class="muted">Personal Hunts</span>
@@ -692,7 +696,201 @@ watch(() => props.detail?.public_hunting_place_id, () => {
         />
       </article>
 
+      <article class="panel table-panel place-panel-area">
+        <SectionHeader title="Area Breakdown" :subtitle="`${detail.reference?.area_summaries?.length || 0} areas`">
+          <button class="ghost-action" :disabled="areaOrderBusy || !areaOrderChanged" @click="saveAreaOrder">
+            <GripVertical :size="15" />
+            Save Order
+          </button>
+        </SectionHeader>
+        <div v-if="sortedAreaSummaries.length" class="area-filter-strip">
+          <button
+            class="ghost-action"
+            :class="{ active: !activeAreaName }"
+            @click="activeAreaName = ''"
+          >
+            All areas
+          </button>
+          <button
+            v-for="area in sortedAreaSummaries"
+            :key="area.area_name"
+            class="ghost-action"
+            :class="{ active: activeAreaName === area.area_name }"
+            @click="setActiveArea(area.area_name)"
+          >
+            {{ area.area_name }}
+          </button>
+        </div>
+        <p v-if="areaOrderError" class="error">{{ areaOrderError }}</p>
+        <DataTable
+          :columns="areaColumns"
+          :items="sortedAreaSummaries"
+          row-key="area_name"
+          min-width="900px"
+          empty-title="No area breakdown"
+          empty-reason="Area creature summaries will appear after hunting-place detail enrichment."
+        >
+          <template #row="{ items }">
+            <tr
+              v-for="(area, index) in items"
+              :key="area.area_name"
+              class="area-order-row"
+              :class="{ dragging: draggedAreaIndex === index, active: activeAreaName === area.area_name }"
+              draggable="true"
+              @dragstart="onAreaDragStart(index)"
+              @dragover="onAreaDragOver($event, index)"
+              @drop="onAreaDrop($event, index)"
+              @dragend="onAreaDragEnd"
+            >
+              <td>
+                <div class="area-name-cell">
+                  <GripVertical :size="15" class="drag-handle" />
+                  <div>
+                    <button class="inline-link area-name-button" @click="setActiveArea(area.area_name)">
+                      {{ area.area_name }}
+                    </button>
+                    <div class="muted compact-note">Order {{ index + 1 }} | {{ area.creature_count ?? area.creatures?.length ?? 0 }} creature(s)</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div class="area-level-stack">
+                  <span><b>Your level</b> {{ latestPersonalLevel() ?? '-' }}</span>
+                  <span><b>Public data</b> {{ publicDataLevel() }}</span>
+                  <span><b>Wiki recommended</b> {{ areaWikiLevel(area) }}</span>
+                </div>
+              </td>
+              <td>
+                <div v-if="area.creatures?.length" class="area-creature-list">
+                  <InlineLink
+                    v-for="creature in area.creatures"
+                    :key="creature.normalized_creature_name || creature.name"
+                    class="creature-name-link"
+                    @click="$emit('open-creature', creature)"
+                  >
+                    {{ creature.name }}
+                  </InlineLink>
+                </div>
+                <span v-else class="muted">No creatures listed</span>
+              </td>
+              <td>
+                <div v-if="topAreaLoot(area).length" class="creature-loot-strip" :aria-label="`${area.area_name} top loot`">
+                <button
+                  v-for="item in topAreaLoot(area)"
+                  :key="`${area.area_name}-${item.item_id || item.normalized_item_name}`"
+                  class="creature-loot-chip"
+                  :disabled="!item.item_id"
+                  :title="`${item.name}: ${gp(lootSortValue(item))} gp`"
+                  @click="$emit('open-item', item.item_id)"
+                >
+                  <img v-if="item.item_id" class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.name" loading="lazy" />
+                  <span v-else class="loot-image-placeholder">?</span>
+                  <small>{{ gp(lootSortValue(item)) }}</small>
+                </button>
+                <button
+                  v-if="extraAreaLootCount(area) > 0"
+                  class="creature-loot-chip creature-loot-more"
+                  :title="`${extraAreaLootCount(area)} more loot items`"
+                >
+                  +{{ extraAreaLootCount(area) }}
+                </button>
+                </div>
+                <span v-else class="muted">No loot priced</span>
+              </td>
+            </tr>
+          </template>
+        </DataTable>
+      </article>
+
       <div class="dashboard-grid hunting-place-grid">
+        <article class="panel table-panel place-panel-creatures">
+          <SectionHeader
+            title="Known Creatures"
+            :subtitle="activeArea ? `${areaFilteredCreatures.length}/${detail.reference?.creatures?.length || 0} in ${activeArea.area_name}` : `${detail.reference?.creatures?.length || 0} creatures`"
+          />
+          <DataTable
+            :columns="creatureColumns"
+            :items="areaFilteredCreatures"
+            :page-size="50"
+            row-key="normalized_creature_name"
+            min-width="760px"
+            empty-title="No creatures enriched"
+            empty-reason="Creature enrichment has not populated this place yet."
+          >
+            <template #row="{ items }">
+              <tr v-for="creature in items" :key="creature.normalized_creature_name">
+                <td>
+                  <InlineLink class="creature-name-link" @click="$emit('open-creature', creature)">
+                  {{ creature.name }}
+                  </InlineLink>
+                </td>
+                <td>
+                  <div v-if="topCreatureLoot(creature).length" class="creature-loot-strip" :aria-label="`${creature.name} top loot`">
+                  <button
+                    v-for="item in topCreatureLoot(creature)"
+                    :key="`${creature.normalized_creature_name}-${item.item_id || item.normalized_item_name}`"
+                    class="creature-loot-chip"
+                    :disabled="!item.item_id"
+                    :title="`${item.name}: ${gp(lootSortValue(item))} gp`"
+                    @click="$emit('open-item', item.item_id)"
+                  >
+                    <img v-if="item.item_id" class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.name" loading="lazy" />
+                    <span v-else class="loot-image-placeholder">?</span>
+                    <small>{{ gp(lootSortValue(item)) }}</small>
+                  </button>
+                  <button
+                    v-if="extraCreatureLootCount(creature) > 0"
+                    class="creature-loot-chip creature-loot-more"
+                    :title="`${extraCreatureLootCount(creature)} more loot items`"
+                    @click="$emit('open-creature', creature)"
+                  >
+                    +{{ extraCreatureLootCount(creature) }}
+                  </button>
+                  </div>
+                  <span v-else class="muted">No loot priced</span>
+                </td>
+                <td>{{ gp(creature.experience) }}</td>
+                <td>{{ creature.bestiary?.difficulty || 'n/a' }}</td>
+              </tr>
+            </template>
+          </DataTable>
+        </article>
+
+        <article class="panel table-panel place-panel-loot">
+          <SectionHeader
+            title="Expected Loot"
+            :subtitle="activeArea ? `${areaFilteredLoot.length}/${detail.reference?.expected_loot?.length || 0} item(s) in ${activeArea.area_name}` : `${detail.reference?.market_weighted_loot_value?.priced_item_count || 0}/${detail.reference?.market_weighted_loot_value?.total_item_count || 0} priced`"
+          >
+            <FreshnessBadge :freshness="detail.reference?.market_weighted_loot_value?.freshness" />
+          </SectionHeader>
+          <DataTable
+            :columns="lootColumns"
+            :items="areaFilteredLoot"
+            :page-size="50"
+            :row-key="(item) => item.item_id || item.normalized_item_name"
+            min-width="640px"
+            empty-title="No expected loot"
+            empty-reason="Expected loot will appear after public creature loot enrichment."
+          >
+            <template #row="{ items }">
+              <tr v-for="item in items" :key="`${item.item_id || item.normalized_item_name}`">
+                <td>
+                  <EntityLinkPill
+                    :entity="{ type: 'item', id: item.item_id, name: item.name }"
+                    :image-src="item.item_id ? itemImagePath(item.item_id) : ''"
+                    :unresolved="!item.item_id"
+                    clickable
+                    @activate="$emit('open-item', item.item_id)"
+                  />
+                  <div class="muted compact-note">{{ item.creature_names?.join(', ') }}</div>
+                </td>
+                <td>{{ item.amount_text || [item.min_count, item.max_count].filter((value) => value !== null && value !== undefined).join('-') || 'n/a' }}</td>
+                <td>{{ gp(item.estimated_unit_value) }}</td>
+              </tr>
+            </template>
+          </DataTable>
+        </article>
+
         <article class="panel place-panel-your">
           <SectionHeader title="Your Results" :subtitle="`${detail.personal?.summary?.hunt_count || 0} linked hunts`" />
           <div class="metric-strip">
@@ -799,165 +997,6 @@ watch(() => props.detail?.public_hunting_place_id, () => {
           </div>
         </article>
 
-        <article class="panel table-panel place-panel-area">
-          <SectionHeader title="Area Breakdown" :subtitle="`${detail.reference?.area_summaries?.length || 0} areas`">
-            <button class="ghost-action" :disabled="areaOrderBusy || !areaOrderChanged" @click="saveAreaOrder">
-              <GripVertical :size="15" />
-              Save Order
-            </button>
-          </SectionHeader>
-          <div v-if="sortedAreaSummaries.length" class="area-filter-strip">
-            <button
-              class="ghost-action"
-              :class="{ active: !activeAreaName }"
-              @click="activeAreaName = ''"
-            >
-              All areas
-            </button>
-            <button
-              v-for="area in sortedAreaSummaries"
-              :key="area.area_name"
-              class="ghost-action"
-              :class="{ active: activeAreaName === area.area_name }"
-              @click="setActiveArea(area.area_name)"
-            >
-              {{ area.area_name }}
-            </button>
-          </div>
-          <p v-if="areaOrderError" class="error">{{ areaOrderError }}</p>
-          <DataTable
-            :columns="areaColumns"
-            :items="sortedAreaSummaries"
-            row-key="area_name"
-            min-width="900px"
-            empty-title="No area breakdown"
-            empty-reason="Area creature summaries will appear after hunting-place detail enrichment."
-          >
-            <template #row="{ items }">
-              <tr
-                v-for="(area, index) in items"
-                :key="area.area_name"
-                class="area-order-row"
-                :class="{ dragging: draggedAreaIndex === index }"
-                draggable="true"
-                @dragstart="onAreaDragStart(index)"
-                @dragover="onAreaDragOver($event, index)"
-                @drop="onAreaDrop($event, index)"
-                @dragend="onAreaDragEnd"
-              >
-                <td>
-                  <div class="area-name-cell">
-                    <GripVertical :size="15" class="drag-handle" />
-                    <div>
-                      <button class="inline-link area-name-button" @click="setActiveArea(area.area_name)">
-                        {{ area.area_name }}
-                      </button>
-                      <div class="muted compact-note">Order {{ index + 1 }} | {{ area.creature_count ?? area.creatures?.length ?? 0 }} creature(s)</div>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <div class="area-level-stack">
-                    <span><b>Your level</b> {{ latestPersonalLevel() ?? '-' }}</span>
-                    <span><b>Public data</b> {{ publicDataLevel() }}</span>
-                    <span><b>Wiki recommended</b> {{ areaWikiLevel(area) }}</span>
-                  </div>
-                </td>
-                <td>
-                  <div v-if="area.creatures?.length" class="area-creature-list">
-                    <InlineLink
-                      v-for="creature in area.creatures"
-                      :key="creature.normalized_creature_name || creature.name"
-                      class="creature-name-link"
-                      @click="$emit('open-creature', creature)"
-                    >
-                      {{ creature.name }}
-                    </InlineLink>
-                  </div>
-                  <span v-else class="muted">No creatures listed</span>
-                </td>
-                <td>
-                  <div v-if="topAreaLoot(area).length" class="creature-loot-strip" :aria-label="`${area.area_name} top loot`">
-                  <button
-                    v-for="item in topAreaLoot(area)"
-                    :key="`${area.area_name}-${item.item_id || item.normalized_item_name}`"
-                    class="creature-loot-chip"
-                    :disabled="!item.item_id"
-                    :title="`${item.name}: ${gp(lootSortValue(item))} gp`"
-                    @click="$emit('open-item', item.item_id)"
-                  >
-                    <img v-if="item.item_id" class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.name" loading="lazy" />
-                    <span v-else class="loot-image-placeholder">?</span>
-                    <small>{{ gp(lootSortValue(item)) }}</small>
-                  </button>
-                  <button
-                    v-if="extraAreaLootCount(area) > 0"
-                    class="creature-loot-chip creature-loot-more"
-                    :title="`${extraAreaLootCount(area)} more loot items`"
-                  >
-                    +{{ extraAreaLootCount(area) }}
-                  </button>
-                  </div>
-                  <span v-else class="muted">No loot priced</span>
-                </td>
-              </tr>
-            </template>
-          </DataTable>
-        </article>
-
-        <article class="panel table-panel place-panel-creatures">
-          <SectionHeader
-            title="Known Creatures"
-            :subtitle="activeArea ? `${areaFilteredCreatures.length}/${detail.reference?.creatures?.length || 0} in ${activeArea.area_name}` : `${detail.reference?.creatures?.length || 0} creatures`"
-          />
-          <DataTable
-            :columns="creatureColumns"
-            :items="areaFilteredCreatures"
-            :page-size="50"
-            row-key="normalized_creature_name"
-            min-width="760px"
-            empty-title="No creatures enriched"
-            empty-reason="Creature enrichment has not populated this place yet."
-          >
-            <template #row="{ items }">
-              <tr v-for="creature in items" :key="creature.normalized_creature_name">
-                <td>
-                  <InlineLink class="creature-name-link" @click="$emit('open-creature', creature)">
-                  {{ creature.name }}
-                  </InlineLink>
-                </td>
-                <td>
-                  <div v-if="topCreatureLoot(creature).length" class="creature-loot-strip" :aria-label="`${creature.name} top loot`">
-                  <button
-                    v-for="item in topCreatureLoot(creature)"
-                    :key="`${creature.normalized_creature_name}-${item.item_id || item.normalized_item_name}`"
-                    class="creature-loot-chip"
-                    :disabled="!item.item_id"
-                    :title="`${item.name}: ${gp(lootSortValue(item))} gp`"
-                    @click="$emit('open-item', item.item_id)"
-                  >
-                    <img v-if="item.item_id" class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.name" loading="lazy" />
-                    <span v-else class="loot-image-placeholder">?</span>
-                    <small>{{ gp(lootSortValue(item)) }}</small>
-                  </button>
-                  <button
-                    v-if="extraCreatureLootCount(creature) > 0"
-                    class="creature-loot-chip creature-loot-more"
-                    :title="`${extraCreatureLootCount(creature)} more loot items`"
-                    @click="$emit('open-creature', creature)"
-                  >
-                    +{{ extraCreatureLootCount(creature) }}
-                  </button>
-                  </div>
-                  <span v-else class="muted">No loot priced</span>
-                </td>
-                <td>{{ gp(creature.experience) }}</td>
-                <td>{{ creature.bestiary?.difficulty || 'n/a' }}</td>
-              </tr>
-            </template>
-          </DataTable>
-        </article>
-
         <article class="panel access-panel place-panel-access">
           <SectionHeader title="Access" :subtitle="accessLabel(detail.access)">
             <span class="status-badge" :class="`access-${accessTone(detail.access)}`">
@@ -1023,41 +1062,6 @@ watch(() => props.detail?.public_hunting_place_id, () => {
               </button>
             </div>
           </div>
-        </article>
-
-        <article class="panel table-panel place-panel-loot">
-          <SectionHeader
-            title="Expected Loot"
-            :subtitle="activeArea ? `${areaFilteredLoot.length}/${detail.reference?.expected_loot?.length || 0} item(s) in ${activeArea.area_name}` : `${detail.reference?.market_weighted_loot_value?.priced_item_count || 0}/${detail.reference?.market_weighted_loot_value?.total_item_count || 0} priced`"
-          >
-            <FreshnessBadge :freshness="detail.reference?.market_weighted_loot_value?.freshness" />
-          </SectionHeader>
-          <DataTable
-            :columns="lootColumns"
-            :items="areaFilteredLoot"
-            :page-size="50"
-            :row-key="(item) => item.item_id || item.normalized_item_name"
-            min-width="640px"
-            empty-title="No expected loot"
-            empty-reason="Expected loot will appear after public creature loot enrichment."
-          >
-            <template #row="{ items }">
-              <tr v-for="item in items" :key="`${item.item_id || item.normalized_item_name}`">
-                <td>
-                  <EntityLinkPill
-                    :entity="{ type: 'item', id: item.item_id, name: item.name }"
-                    :image-src="item.item_id ? itemImagePath(item.item_id) : ''"
-                    :unresolved="!item.item_id"
-                    clickable
-                    @activate="$emit('open-item', item.item_id)"
-                  />
-                  <div class="muted compact-note">{{ item.creature_names?.join(', ') }}</div>
-                </td>
-                <td>{{ item.amount_text || [item.min_count, item.max_count].filter((value) => value !== null && value !== undefined).join('-') || 'n/a' }}</td>
-                <td>{{ gp(item.estimated_unit_value) }}</td>
-              </tr>
-            </template>
-          </DataTable>
         </article>
 
         <article class="panel place-panel-reference">
@@ -1245,6 +1249,10 @@ watch(() => props.detail?.public_hunting_place_id, () => {
 }
 
 .place-panel-area {
+  width: 100%;
+}
+
+.place-panel-creatures {
   order: 1;
 }
 
@@ -1252,24 +1260,20 @@ watch(() => props.detail?.public_hunting_place_id, () => {
   order: 2;
 }
 
-.place-panel-creatures {
-  order: 3;
-}
-
 .place-panel-public {
   order: 4;
 }
 
 .place-panel-your {
-  order: 5;
+  order: 3;
 }
 
 .place-panel-access {
-  order: 6;
+  order: 5;
 }
 
 .place-panel-reference {
-  order: 7;
+  order: 6;
 }
 
 .area-filter-strip {
@@ -1399,6 +1403,14 @@ watch(() => props.detail?.public_hunting_place_id, () => {
 
 .area-order-row.dragging {
   opacity: 0.58;
+}
+
+.area-order-row.active td {
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.area-order-row.active td:first-child {
+  border-left: 3px solid rgba(45, 212, 191, 0.82);
 }
 
 .area-name-cell {

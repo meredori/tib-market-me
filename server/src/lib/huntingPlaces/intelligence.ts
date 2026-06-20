@@ -353,6 +353,7 @@ export type HuntingPlaceDetail = {
       total_duration_minutes: number;
       total_xp: number;
       total_profit: number;
+      weighted_loot_per_hour: number | null;
       total_supply_cost: number;
       best_xp_per_hour: number | null;
       median_xp_per_hour: number | null;
@@ -586,6 +587,22 @@ function perHour(value: number, durationMinutes: number): number | null {
     return null;
   }
   return Math.round((value / durationMinutes) * 60);
+}
+
+function weightedPerHour(
+  rows: Array<{ duration_minutes: number; loot_gold?: number; xp?: number; profit?: number; supply_cost?: number }>,
+  field: "loot_gold" | "xp" | "profit" | "supply_cost"
+): number | null {
+  const totals = rows.reduce((acc, row) => {
+    const duration = Number(row.duration_minutes || 0);
+    const value = Number(row[field] ?? 0);
+    if (Number.isFinite(duration) && duration > 0 && Number.isFinite(value)) {
+      acc.duration += duration;
+      acc.value += value;
+    }
+    return acc;
+  }, { duration: 0, value: 0 });
+  return totals.duration > 0 ? Math.round((totals.value / totals.duration) * 60) : null;
 }
 
 function chanceWeight(chancePercent: number | null): number | null {
@@ -1213,6 +1230,7 @@ function summarizePersonal(hunts: PersonalHuntSummary[]): HuntingPlaceDetail["pe
     total_duration_minutes: hunts.reduce((acc, hunt) => acc + hunt.duration_minutes, 0),
     total_xp: hunts.reduce((acc, hunt) => acc + hunt.xp, 0),
     total_profit: hunts.reduce((acc, hunt) => acc + hunt.profit, 0),
+    weighted_loot_per_hour: weightedPerHour(hunts, "loot_gold"),
     total_supply_cost: hunts.reduce((acc, hunt) => acc + hunt.supply_cost, 0),
     best_xp_per_hour: xpRates.length ? Math.max(...xpRates) : null,
     median_xp_per_hour: median(xpRates),
@@ -1362,7 +1380,11 @@ function suitability(place: HuntingPlaceRow, personal: HuntingPlaceDetail["perso
   }
 
   const levelBand = place.min_level || place.max_level
-    ? `${place.min_level ?? "?"}-${place.max_level ?? "?"}`
+    ? place.min_level && place.max_level
+      ? `${place.min_level}-${place.max_level}`
+      : place.min_level
+        ? `${place.min_level}+`
+        : `up to ${place.max_level}`
     : "unknown";
   const safetyLabel = place.risk_level
     ? place.risk_level

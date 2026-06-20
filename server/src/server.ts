@@ -71,6 +71,7 @@ import {
 import { registerTaskboardRoutes } from "./lib/taskboard/routes";
 import { registerRecommendationRoutes } from "./lib/recommendations/routes";
 import { registerAccessRoutes } from "./lib/access/routes";
+import { getAppSettings, updateAppSettings } from "./lib/appSettings";
 
 export function buildServer(db: Database.Database) {
   const app = Fastify({ logger: true });
@@ -436,6 +437,20 @@ export function buildServer(db: Database.Database) {
         : {};
       const q = typeof query.q === "string" ? query.q : "";
       return { ok: true, items: searchKnownCharacters(db, q) };
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.get("/api/settings", async () => ({
+    ok: true,
+    settings: getAppSettings(db)
+  }));
+
+  app.put("/api/settings", async (request, reply) => {
+    try {
+      return { ok: true, settings: await updateAppSettings(db, objectBody(request.body)) };
     } catch (error) {
       reply.code(400);
       return { ok: false, error: String(error) };

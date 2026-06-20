@@ -94,6 +94,7 @@ The following functionality already exists and should not be rebuilt as future r
 - Public Tibia character lookup.
 - Local character cache.
 - Character context on saved hunts.
+- Settings can store a default character, refresh it from TibiaData, and use it as the default saved-hunt character context.
 
 ### Hunt-To-Hunting-Place Matching
 
@@ -775,6 +776,7 @@ Label clearly:
 - Public/reference expected.
 - Market-weighted estimate.
 - Low confidence.
+- Places detail can prefer a duration-weighted personal loot/hour average when linked personal hunts exist.
 
 ### 4. Safety And Suitability Signals
 

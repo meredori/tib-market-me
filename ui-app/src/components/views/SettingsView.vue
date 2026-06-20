@@ -35,6 +35,9 @@ const props = defineProps({
   itemPriceMode: { type: String, default: 'conservative_min' },
   itemPriceInfo: { type: String, default: '' },
   itemPriceBusy: { type: Boolean, default: false },
+  defaultCharacterName: { type: String, default: '' },
+  defaultCharacterInfo: { type: String, default: '' },
+  defaultCharacterBusy: { type: Boolean, default: false },
   hunts: { type: Object, required: true },
 })
 
@@ -84,15 +87,25 @@ const emit = defineEmits([
   'review-public-hunt',
   'generate-prices',
   'review-import',
+  'save-default-character',
 ])
 
 const selectedPublicHuntId = ref(null)
+const defaultCharacterDraft = ref(props.defaultCharacterName || '')
 const publicHuntPlaceQuery = ref('')
 const publicHuntPlaceResults = ref([])
 const publicHuntPlaceInfo = ref('')
 const publicHuntPlaceBusy = ref(false)
 const activeSettingsTab = ref('general')
 let publicHuntPlaceSearchTimer = null
+
+watch(
+  () => props.defaultCharacterName,
+  (name) => {
+    defaultCharacterDraft.value = name || ''
+  },
+  { immediate: true }
+)
 
 const selectedPublicHunt = computed(() => {
   return props.publicHuntReviewItems.find((item) => item.id === selectedPublicHuntId.value) || null
@@ -232,6 +245,20 @@ function aliasExamples(alias) {
     </div>
 
     <div class="settings-grid">
+      <article v-if="activeSettingsTab === 'general'" class="panel settings-action-panel">
+        <h2>Default Character</h2>
+        <p class="muted">Lookup and use this character automatically when saving personal hunts.</p>
+        <label>
+          Character Name
+          <input v-model="defaultCharacterDraft" placeholder="Character name" @keydown.enter="$emit('save-default-character', defaultCharacterDraft)" />
+        </label>
+        <div class="button-row mt-10">
+          <button :disabled="defaultCharacterBusy" @click="$emit('save-default-character', defaultCharacterDraft)">Lookup & Save</button>
+          <button class="ghost-action" :disabled="defaultCharacterBusy || !defaultCharacterName" @click="$emit('save-default-character', '')">Clear</button>
+          <span class="muted">{{ defaultCharacterInfo }}</span>
+        </div>
+      </article>
+
       <article v-if="activeSettingsTab === 'general'" class="panel settings-action-panel">
         <h2>Generate itemprices.json</h2>
         <p class="muted">Create a Tibia item price file from latest market data using a selectable valuation mode.</p>
