@@ -102,6 +102,35 @@ function insertHunt(placeId: number, input: { label: string; duration: number; x
   `).run(input.label, input.duration, input.xp, input.loot, input.supplies, input.label, placeId, input.character ?? null);
 }
 
+function insertCharacter(input: {
+  name: string;
+  level?: number;
+  vocation?: string;
+  world?: string;
+  preferredRisk?: string;
+  partyPreference?: string;
+  shortWalkPreference?: string;
+  notes?: string;
+}): void {
+  db.prepare(`
+    INSERT INTO tibia_characters (
+      name, normalized_name, vocation, level, world, fetched_at, payload_json,
+      preferred_risk, party_preference, short_walk_preference, profile_notes
+    ) VALUES (?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?)
+  `).run(
+    input.name,
+    input.name.toLowerCase(),
+    input.vocation ?? null,
+    input.level ?? null,
+    input.world ?? null,
+    isoHoursAgo(1),
+    input.preferredRisk ?? null,
+    input.partyPreference ?? null,
+    input.shortWalkPreference ?? null,
+    input.notes ?? null
+  );
+}
+
 function seedBaseline(): void {
   insertPlace({ id: 10, name: "Dragon Lair", creatureId: 100, creature: "Dragon", risk: "medium", minLevel: 80, maxLevel: 180, exp: 3, loot: 4, itemId: 300, item: "Dragon Shield", itemChance: 12 });
   insertPlace({ id: 20, name: "Quiet Rotworm Cave", creatureId: 200, creature: "Rotworm", risk: "low", minLevel: 20, maxLevel: 60, exp: 1, loot: 1, itemId: 301, item: "Worm Pearl", itemChance: 15 });
@@ -215,5 +244,77 @@ describe("hunt recommendations", () => {
     const available = listHuntRecommendations(db, { mode: "profit", character_level: 220, character_name: "Knight One" }) as Record<string, any>;
     const availableDemon = available.items.find((item: Record<string, any>) => item.place.name === "Demon Forge");
     expect(availableDemon.access.state).toBe("available");
+  });
+
+  it("hydrates recommendation context from a cached character profile", () => {
+    seedBaseline();
+    insertCharacter({
+      name: "Knight One",
+      level: 220,
+      vocation: "Elite Knight",
+      world: "Bona",
+      preferredRisk: "low",
+      partyPreference: "solo",
+      shortWalkPreference: "prefer",
+      notes: "Keep routes practical."
+    });
+
+    const result = listHuntRecommendations(db, { mode: "profit", character_name: "Knight One" }) as Record<string, any>;
+
+    expect(result.query).toMatchObject({
+      character_level: 220,
+      character_vocation: "Elite Knight",
+      character_world: "Bona",
+      risk_preference: "low",
+      risk_preference_source: "profile",
+      party_preference: "solo",
+      short_walk_preference: "prefer",
+      character_context_source: "profile"
+    });
+    expect(result.items[0].character_context).toMatchObject({
+      name: "Knight One",
+      level: 220,
+      vocation: "Elite Knight",
+      world: "Bona",
+      profile_notes: "Keep routes practical.",
+      source: "profile"
+    });
+    expect(result.items[0].place.name).not.toBe("Demon Forge");
+  });
+
+  it("lets explicit recommendation filters override character profile defaults", () => {
+    seedBaseline();
+    insertCharacter({
+      name: "Knight One",
+      level: 220,
+      vocation: "Elite Knight",
+      preferredRisk: "low"
+    });
+
+    const result = listHuntRecommendations(db, {
+      mode: "profit",
+      character_name: "Knight One",
+      character_level: 45,
+      character_vocation: "Royal Paladin",
+      risk_preference: "high"
+    }) as Record<string, any>;
+
+    expect(result.query).toMatchObject({
+      character_level: 45,
+      character_vocation: "Royal Paladin",
+      risk_preference: "high",
+      risk_preference_source: "query"
+    });
+  });
+
+  it("keeps incomplete character profiles usable with missing-data warnings", () => {
+    seedBaseline();
+    insertCharacter({ name: "Scout One", preferredRisk: "medium" });
+
+    const result = listHuntRecommendations(db, { mode: "balanced", character_name: "Scout One" }) as Record<string, any>;
+
+    expect(result.ok).toBe(true);
+    expect(result.items.length).toBeGreaterThan(0);
+    expect(result.items.some((item: Record<string, any>) => item.missing_data.includes("Character profile incomplete."))).toBe(true);
   });
 });

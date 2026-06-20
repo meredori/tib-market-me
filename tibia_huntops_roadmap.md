@@ -993,6 +993,8 @@ Access state should integrate with:
 
 # Phase 10: Character And Vocation Planner
 
+**Status: Completed.** Phase 10 expands cached TibiaData character profiles into a practical local planner for Recommendations. Character lookup now preserves planner-essential API fields plus the raw payload, manual profile notes/preferences survive refreshes, and recommendations can hydrate missing level/vocation/risk context from the cached profile while keeping explicit filters authoritative.
+
 ## Goal
 
 Make recommendations aware of the actual character, not just generic level ranges.

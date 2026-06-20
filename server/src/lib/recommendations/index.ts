@@ -3,6 +3,7 @@ import { config } from "../../config";
 import { getAccessSummary } from "../access";
 import { confidence as buildConfidence, entityRef, explanation, freshness as buildFreshness, provenance } from "../intelligence/metadata";
 import type { InsightExplanation } from "../intelligence/types";
+import { getKnownCharacter } from "../tibiadata/characters";
 import type {
   HuntRecommendation,
   RecommendationFeedbackAction,
@@ -107,15 +108,59 @@ function hasTable(db: Database.Database, tableName: string): boolean {
 export function parseRecommendationQuery(input: Record<string, unknown>): RecommendationQuery {
   const mode = MODES.includes(input.mode as RecommendationMode) ? input.mode as RecommendationMode : "balanced";
   const risk = asText(input.risk_preference).trim().toLowerCase();
+  const explicitRisk = risk === "any" || risk === "low" || risk === "medium" || risk === "high";
   const limit = optionalPositiveInt(input.limit) ?? 12;
   return {
     mode,
     character_name: optionalText(input.character_name, 60),
     character_level: optionalPositiveInt(input.character_level),
     character_vocation: optionalText(input.character_vocation, 60),
+    character_world: null,
     risk_preference: risk === "low" || risk === "medium" || risk === "high" ? risk : "any",
+    risk_preference_source: explicitRisk ? "query" : "default",
+    preferred_hunt_style: null,
+    party_preference: "any",
+    short_walk_preference: "any",
+    profile_notes: null,
+    equipment_notes: null,
+    charm_notes: null,
+    unlock_notes: null,
+    character_context_source: "none",
     limit: Math.max(1, Math.min(30, limit))
   };
+}
+
+function resolveRecommendationQuery(db: Database.Database, input: Record<string, unknown>): RecommendationQuery {
+  const query = parseRecommendationQuery(input);
+  if (!query.character_name) {
+    query.character_context_source = query.character_level || query.character_vocation ? "query" : "none";
+    return query;
+  }
+
+  const profile = getKnownCharacter(db, query.character_name);
+  const rawRisk = asText(input.risk_preference).trim().toLowerCase();
+  const explicitRisk = rawRisk === "low" || rawRisk === "medium" || rawRisk === "high" || rawRisk === "any";
+  if (profile) {
+    query.character_name = profile.name;
+    query.character_level = query.character_level ?? profile.level;
+    query.character_vocation = query.character_vocation ?? profile.vocation;
+    query.character_world = profile.world;
+    query.preferred_hunt_style = profile.preferred_hunt_style;
+    query.party_preference = profile.party_preference ?? "any";
+    query.short_walk_preference = profile.short_walk_preference ?? "any";
+    query.profile_notes = profile.profile_notes;
+    query.equipment_notes = profile.equipment_notes;
+    query.charm_notes = profile.charm_notes;
+    query.unlock_notes = profile.unlock_notes;
+    query.character_context_source = "profile";
+    if (!explicitRisk && profile.preferred_risk && profile.preferred_risk !== "any") {
+      query.risk_preference = profile.preferred_risk;
+      query.risk_preference_source = "profile";
+    }
+  } else {
+    query.character_context_source = "query";
+  }
+  return query;
 }
 
 function latestMarketRun(db: Database.Database): { id: number; finished_at: string } | null {
@@ -389,6 +434,9 @@ function scoreForMode(input: {
   bestiary: number;
   taskboard: number;
   risk: number;
+  partyPreference: RecommendationQuery["party_preference"];
+  shortWalkPreference: RecommendationQuery["short_walk_preference"];
+  preferredHuntStyle: string | null;
   feedback: number;
 }): number {
   const loot = Math.min(1, (input.loot ?? Number(input.place.loot_stars ?? 0) * 120) / 900);
@@ -398,6 +446,17 @@ function scoreForMode(input: {
   const novelty = history ? 0.1 : 0.85;
   const short = input.personal?.avg_duration_minutes ? (input.personal.avg_duration_minutes <= 45 ? 0.85 : 0.3) : input.risk * 0.55;
   const balanced = loot * 0.25 + xp * 0.25 + input.levelFitScore * 0.2 + input.risk * 0.12 + input.bestiary * 0.09 + input.taskboard * 0.09;
+  const teamPenalty = input.partyPreference === "solo" && asText(input.place.risk_level).toLowerCase().includes("high") ? -0.08 : 0;
+  const teamBonus = input.partyPreference === "team" && asText(input.place.risk_level).toLowerCase().includes("high") ? 0.05 : 0;
+  const shortWalkBonus = input.shortWalkPreference === "prefer" && input.place.location ? 0.03 : 0;
+  const style = asText(input.preferredHuntStyle).toLowerCase();
+  const styleBonus = style && (
+    input.mode.includes(style)
+    || (style.includes("profit") && input.mode === "profit")
+    || (style.includes("xp") && input.mode === "xp")
+    || (style.includes("safe") && input.mode === "safe")
+  ) ? 0.04 : 0;
+  const preferenceAdjustment = teamPenalty + teamBonus + shortWalkBonus + styleBonus;
   const byMode: Record<RecommendationMode, number> = {
     profit: loot * 0.48 + (input.personal?.avg_profit_per_hour ? 0.28 : 0) + input.levelFitScore * 0.14 + input.risk * 0.1,
     xp: xp * 0.5 + (input.personal?.avg_xp_per_hour ? 0.22 : 0) + input.levelFitScore * 0.18 + input.risk * 0.1,
@@ -409,7 +468,7 @@ function scoreForMode(input: {
     revisit: revisit * 0.62 + balanced * 0.28 + input.risk * 0.1,
     new: novelty * 0.52 + balanced * 0.32 + input.levelFitScore * 0.16
   };
-  return Number(Math.max(0, Math.min(1, byMode[input.mode] + input.feedback)).toFixed(4));
+  return Number(Math.max(0, Math.min(1, byMode[input.mode] + input.feedback + preferenceAdjustment)).toFixed(4));
 }
 
 function splitExplanations(explanations: InsightExplanation[]): HuntRecommendation["explanations"] {
@@ -426,7 +485,7 @@ function signature(mode: RecommendationMode, placeId: number, characterLevel: nu
 }
 
 export function listHuntRecommendations(db: Database.Database, rawQuery: Record<string, unknown> = {}): Record<string, unknown> {
-  const query = parseRecommendationQuery(rawQuery);
+  const query = resolveRecommendationQuery(db, rawQuery);
   const marketRun = latestMarketRun(db);
   const places = readPlaces(db);
   const creaturesByPlace = readCreatures(db);
@@ -460,6 +519,23 @@ export function listHuntRecommendations(db: Database.Database, rawQuery: Record<
       explanations.push(explanation("risk preference mismatch", "warning", "This place is riskier than the selected preference.", {
         source_refs: [entityRef("hunting_place", { id: place.id, name: place.name })]
       }));
+    }
+    if (query.character_context_source === "profile") {
+      explanations.push(explanation("character profile", "neutral", "Character level, vocation, or planner preferences are coming from the saved character profile.", {
+        provenance: [provenance("manual_input", { label: "character planner profile", manual: true })]
+      }));
+    }
+    if (query.character_name && (!query.character_level || !query.character_vocation)) {
+      missingData.push("Character profile incomplete.");
+      explanations.push(explanation("character profile incomplete", "warning", "Character profile is missing level or vocation context.", {
+        missing_data_reason: "Look up the character or fill the profile fields."
+      }));
+    }
+    if (query.party_preference !== "any") {
+      explanations.push(explanation(`${query.party_preference} preference`, "neutral", "Character planner party preference nudges ranking without blocking recommendations."));
+    }
+    if (query.short_walk_preference === "prefer") {
+      explanations.push(explanation("short walk preference", "neutral", "Character planner short-walk preference modestly nudges ranking."));
     }
     if (!creatures.length) {
       missingData.push("No enriched creature list.");
@@ -519,6 +595,9 @@ export function listHuntRecommendations(db: Database.Database, rawQuery: Record<
       bestiary: bestiaryResult.score,
       taskboard: taskboardMatchResult.score,
       risk,
+      partyPreference: query.party_preference,
+      shortWalkPreference: query.short_walk_preference,
+      preferredHuntStyle: query.preferred_hunt_style,
       feedback: feedback.score
     });
     const score = access.state === "unavailable"
@@ -591,6 +670,21 @@ export function listHuntRecommendations(db: Database.Database, rawQuery: Record<
       known_risks: [place.risk_level ? `${place.risk_level} risk` : "Risk unknown"].concat(feedback.reasons.filter((item) => item.includes("risky"))),
       missing_data: Array.from(new Set(missingData)),
       access,
+      character_context: {
+        name: query.character_name,
+        level: query.character_level,
+        vocation: query.character_vocation,
+        world: query.character_world,
+        preferred_risk: query.risk_preference,
+        preferred_hunt_style: query.preferred_hunt_style,
+        party_preference: query.party_preference,
+        short_walk_preference: query.short_walk_preference,
+        profile_notes: query.profile_notes,
+        equipment_notes: query.equipment_notes,
+        charm_notes: query.charm_notes,
+        unlock_notes: query.unlock_notes,
+        source: query.character_context_source
+      },
       personal_history: {
         hunt_count: personal?.hunt_count ?? 0,
         last_hunted_at: personal?.last_hunted_at ?? null,

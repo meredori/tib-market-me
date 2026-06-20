@@ -69,6 +69,21 @@ export type HuntRecommendation = {
   known_risks: string[];
   missing_data: string[];
   access: AccessSummary;
+  character_context: {
+    name: string | null;
+    level: number | null;
+    vocation: string | null;
+    world: string | null;
+    preferred_risk: "any" | "low" | "medium" | "high";
+    preferred_hunt_style: string | null;
+    party_preference: "any" | "solo" | "duo" | "team";
+    short_walk_preference: "any" | "prefer" | "avoid";
+    profile_notes: string | null;
+    equipment_notes: string | null;
+    charm_notes: string | null;
+    unlock_notes: string | null;
+    source: "profile" | "query" | "none";
+  };
   personal_history: {
     hunt_count: number;
     last_hunted_at: string | null;
@@ -83,6 +98,16 @@ export type RecommendationQuery = {
   character_name: string | null;
   character_level: number | null;
   character_vocation: string | null;
+  character_world: string | null;
   risk_preference: "any" | "low" | "medium" | "high";
+  risk_preference_source: "query" | "profile" | "default";
+  preferred_hunt_style: string | null;
+  party_preference: "any" | "solo" | "duo" | "team";
+  short_walk_preference: "any" | "prefer" | "avoid";
+  profile_notes: string | null;
+  equipment_notes: string | null;
+  charm_notes: string | null;
+  unlock_notes: string | null;
+  character_context_source: "profile" | "query" | "none";
   limit: number;
 };

@@ -40,7 +40,7 @@ import {
 } from "./lib/http/validation";
 import { ensureItemHistory, summarizeItemHistory } from "./lib/pricing/itemHistory";
 import { setItemAlias } from "./lib/hunts/itemAliases";
-import { lookupTibiaCharacter, searchKnownCharacters } from "./lib/tibiadata/characters";
+import { getKnownCharacter, lookupTibiaCharacter, searchKnownCharacters, updateCharacterProfile } from "./lib/tibiadata/characters";
 import { getPublicReferenceStatus, queuePublicReferenceMissingCreatureLoot, resetPublicReferenceData, startPublicReferenceEnrichment, syncPublicReferenceData } from "./lib/tibiadata/publicReference";
 import {
   addMarketWatchlistItem,
@@ -379,6 +379,31 @@ export function buildServer(db: Database.Database) {
         : {};
       const name = typeof query.name === "string" ? query.name : "";
       return { ok: true, item: await lookupTibiaCharacter(db, name) };
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.get("/api/characters/:name", async (request, reply) => {
+    try {
+      const name = (request.params as Record<string, string>).name;
+      const item = getKnownCharacter(db, name);
+      if (!item) {
+        reply.code(404);
+        return { ok: false, error: "Character profile not found" };
+      }
+      return { ok: true, item };
+    } catch (error) {
+      reply.code(400);
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  app.put("/api/characters/:name/profile", async (request, reply) => {
+    try {
+      const name = (request.params as Record<string, string>).name;
+      return { ok: true, item: updateCharacterProfile(db, name, objectBody(request.body)) };
     } catch (error) {
       reply.code(400);
       return { ok: false, error: String(error) };
