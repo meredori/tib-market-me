@@ -1,15 +1,21 @@
 <script setup>
+import { computed, ref } from 'vue'
 import {
   AlertTriangle,
-  ChevronRight,
+  ArrowLeft,
+  CalendarDays,
+  Clock3,
+  Coins,
   Download,
-  RefreshCw,
+  Edit3,
   ShieldQuestion,
+  Swords,
   Trash2,
 } from '@lucide/vue'
+import HuntIntelligence from '../hunts/HuntIntelligence.vue'
 import HuntSummary from '../HuntSummary.vue'
 
-defineProps({
+const props = defineProps({
   hunts: { type: Object, required: true },
   workspaceTab: { type: String, required: true },
   activeSavedHunt: { type: Object, default: null },
@@ -20,7 +26,7 @@ defineProps({
   itemImagePath: { type: Function, required: true },
 })
 
-defineEmits([
+const emit = defineEmits([
   'update:workspaceTab',
   'open-history',
   'open-hunt',
@@ -30,6 +36,68 @@ defineEmits([
   'assign-item-id',
   'save-previous-hunt',
 ])
+
+const showEditPanel = ref(false)
+
+const activePreview = computed(() => props.hunts.activeHuntPreview.value || null)
+const activeParsed = computed(() => activePreview.value?.parsed || {})
+const activeSaved = computed(() => activePreview.value?.saved_hunt || null)
+const placeLabel = computed(() => {
+  return props.hunts.cleanDisplayText(
+    activePreview.value?.location?.selected_name
+    || activePreview.value?.location?.suggested_name
+    || activeSaved.value?.hunting_place_match?.selected_hunting_place_name
+    || props.activeSavedHunt?.location_name
+    || 'Unassigned'
+  )
+})
+const placeDisplay = computed(() => {
+  const label = placeLabel.value
+  const slashIndex = label.indexOf('/')
+  if (slashIndex === -1) {
+    return { title: label, subtext: '' }
+  }
+  const title = label.slice(0, slashIndex).trim()
+  const subtext = label.slice(slashIndex + 1).trim()
+  return {
+    title: title || label,
+    subtext,
+  }
+})
+const importedAt = computed(() => activeSaved.value?.uploaded_at || activeParsed.value?.ended_at || activeParsed.value?.hunt_date || null)
+const durationLabel = computed(() => `${activeParsed.value?.duration_minutes || props.activeSavedHunt?.duration_minutes || 0}m`)
+const killCount = computed(() => (activePreview.value?.monsters || []).reduce((sum, row) => sum + Number(row.count || 0), 0))
+const xpGain = computed(() => Number(activeParsed.value?.total_xp || props.activeSavedHunt?.total_xp || 0))
+const profit = computed(() => Number(activeParsed.value?.adjusted_net_profit ?? activeParsed.value?.net_profit ?? props.activeSavedHunt?.net_profit ?? 0))
+const isSavedHunt = computed(() => Boolean(activeSaved.value?.id))
+const isImportReview = computed(() => Boolean(props.hunts.importHuntPreview.value))
+const isUnsavedPreview = computed(() => Boolean(props.hunts.huntPreview.value && !props.hunts.previousHuntPreview.value))
+
+function formatDate(value) {
+  if (!value) return 'Date unknown'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 16)
+  return parsed.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function formatTimeRange() {
+  const start = activeParsed.value?.started_at
+  const end = activeParsed.value?.ended_at
+  if (!start || !end) return ''
+  const startDate = new Date(start)
+  const endDate = new Date(end)
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return ''
+  return `${startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+}
+
+function toggleEditPanel() {
+  showEditPanel.value = !showEditPanel.value
+}
+
+async function saveEditPanel() {
+  emit('save-previous-hunt')
+  showEditPanel.value = false
+}
 
 function huntingPlaceMatch(preview) {
   return preview?.location?.hunting_place_match || preview?.saved_hunt?.hunting_place_match || null
@@ -89,26 +157,162 @@ function placeLevel(candidate) {
 <template>
   <section class="hunt-workspace">
     <div class="workspace-main">
-      <div class="workspace-header panel">
-        <div class="breadcrumb">Hunts <ChevronRight :size="14" /> {{ hunts.activeHuntPreview.value?.suggested_label || 'New Hunt Workspace' }}</div>
-        <div class="status-row">
-          <span v-if="hunts.hasUnsavedHuntChanges.value" class="status-badge warning"><AlertTriangle :size="15" /> Unsaved changes</span>
-          <span v-if="hunts.hydrationInfo.value" class="status-badge warning"><AlertTriangle :size="15" /> {{ hunts.hydrationInfo.value }}</span>
-          <span v-if="hunts.huntInfo.value" class="muted">{{ hunts.huntInfo.value }}</span>
+      <header class="hunt-details-topbar">
+        <button class="ghost-action icon-label topbar-back" title="Back to Hunt History" @click="$emit('open-history', '')">
+          <ArrowLeft :size="16" />
+          <span>Back to Hunt History</span>
+        </button>
+        <div class="hunt-title-lockup">
+          <Swords :size="23" />
+          <h1>Hunt Details</h1>
         </div>
+        <div class="button-row">
+          <button v-if="isSavedHunt" class="ghost-action icon-label" title="Edit hunt" @click="toggleEditPanel">
+            <Edit3 :size="15" />
+            <span>Edit</span>
+          </button>
+          <button v-if="isSavedHunt" class="danger-btn icon-label" :disabled="hunts.huntDeleteBusy.value" title="Delete hunt" @click="hunts.deleteHunt()">
+            <Trash2 :size="15" />
+            <span>Delete</span>
+          </button>
+          <button v-else-if="isImportReview" class="primary-action icon-label" :disabled="hunts.huntSubmitBusy.value" @click="hunts.saveHuntLogImport">
+            <Download :size="15" />
+            <span>Save Import</span>
+          </button>
+          <button v-else-if="isUnsavedPreview" class="primary-action icon-label" :disabled="hunts.huntSubmitBusy.value" @click="hunts.submitHuntScaffold">
+            <Download :size="15" />
+            <span>Save Hunt</span>
+          </button>
+        </div>
+      </header>
+
+      <section v-if="activePreview" class="hunt-detail-hero panel">
+        <div class="hunt-place-summary">
+          <div class="place-avatar"><Swords :size="29" /></div>
+          <div>
+            <h2>{{ placeDisplay.title }}</h2>
+            <p v-if="placeDisplay.subtext" class="muted">{{ placeDisplay.subtext }}</p>
+          </div>
+        </div>
+        <div class="hero-stat">
+          <CalendarDays :size="22" />
+          <div>
+            <strong>{{ formatDate(importedAt) }}</strong>
+            <span>{{ formatTimeRange() || 'Time unknown' }}</span>
+          </div>
+        </div>
+        <div class="hero-stat">
+          <Clock3 :size="24" />
+          <div>
+            <strong>{{ durationLabel }}</strong>
+            <span>Duration</span>
+          </div>
+        </div>
+        <div class="hero-stat">
+          <Swords :size="24" />
+          <div>
+            <strong>{{ formatValue(killCount) }}</strong>
+            <span>Kills</span>
+          </div>
+        </div>
+        <div class="hero-stat">
+          <span class="hero-token xp-token">XP</span>
+          <div>
+            <strong>{{ formatValue(xpGain) }}</strong>
+            <span>XP Gain</span>
+          </div>
+        </div>
+        <div class="hero-stat profit">
+          <Coins :size="28" />
+          <div>
+            <strong>{{ formatSigned(profit) }}</strong>
+            <span>Profit</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="status-row hunt-detail-status">
+        <span v-if="hunts.hasUnsavedHuntChanges.value" class="status-badge warning"><AlertTriangle :size="15" /> Unsaved changes</span>
+        <span v-if="hunts.hydrationInfo.value" class="status-badge warning"><AlertTriangle :size="15" /> {{ hunts.hydrationInfo.value }}</span>
+        <span v-if="hunts.huntInfo.value" class="muted">{{ hunts.huntInfo.value }}</span>
       </div>
 
-      <div class="segmented-tabs">
-        <button :class="{ active: workspaceTab === 'overview' }" @click="$emit('update:workspaceTab', 'overview')">Overview</button>
-        <button :class="{ active: workspaceTab === 'loot' }" @click="$emit('update:workspaceTab', 'loot')">Loot</button>
-        <button :class="{ active: workspaceTab === 'raw' }" @click="$emit('update:workspaceTab', 'raw')">Raw</button>
-        <button :class="{ active: workspaceTab === 'similar' }" @click="$emit('update:workspaceTab', 'similar')">Similar</button>
-      </div>
-
-      <article v-if="workspaceTab === 'raw'" class="panel">
+      <article v-if="showEditPanel && hunts.previousHuntPreview.value" class="panel hunt-edit-panel">
         <div class="section-head compact">
-          <h2>Raw Hunt Data</h2>
+          <h2>Edit Hunt</h2>
+          <button class="ghost-action" @click="showEditPanel = false">Close</button>
         </div>
+        <div class="hunt-edit-grid">
+          <label>Name<input v-model="hunts.previousHuntDraftLabel.value" @input="hunts.markUnsavedHuntChanges" /></label>
+          <div class="location-field">
+            <label>
+              Location
+              <input
+                :value="hunts.previousHuntDraftLocation.value"
+                placeholder="Type 3 characters or choose a hunting spot"
+                @focus="hunts.openHuntingPlacePicker('previous', hunts.previousHuntDraftLocation)"
+                @click="hunts.openHuntingPlacePicker('previous', hunts.previousHuntDraftLocation)"
+                @keydown.escape="hunts.closeHuntingPlacePicker"
+                @input="hunts.updateLocationSearch(hunts.previousHuntDraftLocation, hunts.previousHuntDraftHuntingPlaceId, $event.target.value)"
+              />
+            </label>
+            <div v-if="hunts.activeHuntingPlacePicker.value === 'previous'" class="location-menu">
+              <button class="location-option muted-option" @mousedown.prevent="hunts.selectHuntingPlaceFromOptions('', [], hunts.previousHuntDraftLocation, hunts.previousHuntDraftHuntingPlaceId)">
+                None
+              </button>
+              <button
+                v-for="candidate in huntingPlaceOptions(huntingPlaceMatch(hunts.previousHuntPreview.value), hunts)"
+                :key="`previous-inline-place-${candidate.id}`"
+                class="location-option"
+                @mousedown.prevent="hunts.selectHuntingPlace(candidate, hunts.previousHuntDraftLocation, hunts.previousHuntDraftHuntingPlaceId)"
+              >
+                <span>{{ optionLabel(candidate) }}</span>
+                <small>{{ placeLevel(candidate) ? `Level ${placeLevel(candidate)}` : 'Level n/a' }}</small>
+              </button>
+            </div>
+          </div>
+          <label>Character<input v-model="hunts.previousHuntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
+          <label>Tags<input v-model="hunts.previousHuntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
+        </div>
+        <div class="button-row split">
+          <button :disabled="hunts.huntSubmitBusy.value" @click="saveEditPanel">Save Changes</button>
+          <button class="ghost-action" @click="showEditPanel = false">Cancel</button>
+        </div>
+      </article>
+
+      <HuntIntelligence
+        v-if="activePreview"
+        :preview="hunts.activeHuntPreview.value"
+        mode="overview"
+        :format-value="formatValue"
+        :format-signed="formatSigned"
+        :item-image-path="itemImagePath"
+        @open-item="$emit('open-item', $event)"
+        @open-creature="$emit('open-creature', $event)"
+      />
+      <details v-if="activePreview" class="raw-audit panel">
+        <summary>Raw imported data and full loot audit</summary>
+        <HuntSummary
+          :preview="hunts.activeHuntPreview.value"
+          :show-hidden-loot="hunts.showHiddenLoot.value"
+          :hidden-loot-count="hunts.hiddenLootCount.value"
+          :visible-loot-items="hunts.visibleLootItems.value"
+          :history-by-item-id="hunts.historyByItemId"
+          :history-loading-by-item-id="hunts.historyLoadingByItemId"
+          :show-monsters="false"
+          :show-loot-audit-columns="true"
+          :format-value="formatValue"
+          :format-signed="formatSigned"
+          :format-percent="formatPercent"
+          :item-image-path="itemImagePath"
+          @toggle-hidden="hunts.showHiddenLoot.value = $event"
+          @open-item="$emit('open-item', $event)"
+          @open-creature="$emit('open-creature', $event)"
+          @open-loot-inbox="$emit('open-loot-inbox')"
+          @assign-item-id="$emit('assign-item-id', $event)"
+          @hide-loot="hunts.hideLootItem"
+          @restore-loot="hunts.restoreLootItem"
+        />
         <label class="block-label">
           Session text
           <textarea
@@ -117,85 +321,16 @@ function placeLevel(candidate) {
             placeholder="Open a hunt or use New Hunt to parse fresh raw text."
           ></textarea>
         </label>
-      </article>
+      </details>
 
-      <HuntSummary
-        v-if="hunts.activeHuntPreview.value && workspaceTab === 'overview'"
-        :preview="hunts.activeHuntPreview.value"
-        :show-hidden-loot="hunts.showHiddenLoot.value"
-        :hidden-loot-count="hunts.hiddenLootCount.value"
-        :visible-loot-items="hunts.visibleLootItems.value"
-        :history-by-item-id="hunts.historyByItemId"
-        :history-loading-by-item-id="hunts.historyLoadingByItemId"
-        :allow-loot-controls="false"
-        :show-monsters="true"
-        :show-loot-audit-columns="false"
-        :show-suggestions="false"
-        :format-value="formatValue"
-        :format-signed="formatSigned"
-        :format-percent="formatPercent"
-        :item-image-path="itemImagePath"
-        @toggle-hidden="hunts.showHiddenLoot.value = $event"
-        @open-item="$emit('open-item', $event)"
-        @open-creature="$emit('open-creature', $event)"
-        @open-loot-inbox="$emit('open-loot-inbox')"
-        @assign-item-id="$emit('assign-item-id', $event)"
-        @hide-loot="hunts.hideLootItem"
-        @restore-loot="hunts.restoreLootItem"
-      />
-      <HuntSummary
-        v-if="hunts.activeHuntPreview.value && workspaceTab === 'loot'"
-        :preview="hunts.activeHuntPreview.value"
-        :show-hidden-loot="hunts.showHiddenLoot.value"
-        :hidden-loot-count="hunts.hiddenLootCount.value"
-        :visible-loot-items="hunts.visibleLootItems.value"
-        :history-by-item-id="hunts.historyByItemId"
-        :history-loading-by-item-id="hunts.historyLoadingByItemId"
-        :show-monsters="false"
-        :show-loot-audit-columns="true"
-        :format-value="formatValue"
-        :format-signed="formatSigned"
-        :format-percent="formatPercent"
-        :item-image-path="itemImagePath"
-        @toggle-hidden="hunts.showHiddenLoot.value = $event"
-        @open-item="$emit('open-item', $event)"
-        @open-creature="$emit('open-creature', $event)"
-        @open-loot-inbox="$emit('open-loot-inbox')"
-        @assign-item-id="$emit('assign-item-id', $event)"
-        @hide-loot="hunts.hideLootItem"
-        @restore-loot="hunts.restoreLootItem"
-      />
-      <article v-if="workspaceTab === 'similar'" class="panel">
-        <div class="section-head compact">
-          <h2>Similar Hunts</h2>
-          <span class="muted">Same location, similar experience, similar loot, and related locations.</span>
-        </div>
-        <div v-if="activeSavedHunt" class="similar-grid">
-          <section v-for="group in similarHuntGroups" :key="group.label" class="analysis-panel">
-            <div class="panel-title">{{ group.label }}</div>
-            <button
-              v-for="row in group.rows"
-              :key="`${group.label}-${row.id}`"
-              class="saved-row compact"
-              @click="$emit('open-hunt', row)"
-            >
-              <span>{{ row.label || `Hunt ${row.id}` }}</span>
-              <strong>{{ formatSigned(row.net_profit) }}</strong>
-              <small>{{ row.location_name || 'Unassigned' }} | {{ row.character_name || 'No character' }} | {{ formatValue(row.xp_per_hour) }} XP/H | {{ formatValue(row.total_loot_gold) }} loot</small>
-            </button>
-            <p v-if="!group.rows.length" class="muted">No close matches yet.</p>
-          </section>
-        </div>
-        <p v-else class="muted">Open a saved hunt to compare it against previous hunts.</p>
-      </article>
-      <article v-if="!hunts.activeHuntPreview.value && workspaceTab !== 'raw'" class="panel empty-state">
+      <article v-if="!activePreview" class="panel empty-state">
         <ShieldQuestion :size="32" />
         <h2>No active hunt preview</h2>
         <p class="muted">Parse a new session, review a log import, or open a saved hunt to populate the HuntLens workspace.</p>
       </article>
     </div>
 
-    <aside class="detail-drawer">
+    <aside v-if="false" class="detail-drawer">
       <div v-if="hunts.importHuntPreview.value" class="drawer-form">
         <h3>Review Log Import</h3>
         <span class="muted mono">{{ hunts.importHuntCandidate.value?.file_name }}</span>

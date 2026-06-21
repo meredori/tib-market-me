@@ -43,6 +43,8 @@ export type ParsedHuntText = {
   total_xp: number | null;
   total_loot_gold: number | null;
   total_supply_cost: number | null;
+  total_damage?: number | null;
+  total_healing?: number | null;
   started_at: string | null;
   ended_at: string | null;
   hunt_date: string | null;

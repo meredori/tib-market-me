@@ -30,6 +30,8 @@ function buildHuntPayload(preview, draft, rawText, source = null) {
     total_xp: Number(preview.parsed?.total_xp || 0),
     total_loot_gold: Number(preview.parsed?.adjusted_loot_gold ?? preview.parsed?.total_loot_gold ?? 0),
     total_supply_cost: Number(preview.parsed?.total_supply_cost || 0),
+    total_damage: preview.parsed?.total_damage ?? null,
+    total_healing: preview.parsed?.total_healing ?? null,
     started_at: preview.parsed?.started_at || null,
     ended_at: preview.parsed?.ended_at || null,
     excluded_item_names: draft.excluded.value,

@@ -3,6 +3,7 @@ import {
   hydrateHuntItemDetails
 } from "./itemDetailCache";
 import { hydrateMissingHuntingPlaceDetailsForMatch, matchHuntToHuntingPlaces } from "./huntingPlaceMatcher";
+import { buildHuntIntelligence } from "./intelligence";
 import { enrichLootItems } from "./lootEnrichment";
 import { parseHuntSessionText } from "./parser";
 import {
@@ -58,7 +59,7 @@ async function buildHuntPreviewFromParsed(
   });
   const boostFactor = computeBoostFactor(rawTotalXp, totalXp);
 
-  return {
+  const preview: Record<string, unknown> = {
     suggested_label: parsed.label ?? "Untitled Hunt",
     parsed: {
       duration_minutes: durationMinutes,
@@ -67,6 +68,8 @@ async function buildHuntPreviewFromParsed(
       total_loot_gold: totalLoot,
       adjusted_loot_gold: adjustedLoot,
       total_supply_cost: totalSupply,
+      total_damage: parsed.total_damage ?? null,
+      total_healing: parsed.total_healing ?? null,
       net_profit: netProfit,
       adjusted_net_profit: adjustedNetProfit,
       xp_per_hour: Math.round(totalXp / hours),
@@ -95,6 +98,10 @@ async function buildHuntPreviewFromParsed(
     },
     suggestions: enriched.suggestions,
     raw_text: rawText
+  };
+  return {
+    ...preview,
+    hunt_intelligence: buildHuntIntelligence(db, preview)
   };
 }
 
@@ -133,7 +140,7 @@ export async function getHuntUploadPreview(
   db: Database.Database,
   huntId: number
 ): Promise<Record<string, unknown> | null> {
-  return getRepositoryHuntUploadPreview(
+  const preview = await getRepositoryHuntUploadPreview(
     db,
     huntId,
     (parsed, rawText, excludedItemNames, explicitLocationName) => buildHuntPreviewFromParsed(
@@ -145,6 +152,13 @@ export async function getHuntUploadPreview(
     ),
     (payload) => parseHuntPreview(db, payload)
   );
+  if (!preview) {
+    return null;
+  }
+  return {
+    ...preview,
+    hunt_intelligence: buildHuntIntelligence(db, preview, asRecord(preview.saved_hunt))
+  };
 }
 
 export {

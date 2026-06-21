@@ -315,7 +315,14 @@ export function deleteHuntLogImportFile(db: Database.Database, payload: unknown)
 function buildHuntInput(db: Database.Database, payload: unknown): HuntInput {
   const row = asRecord(payload) ?? {};
   const rawText = asText(row.raw_text).replace(/<\/??hunt>/gi, "").trim();
-  const parsedText = rawText.trim() ? parseHuntSessionText(rawText) : null;
+  let parsedText = rawText.trim() ? parseHuntSessionText(rawText) : null;
+  if (parsedText) {
+    parsedText = {
+      ...parsedText,
+      total_damage: parsedText.total_damage ?? asNumberOrNull(row.total_damage),
+      total_healing: parsedText.total_healing ?? asNumberOrNull(row.total_healing)
+    };
+  }
   const fallbackTotalXp = asNumber(row.total_xp, parsedText?.total_xp ?? 0);
   const fallbackRawTotalXp = parsedText?.raw_total_xp ?? fallbackTotalXp;
   const monsters = parsedText?.monsters ?? [];
@@ -1355,12 +1362,21 @@ export async function getHuntUploadPreview(
       excludedItemNames = [];
     }
   }
+  const rawText = asText(row.raw_text);
+  let rawParsed: import("./types").ParsedHuntText | null = null;
   let parsed: import("./types").ParsedHuntText | null = null;
   if (typeof row.processed_json === "string" && row.processed_json.trim()) {
     try {
       const processed = JSON.parse(row.processed_json) as Record<string, unknown>;
       const processedParsed = asRecord(processed.parsed);
       if (processedParsed) {
+        if (rawText.trim()) {
+          try {
+            rawParsed = parseHuntSessionText(rawText);
+          } catch {
+            rawParsed = null;
+          }
+        }
         parsed = {
           label: firstText(processedParsed.label),
           duration_minutes: asNumberOrNull(processedParsed.duration_minutes),
@@ -1368,6 +1384,8 @@ export async function getHuntUploadPreview(
           total_xp: asNumberOrNull(processedParsed.total_xp),
           total_loot_gold: asNumberOrNull(processedParsed.total_loot_gold),
           total_supply_cost: asNumberOrNull(processedParsed.total_supply_cost),
+          total_damage: asNumberOrNull(processedParsed.total_damage) ?? rawParsed?.total_damage ?? null,
+          total_healing: asNumberOrNull(processedParsed.total_healing) ?? rawParsed?.total_healing ?? null,
           started_at: firstText(processedParsed.started_at),
           ended_at: firstText(processedParsed.ended_at),
           hunt_date: firstText(processedParsed.hunt_date),
@@ -1388,7 +1406,6 @@ export async function getHuntUploadPreview(
     }
   }
 
-  const rawText = asText(row.raw_text);
   const preview = parsed
     ? await buildPreviewFromParsed(parsed, rawText, excludedItemNames, asText(row.location_name).trim() || null)
     : await buildPreview({

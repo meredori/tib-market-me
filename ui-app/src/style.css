@@ -1160,9 +1160,153 @@ th {
 
 .hunt-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: start;
+}
+
+.hunt-details-topbar {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.hunt-details-topbar > .button-row {
+  justify-content: end;
+}
+
+.hunt-details-topbar .topbar-back {
+  justify-self: start;
+  border-color: transparent;
+  padding-inline: 0;
+}
+
+.hunt-details-topbar .topbar-back:hover {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink);
+}
+
+.hunt-title-lockup {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.hunt-title-lockup h1 {
+  font-size: 1.28rem;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.hunt-detail-hero {
+  align-items: stretch;
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(260px, 1.8fr) repeat(5, minmax(130px, 1fr));
+  overflow: hidden;
+  padding: 0;
+}
+
+.hunt-place-summary,
+.hero-stat {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px;
+}
+
+.hero-stat {
+  border-left: 1px solid var(--line-soft);
+}
+
+.hunt-place-summary h2,
+.hunt-place-summary p,
+.hero-stat strong,
+.hero-stat span {
+  margin: 0;
+}
+
+.hunt-place-summary h2 {
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+
+.place-avatar {
+  align-items: center;
+  background: linear-gradient(145deg, rgba(59, 130, 246, 0.22), rgba(168, 85, 247, 0.22));
+  border: 1px solid rgba(120, 146, 176, 0.28);
+  border-radius: 50%;
+  color: #c7d7ff;
+  display: inline-flex;
+  flex: 0 0 64px;
+  height: 64px;
+  justify-content: center;
+  width: 64px;
+}
+
+.hero-stat div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hero-stat strong {
+  font-size: 1.05rem;
+}
+
+.hero-stat span {
+  color: var(--muted);
+  font-size: var(--font-small);
+}
+
+.hero-stat.profit strong {
+  color: var(--green);
+}
+
+.hero-token {
+  align-items: center;
+  border-radius: 50%;
+  display: inline-flex;
+  flex: 0 0 40px;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.xp-token {
+  background: #245c9d;
+  color: #d8ebff;
+  font-weight: 800;
+}
+
+.hunt-detail-status:empty {
+  display: none;
+}
+
+.hunt-edit-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.hunt-edit-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.raw-audit {
+  display: grid;
+  gap: 12px;
+}
+
+.raw-audit summary {
+  cursor: pointer;
+  font-size: var(--font-heading);
+  font-weight: 700;
+  list-style-position: inside;
 }
 
 .history-grid {
@@ -2249,6 +2393,31 @@ tr.selected {
 
   .topbar-actions {
     justify-content: flex-start;
+  }
+
+  .hunt-details-topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .hunt-details-topbar > .button-row {
+    justify-content: flex-start;
+  }
+
+  .hunt-detail-hero {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .hunt-place-summary {
+    grid-column: 1 / -1;
+  }
+
+  .hero-stat {
+    border-left: 0;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .hunt-edit-grid {
+    grid-template-columns: 1fr;
   }
 
   .topbar,

@@ -64,6 +64,8 @@ export function huntSessionSignature(parsed: ParsedHuntText | null): string | nu
     total_xp: Math.max(0, Math.round(asNumber(parsed.total_xp, 0))),
     total_loot_gold: Math.max(0, Math.round(asNumber(parsed.total_loot_gold, 0))),
     total_supply_cost: Math.max(0, Math.round(asNumber(parsed.total_supply_cost, 0))),
+    total_damage: Math.max(0, Math.round(asNumber(parsed.total_damage, 0))),
+    total_healing: Math.max(0, Math.round(asNumber(parsed.total_healing, 0))),
     started_at: parsed.started_at ?? null,
     ended_at: parsed.ended_at ?? null,
     monsters: sortedCountRows(parsed.monsters),
@@ -165,6 +167,8 @@ export function parseHuntSessionText(rawText: string): ParsedHuntText {
   const xpGain = parseLineValue(cleaned, "XP Gain");
   const loot = parseLineValue(cleaned, "Loot");
   const supplies = parseLineValue(cleaned, "Supplies");
+  const damage = parseLineValue(cleaned, "Damage");
+  const healing = parseLineValue(cleaned, "Healing");
   const monsters = parseCountedSection(cleaned, "Killed Monsters");
   const lootItemsRaw = parseCountedSection(cleaned, "Looted Items");
   const lootItems = lootItemsRaw.map((item) => ({
@@ -182,6 +186,8 @@ export function parseHuntSessionText(rawText: string): ParsedHuntText {
     total_xp: xpGain,
     total_loot_gold: loot,
     total_supply_cost: supplies,
+    total_damage: damage,
+    total_healing: healing,
     started_at: startedAt,
     ended_at: endedAt,
     hunt_date: huntDate,

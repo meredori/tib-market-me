@@ -8,7 +8,7 @@ import {
   parseHuntPreview,
   updateHuntUpload
 } from "./huntAnalyser";
-import { existingHuntsByImportIdentity } from "./repository";
+import { existingHuntsByImportIdentity, getHuntUploadPreview } from "./repository";
 import { rematchHuntUpload, rematchHuntUploads } from "./repository";
 import { matchHuntToHuntingPlaces } from "./huntingPlaceMatcher";
 import { resetItemDetailFetchForTests, setItemDetailFetchForTests } from "./itemDetailCache";
@@ -32,6 +32,70 @@ function sampleHunt(lootLines: string): string {
     "  20x dragon",
     "Looted Items:",
     lootLines
+  ].join("\n");
+}
+
+function customHunt(input: {
+  rawXp?: number;
+  xp?: number;
+  loot?: number;
+  supplies?: number;
+  damage?: number;
+  healing?: number;
+  monsters?: string[];
+  lootLines?: string;
+} = {}): string {
+  return [
+    "Session data: From 2026-06-10, 10:00:00 to 2026-06-10, 10:30:00",
+    "Session: 00:30h",
+    `Raw XP Gain: ${(input.rawXp ?? 120_000).toLocaleString("en-US")}`,
+    `XP Gain: ${(input.xp ?? 180_000).toLocaleString("en-US")}`,
+    `Loot: ${(input.loot ?? 1_000).toLocaleString("en-US")}`,
+    `Supplies: ${(input.supplies ?? 250).toLocaleString("en-US")}`,
+    ...(input.damage !== undefined ? [`Damage: ${input.damage.toLocaleString("en-US")}`] : []),
+    ...(input.healing !== undefined ? [`Healing: ${input.healing.toLocaleString("en-US")}`] : []),
+    "Killed Monsters:",
+    ...(input.monsters ?? ["  20x dragon"]),
+    "Looted Items:",
+    input.lootLines ?? "  1x gold coin"
+  ].join("\n");
+}
+
+function magicianQuarterHunt(): string {
+  return [
+    "Session data: From 2026-06-20, 11:26:13 to 2026-06-20, 12:16:44",
+    "Session: 00:50h",
+    "Raw XP Gain: 57,944",
+    "XP Gain: 100,469",
+    "Raw XP/h: 68,823",
+    "XP/h: 119,332",
+    "Loot: 13,872",
+    "Supplies: 3,920",
+    "Balance: 9,952",
+    "Damage: 111,010",
+    "Damage/h: 141,759",
+    "Healing: 4,551",
+    "Healing/h: 5,811",
+    "Killed Monsters:",
+    "  259x dark apprentice",
+    "  118x dark magician",
+    "  39x mad scientist",
+    "Looted Items:",
+    "  5x a strong health potion",
+    "  3x a strong mana potion",
+    "  27x a health potion",
+    "  25x a mana potion",
+    "  8056x a gold coin",
+    "  2x a magic light wand",
+    "  1x a life crystal",
+    "  1x a necrotic rod",
+    "  1x a wand of decay",
+    "  8x a wand of dragonbreath",
+    "  54x a blank rune",
+    "  5x a cookie",
+    "  9x a white mushroom",
+    "  1x a powder herb",
+    "  4x a dead frog"
   ].join("\n");
 }
 
@@ -91,6 +155,11 @@ function createMockDb(handler: (sql: string) => Statement): any {
 function previewDb(options: {
   details?: Record<string, ItemDetailCacheRow | null>;
   loot?: Record<string, LootLookupRow>;
+  history?: Array<Record<string, unknown>>;
+  creatures?: Array<Record<string, unknown>>;
+  publicLoot?: Array<Record<string, unknown>>;
+  marketRun?: Record<string, unknown>;
+  place?: Record<string, unknown>;
 } = {}): any {
   return createMockDb((sql) => {
     if (sql.includes("FROM hunt_locations")) {
@@ -101,8 +170,11 @@ function previewDb(options: {
         get: vi.fn((name: unknown) => options.details?.[String(name)] ?? null)
       };
     }
+    if (sql.includes("FROM hunt_uploads") && sql.includes("processed_json")) {
+      return { all: vi.fn(() => options.history ?? []) };
+    }
     if (sql.includes("FROM market_runs")) {
-      return { get: vi.fn(() => (options.loot ? { id: 99 } : undefined)) };
+      return { get: vi.fn(() => (options.marketRun ?? (options.loot ? { id: 99, finished_at: "2026-06-10T12:00:00.000Z" } : undefined))) };
     }
     if (sql.includes("FROM market_item_prices")) {
       return {
@@ -111,6 +183,15 @@ function previewDb(options: {
     }
     if (sql.includes("FROM item_market_history")) {
       return { all: vi.fn(() => []) };
+    }
+    if (sql.includes("FROM public_creatures") && sql.includes("WHERE normalized_name IN")) {
+      return { all: vi.fn(() => options.creatures ?? []) };
+    }
+    if (sql.includes("FROM public_creature_loot")) {
+      return { all: vi.fn(() => options.publicLoot ?? []) };
+    }
+    if (sql.includes("FROM public_hunting_places") && sql.includes("WHERE id = ?")) {
+      return { get: vi.fn(() => options.place ?? undefined) };
     }
     return {};
   });
@@ -262,6 +343,181 @@ describe("hunt analyser preview", () => {
         fair_sale_price: 800
       })
     });
+  });
+
+  it("classifies strong profit hunts from personal comparisons", async () => {
+    const preview = await parseHuntPreview(previewDb({
+      loot: { "rare gem": lootRow("rare gem", 100_000) },
+      history: [
+        { id: 1, label: "Older", duration_minutes: 30, total_xp: 100_000, raw_total_xp: 100_000, total_loot_gold: 10_000, total_supply_cost: 5_000, uploaded_at: "2026-06-09T00:00:00.000Z" }
+      ]
+    }), { raw_text: customHunt({ lootLines: "  1x rare gem" }) });
+
+    expect((preview.hunt_intelligence as Record<string, any>).verdict.label).toBe("Excellent profit hunt");
+    expect((preview.hunt_intelligence as Record<string, any>).verdict.repeat_recommendation.label).toBe("Repeat this hunt");
+    expect((preview.hunt_intelligence as Record<string, any>).verdict.tags).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "risk", value: "low", tone: "good" }),
+      expect.objectContaining({ key: "supply", value: "low", tone: "good" }),
+      expect.objectContaining({ key: "profit", value: "high", tone: "good" })
+    ]));
+    expect((preview.hunt_intelligence as Record<string, any>).key_metrics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "profit_per_hour", delta_pct: expect.any(Number) })
+    ]));
+  });
+
+  it("classifies strong XP, expensive, and safe slow hunts", async () => {
+    const xpPreview = await parseHuntPreview(previewDb({
+      history: [
+        { id: 1, label: "Low XP", duration_minutes: 30, total_xp: 20_000, raw_total_xp: 20_000, total_loot_gold: 20_000, total_supply_cost: 250, uploaded_at: "2026-06-09T00:00:00.000Z" }
+      ]
+    }), { raw_text: customHunt({ xp: 300_000, loot: 10_000, supplies: 250, lootLines: "  10000x gold coin" }) });
+    const expensivePreview = await parseHuntPreview(previewDb(), { raw_text: customHunt({ loot: 1_000, supplies: 3_000 }) });
+    const safePreview = await parseHuntPreview(previewDb(), { raw_text: customHunt({ loot: 10_000, supplies: 500, lootLines: "  10000x gold coin" }) });
+
+    expect((xpPreview.hunt_intelligence as Record<string, any>).verdict.label).toBe("Strong XP hunt");
+    expect((expensivePreview.hunt_intelligence as Record<string, any>).verdict.label).toBe("Expensive hunt");
+    expect((safePreview.hunt_intelligence as Record<string, any>).verdict.label).toBe("Safe but slow hunt");
+  });
+
+  it("preserves parsed damage and healing totals in combat intelligence", async () => {
+    const preview = await parseHuntPreview(previewDb(), {
+      raw_text: customHunt({
+        damage: 31_886,
+        healing: 1_512,
+        monsters: [
+          "  83x elf",
+          "  29x elf arcanist",
+          "  107x elf scout"
+        ]
+      })
+    });
+    const intelligence = preview.hunt_intelligence as Record<string, any>;
+
+    expect(preview.parsed.total_damage).toBe(31_886);
+    expect(preview.parsed.total_healing).toBe(1_512);
+    expect(intelligence.combat_analysis).toEqual(expect.objectContaining({
+      damage_recorded: true,
+      healing_recorded: true,
+      incoming_damage_recorded: false,
+      total_damage: 31_886,
+      total_healing: 1_512,
+      damage_per_kill: 146,
+      healing_per_kill: 7
+    }));
+  });
+
+  it("parses default Hunt Analyser damage and healing as done totals", async () => {
+    const preview = await parseHuntPreview(previewDb(), {
+      raw_text: magicianQuarterHunt()
+    });
+    const intelligence = preview.hunt_intelligence as Record<string, any>;
+
+    expect(preview.parsed.total_damage).toBe(111_010);
+    expect(preview.parsed.total_healing).toBe(4_551);
+    expect(intelligence.combat_analysis).toEqual(expect.objectContaining({
+      damage_recorded: true,
+      healing_recorded: true,
+      incoming_damage_recorded: false,
+      total_damage: 111_010,
+      total_healing: 4_551,
+      damage_per_kill: 267,
+      healing_per_kill: 11
+    }));
+  });
+
+  it("fills saved hunt damage and healing from raw text when processed JSON is older", async () => {
+    const rawText = magicianQuarterHunt();
+    const oldProcessed = {
+      parsed: {
+        label: "dark apprentices - 2026-06-20",
+        duration_minutes: 50,
+        raw_total_xp: 57_944,
+        total_xp: 100_469,
+        total_loot_gold: 13_872,
+        total_supply_cost: 3_920,
+        started_at: "2026-06-20T11:26:13.000Z",
+        ended_at: "2026-06-20T12:16:44.000Z",
+        hunt_date: "2026-06-20",
+        monsters: [
+          { name: "dark apprentice", count: 259 },
+          { name: "dark magician", count: 118 },
+          { name: "mad scientist", count: 39 }
+        ],
+        loot_items: [
+          { name: "a gold coin", quantity: 8056, normalized_name: "gold coin" }
+        ]
+      }
+    };
+    const db = createMockDb((sql) => {
+      if (sql.includes("FROM hunt_uploads") && sql.includes("WHERE id = ?")) {
+        return {
+          get: vi.fn(() => ({
+            id: 19,
+            label: "dark apprentices - 2026-06-20",
+            uploaded_at: "2026-06-20T12:16:44.000Z",
+            raw_text: rawText,
+            processed_json: JSON.stringify(oldProcessed),
+            location_name: "Magician Quarter/Academy of Magic",
+            tags_json: "[]",
+            excluded_items_json: "[]",
+            hunting_place_match_status: "manual",
+            hunting_place_match_manual: 1
+          }))
+        };
+      }
+      return {};
+    });
+    const preview = await getHuntUploadPreview(
+      db,
+      19,
+      async (parsed) => ({ parsed }),
+      async () => ({ parsed: null })
+    );
+
+    expect(preview?.parsed).toEqual(expect.objectContaining({
+      total_damage: 111_010,
+      total_healing: 4_551
+    }));
+  });
+
+  it("surfaces rare-drop dependency, data quality, and monster XP contribution", async () => {
+    const preview = await parseHuntPreview(previewDb({
+      loot: {
+        "rare gem": { ...lootRow("rare gem", 80_000), confidence: 0.4, override_mode: "market" }
+      },
+      creatures: [
+        { id: 10, name: "dragon", normalized_name: "dragon", experience: 700, hitpoints: 1000, bestiary_class: "Reptile", bestiary_difficulty: "Medium" }
+      ],
+      publicLoot: [
+        { normalized_creature_name: "dragon", normalized_item_name: "rare gem", item_name: "rare gem", chance_percent: 0.5, rarity: "rare" }
+      ],
+      marketRun: { id: 99, finished_at: "2026-06-10T12:00:00.000Z" }
+    }), { raw_text: customHunt({ lootLines: ["  1x rare gem", "  2x mystery dust"].join("\n") }) });
+    const intelligence = preview.hunt_intelligence as Record<string, any>;
+
+    expect(intelligence.loot_analysis.rare_drop_dependency_pct).toBeGreaterThan(35);
+    expect(intelligence.loot_analysis.profit_without_top_drop).toBeLessThan(intelligence.key_metrics.find((item: Record<string, unknown>) => item.key === "profit")?.raw_value as number);
+    expect(intelligence.data_quality.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining("missing resolved prices"),
+      expect.stringContaining("low price confidence"),
+      expect.stringContaining("override")
+    ]));
+    expect(intelligence.monster_analysis.estimated_xp_from_creatures).toBe(14_000);
+    expect(intelligence.combat_analysis.summary).toContain("estimated");
+    expect(intelligence.recommendations.map((item: Record<string, string>) => item.label)).not.toContain("Check profit without rare drops");
+  });
+
+  it("keeps sparse preview intelligence graceful", async () => {
+    const preview = await parseHuntPreview(previewDb(), { raw_text: customHunt({ lootLines: "  1x unknown pebble" }) });
+    const intelligence = preview.hunt_intelligence as Record<string, any>;
+
+    expect(intelligence.verdict.label).toBeTruthy();
+    expect(intelligence.data_quality.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining("missing resolved prices")
+    ]));
+    expect(intelligence.performance_reasons).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "limited comparison" })
+    ]));
   });
 });
 
