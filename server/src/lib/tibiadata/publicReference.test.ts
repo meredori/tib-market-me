@@ -440,7 +440,7 @@ describe("public Tibia reference data", () => {
       chance_percent: 10,
       min_count: 1,
       max_count: 3,
-      rarity: null,
+      rarity: "uncommon",
       amount_text: "1-3"
     });
     expect(db.prepare("SELECT detail_status FROM public_hunting_places WHERE id = 201").get()).toEqual({ detail_status: "enriched" });

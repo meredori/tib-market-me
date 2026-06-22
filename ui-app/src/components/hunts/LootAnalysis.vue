@@ -121,6 +121,11 @@ function openLootItem(item) {
     emit('open-item', item.item_id)
   }
 }
+
+function rarityClass(value) {
+  const normalized = String(value || '').toLowerCase().trim().replace(/[\s_-]+/g, '-')
+  return `rarity-${normalized || 'unknown'}`
+}
 </script>
 
 <template>
@@ -193,8 +198,8 @@ function openLootItem(item) {
               :disabled="!drop.item_id"
               @click="drop.item_id ? emit('open-item', drop.item_id) : null"
             >
-              <span>{{ drop.quantity }}x {{ drop.name }}</span>
-              <em>{{ drop.rarity || 'Unknown' }}</em>
+              <span>{{ drop.quantity }}x {{ titleCaseLabel(drop.name) }}</span>
+              <em :class="rarityClass(drop.rarity)">{{ titleCaseLabel(drop.rarity || 'Unknown') }}</em>
             </button>
           </div>
         </div>
@@ -413,6 +418,42 @@ function openLootItem(item) {
   font-size: var(--font-label);
   font-style: normal;
   padding: 2px 5px;
+}
+
+.rarity-row em.rarity-common {
+  border-color: rgba(212, 212, 212, 0.26);
+  background: rgba(212, 212, 212, 0.08);
+  color: #d4d4d4;
+}
+
+.rarity-row em.rarity-uncommon {
+  border-color: rgba(127, 247, 127, 0.26);
+  background: rgba(127, 247, 127, 0.08);
+  color: #7ff77f;
+}
+
+.rarity-row em.rarity-semi-rare {
+  border-color: rgba(143, 207, 255, 0.26);
+  background: rgba(143, 207, 255, 0.08);
+  color: #8fcfff;
+}
+
+.rarity-row em.rarity-rare {
+  border-color: rgba(255, 179, 255, 0.26);
+  background: rgba(255, 179, 255, 0.08);
+  color: #ffb3ff;
+}
+
+.rarity-row em.rarity-very-rare {
+  border-color: rgba(247, 247, 127, 0.26);
+  background: rgba(247, 247, 127, 0.08);
+  color: #f7f77f;
+}
+
+.rarity-row em.rarity-unknown {
+  border-color: rgba(120, 146, 176, 0.26);
+  background: rgba(120, 146, 176, 0.08);
+  color: var(--muted);
 }
 
 .bar-list {

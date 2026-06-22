@@ -267,6 +267,27 @@ function readPublicLoot(db: Database.Database, creatureNames: string[], itemName
   }));
 }
 
+function rarityRank(value: string | null): number {
+  const normalized = String(value || "").toLowerCase().replace(/[_-]+/g, " ").trim();
+  if (normalized === "common") return 0;
+  if (normalized === "uncommon") return 1;
+  if (normalized === "semi rare" || normalized === "semirare") return 2;
+  if (normalized === "rare") return 3;
+  if (normalized === "very rare") return 4;
+  return 5;
+}
+
+function rarityFromChance(chancePercent: number | null): string | null {
+  if (chancePercent === null || !Number.isFinite(chancePercent) || chancePercent <= 0) {
+    return null;
+  }
+  if (chancePercent >= 20) return "common";
+  if (chancePercent >= 5) return "uncommon";
+  if (chancePercent >= 1) return "semi-rare";
+  if (chancePercent >= 0.1) return "rare";
+  return "very rare";
+}
+
 function readMarketRun(db: Database.Database): MarketRun | null {
   return safeGet<MarketRun>(db, `
     SELECT id, finished_at
@@ -677,6 +698,32 @@ export function buildHuntIntelligence(
   const creatureByName = readCreatures(db, monsterNames);
   const publicLootRows = readPublicLoot(db, monsterNames, visibleLoot.map((item) => asText(item.name)));
   const publicLootByItem = new Map(publicLootRows.map((row) => [row.normalized_item_name, row]));
+  const monsterKillsByName = new Map(monsters.map((monster) => [
+    normalizeLootItemName(asText(monster.name)),
+    Math.max(0, asNumber(monster.count, 0))
+  ]));
+  const publicRarityByItem = new Map<string, string | null>();
+  const fallbackRarityByItem = new Map<string, string | null>();
+  const eligibleKillsByItem = new Map<string, number>();
+  for (const row of publicLootRows) {
+    const item = row.normalized_item_name;
+    const monsterKills = monsterKillsByName.get(row.normalized_creature_name) ?? 0;
+    eligibleKillsByItem.set(item, (eligibleKillsByItem.get(item) ?? 0) + monsterKills);
+
+    const derivedFromChance = rarityFromChance(row.chance_percent);
+    if (derivedFromChance) {
+      const existingPublicRarity = publicRarityByItem.get(item);
+      if (existingPublicRarity === undefined || rarityRank(derivedFromChance) < rarityRank(existingPublicRarity)) {
+        publicRarityByItem.set(item, derivedFromChance);
+      }
+    } else if (row.rarity) {
+      const fallbackRarity = String(row.rarity).toLowerCase();
+      const existingFallbackRarity = fallbackRarityByItem.get(item);
+      if (existingFallbackRarity === undefined || rarityRank(fallbackRarity) < rarityRank(existingFallbackRarity)) {
+        fallbackRarityByItem.set(item, fallbackRarity);
+      }
+    }
+  }
   const marketRun = readMarketRun(db);
   const placeRiskRow = placeId ? safeGet<{ risk_level: string | null; min_level: number | null; max_level: number | null }>(db, `
     SELECT risk_level, min_level, max_level
@@ -690,9 +737,15 @@ export function buildHuntIntelligence(
     .map((item) => {
       const totalValue = Math.max(0, asNumber(item.total_value, 0));
       const contribution = percent(totalValue, loot) ?? 0;
-      const publicLoot = publicLootByItem.get(normalizeLootItemName(asText(item.normalized_name || item.name)));
+      const normalizedItemName = normalizeLootItemName(asText(item.normalized_name || item.name));
+      const publicLoot = publicLootByItem.get(normalizedItemName);
       const lookup = asRecord(item.lookup);
       const lootLogic = asRecord(item.loot_logic);
+      const observedChance = percent(asNumber(item.quantity, 0), eligibleKillsByItem.get(normalizedItemName) ?? 0);
+      const rarity = publicRarityByItem.get(normalizedItemName)
+        || rarityFromChance(observedChance)
+        || fallbackRarityByItem.get(normalizedItemName)
+        || null;
       return {
         item_id: asNumberOrNull(item.item_id),
         name: asText(item.resolved_name || item.name),
@@ -700,8 +753,8 @@ export function buildHuntIntelligence(
         total_value: totalValue,
         contribution_pct: contribution,
         unit_value: asNumberOrNull(item.unit_value),
-        rarity: asText(publicLoot?.rarity) || null,
-        chance_percent: publicLoot?.chance_percent ?? null,
+        rarity,
+        chance_percent: rarityFromChance(publicLoot?.chance_percent ?? null) ? publicLoot?.chance_percent ?? null : observedChance,
         price_confidence: buildConfidence(asNumberOrNull(lookup?.confidence), {
           estimated: true,
           missingDataReason: item.value_source === "unknown" ? "No local market or NPC value." : null
@@ -1064,7 +1117,7 @@ export function buildHuntIntelligence(
       total_estimated_loot: Math.round(totalEstimatedLoot),
       summary: (() => {
         let maxDelta = 0;
-        let notableMonsterRow: typeof creatureRows[0] | null = null;
+        let notableMonsterRow: typeof creatureRowsWithMetrics[0] | null = null;
         for (const row of creatureRowsWithMetrics) {
           const delta = (row.loot_pct ?? 0) - (row.kill_pct ?? 0);
           if (delta > maxDelta) {

@@ -494,7 +494,24 @@ function normalizeLootRow(row: Record<string, unknown>): NormalizedLootRow | nul
   if (!name) {
     return null;
   }
-  const rarity = firstText(row.rarity, row.classification);
+  const explicitRarity = firstText(row.rarity, row.classification);
+  const chancePercent = parsePercent(row.chancePercent ?? row.chance_percent ?? row.chance ?? row.dropChance ?? row.drop_chance ?? row.percentage);
+
+  let rarity = explicitRarity || null;
+  if (chancePercent !== null) {
+    if (chancePercent >= 20) {
+      rarity = "common";
+    } else if (chancePercent >= 5) {
+      rarity = "uncommon";
+    } else if (chancePercent >= 1) {
+      rarity = "semi-rare";
+    } else if (chancePercent >= 0.1) {
+      rarity = "rare";
+    } else {
+      rarity = "very rare";
+    }
+  }
+
   const chanceAmount = amountRangeFromText(row.chance);
   const rawAmount = rawLootAmount(row.raw, name, rarity);
   const explicitAmount = firstText(row.amount, row.count, row.quantity);
@@ -505,7 +522,7 @@ function normalizeLootRow(row: Record<string, unknown>): NormalizedLootRow | nul
     item_id: firstNumber(row.itemId, row.item_id),
     item_name: name,
     normalized_item_name: normalizePublicName(name),
-    chance_percent: parsePercent(row.chancePercent ?? row.chance_percent ?? row.chance ?? row.dropChance ?? row.drop_chance ?? row.percentage),
+    chance_percent: chancePercent,
     min_count: asNumberOrNull(row.minCount ?? row.min_count ?? row.min) ?? explicitAmountRange.min ?? chanceAmount.min ?? rawAmountRange.min ?? 1,
     max_count: asNumberOrNull(row.maxCount ?? row.max_count ?? row.max) ?? explicitAmountRange.max ?? chanceAmount.max ?? rawAmountRange.max ?? 1,
     rarity,
@@ -550,6 +567,22 @@ function normalizedLootRows(payload: unknown): { rows: NormalizedLootRow[]; dupl
       const maxCount = range.max ?? 1;
       const amountText = range.text || "1";
 
+      const explicitRarity = firstText(row.rarity) || null;
+      let rarity = explicitRarity;
+      if (chancePercent !== null) {
+        if (chancePercent >= 20) {
+          rarity = "common";
+        } else if (chancePercent >= 5) {
+          rarity = "uncommon";
+        } else if (chancePercent >= 1) {
+          rarity = "semi-rare";
+        } else if (chancePercent >= 0.1) {
+          rarity = "rare";
+        } else {
+          rarity = "very rare";
+        }
+      }
+
       const normalized: NormalizedLootRow = {
         item_id: firstNumber(row.itemId, row.item_id),
         item_name: itemName,
@@ -557,7 +590,7 @@ function normalizedLootRows(payload: unknown): { rows: NormalizedLootRow[]; dupl
         chance_percent: chancePercent,
         min_count: minCount,
         max_count: maxCount,
-        rarity: firstText(row.rarity) || null,
+        rarity,
         amount_text: amountText,
         payload_json: JSON.stringify(row)
       };
@@ -1436,7 +1469,7 @@ export function upsertPublicCreature(db: Database.Database, payload: unknown, fe
       bestiary_category = excluded.bestiary_category,
       bestiary_difficulty = excluded.bestiary_difficulty,
       charm_points = excluded.charm_points,
-      total_kills = excluded.total_kills,
+      total_kills = COALESCE(excluded.total_kills, public_creatures.total_kills),
       last_updated = excluded.last_updated,
       last_seen = excluded.last_seen,
       fetched_at = excluded.fetched_at,
@@ -1511,7 +1544,7 @@ export function replacePublicCreatureLoot(db: Database.Database, creatureId: num
 export function repairPublicCreatureLootRows(db: Database.Database): Record<string, unknown> {
   const rows = db.prepare(
     `
-    SELECT creature_id, normalized_item_name, payload_json
+    SELECT creature_id, normalized_item_name, chance_percent, payload_json
     FROM public_creature_loot
     `
   ).all() as Array<Record<string, unknown>>;
@@ -1539,11 +1572,30 @@ export function repairPublicCreatureLootRows(db: Database.Database): Record<stri
           skipped += 1;
           continue;
         }
+        const finalChance = normalized.chance_percent ?? (
+          payload && typeof payload === "object" && ("times" in payload || "total" in payload)
+            ? asNumberOrNull(row.chance_percent)
+            : null
+        );
+        let rarity = normalized.rarity;
+        if (finalChance !== null) {
+          if (finalChance >= 20) {
+            rarity = "common";
+          } else if (finalChance >= 5) {
+            rarity = "uncommon";
+          } else if (finalChance >= 1) {
+            rarity = "semi-rare";
+          } else if (finalChance >= 0.1) {
+            rarity = "rare";
+          } else {
+            rarity = "very rare";
+          }
+        }
         update.run(
-          normalized.chance_percent,
+          finalChance,
           normalized.min_count,
           normalized.max_count,
-          normalized.rarity,
+          rarity,
           normalized.amount_text,
           normalized.item_name,
           Number(row.creature_id),

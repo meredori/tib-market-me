@@ -205,7 +205,16 @@ function previewDb(options: {
       return { all: vi.fn(() => options.creatures ?? []) };
     }
     if (sql.includes("FROM public_creature_loot")) {
-      return { all: vi.fn(() => options.publicLoot ?? []) };
+      return {
+        all: vi.fn((...args: unknown[]) => {
+          const params = args.map((a) => String(a).toLowerCase());
+          return (options.publicLoot ?? []).filter((row: any) => {
+            const cName = String(row.normalized_creature_name || row.creature_name || "").toLowerCase();
+            const iName = String(row.normalized_item_name || row.item_name || "").toLowerCase();
+            return params.includes(cName) && params.includes(iName);
+          });
+        })
+      };
     }
     if (sql.includes("FROM public_hunting_places") && sql.includes("WHERE id = ?")) {
       return { get: vi.fn(() => options.place ?? undefined) };
@@ -1145,6 +1154,50 @@ describe("hunt repository semantics", () => {
     expect(updates[0][0]).toBe(201);
     expect(updates[0][2]).toBe("auto");
     expect(updates[0][8]).toBe("auto_apply");
+  });
+
+  it("resolves the lowest rarity for an item among only the creatures in the hunt", async () => {
+    const preview = await parseHuntPreview(previewDb({
+      loot: {
+        "rare gem": { ...lootRow("rare gem", 80_000), confidence: 0.9, override_mode: "market" }
+      },
+      creatures: [
+        { id: 10, name: "dragon", normalized_name: "dragon", experience: 700, hitpoints: 1000, bestiary_class: "Reptile", bestiary_difficulty: "Medium" },
+        { id: 11, name: "dragon lord", normalized_name: "dragon lord" }
+      ],
+      publicLoot: [
+        { normalized_creature_name: "dragon", normalized_item_name: "rare gem", item_name: "rare gem", chance_percent: 0.5, rarity: "rare" },
+        { normalized_creature_name: "dragon lord", normalized_item_name: "rare gem", item_name: "rare gem", chance_percent: 5.0, rarity: "uncommon" },
+        { normalized_creature_name: "demon", normalized_item_name: "rare gem", item_name: "rare gem", chance_percent: 25.0, rarity: "common" }
+      ],
+      marketRun: { id: 99, finished_at: "2026-06-10T12:00:00.000Z" }
+    }), { raw_text: customHunt({ lootLines: "  1x rare gem", monsters: ["  20x dragon", "  5x dragon lord"] }) });
+    const intelligence = preview.hunt_intelligence as Record<string, any>;
+
+    const topItem = intelligence.loot_analysis.top_value_items.find((item: any) => item.name === "rare gem");
+    expect(topItem?.rarity).toBe("uncommon");
+  });
+
+  it("uses observed eligible monster kills when public loot chance is an imported zero", async () => {
+    const preview = await parseHuntPreview(previewDb({
+      loot: {
+        "necrotic rod": { ...lootRow("necrotic rod", 80_000), confidence: 0.9, override_mode: "market" }
+      },
+      creatures: [
+        { id: 20, name: "dark apprentice", normalized_name: "dark apprentice" },
+        { id: 21, name: "dark magician", normalized_name: "dark magician" },
+        { id: 22, name: "mad scientist", normalized_name: "mad scientist" }
+      ],
+      publicLoot: [
+        { normalized_creature_name: "dark magician", normalized_item_name: "necrotic rod", item_name: "Necrotic Rod", chance_percent: 0, rarity: "very rare" }
+      ],
+      marketRun: { id: 99, finished_at: "2026-06-10T12:00:00.000Z" }
+    }), { raw_text: magicianQuarterHunt() });
+    const intelligence = preview.hunt_intelligence as Record<string, any>;
+
+    const necroticRod = intelligence.loot_analysis.top_value_items.find((item: any) => item.name === "necrotic rod");
+    expect(necroticRod?.rarity).toBe("rare");
+    expect(necroticRod?.chance_percent).toBe(0.8);
   });
 });
 

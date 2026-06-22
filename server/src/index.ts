@@ -3,13 +3,14 @@ import { openDatabase } from "./lib/db/database";
 import { applyMigrations } from "./lib/db/migrations";
 import { runMarketSync } from "./lib/sync/updatePrices";
 import { reprocessPublicHunts } from "./lib/publicHunts";
-import { enrichPublicReferenceData, resetPublicReferenceData, syncPublicReferenceData } from "./lib/tibiadata/publicReference";
+import { enrichPublicReferenceData, repairPublicCreatureLootRows, resetPublicReferenceData, syncPublicReferenceData } from "./lib/tibiadata/publicReference";
 import { buildServer } from "./server";
 
 async function main(): Promise<void> {
   const command = process.argv[2] ?? "serve";
   const db = openDatabase();
   applyMigrations(db);
+  repairPublicCreatureLootRows(db);
 
   if (command === "migrate") {
     console.log("Migrations applied.");
