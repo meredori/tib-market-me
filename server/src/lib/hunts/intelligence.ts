@@ -39,6 +39,10 @@ type PublicLootRow = {
   item_name: string;
   chance_percent: number | null;
   rarity: string | null;
+  min_count: number | null;
+  max_count: number | null;
+  payload_json: string | null;
+  creature_total_kills: number | null;
 };
 
 type MarketRun = {
@@ -121,6 +125,66 @@ function nullableNumber(value: unknown): number | null {
   return value === null || value === undefined || value === "" ? null : asNumberOrNull(value);
 }
 
+function receivedDamageFromParsed(parsed: Record<string, unknown>): {
+  total: number | null;
+  max_dps: number | null;
+  damage_types: Array<{ type: string; amount: number; percent: number | null }>;
+  damage_sources: Array<{ name: string; amount: number; percent: number | null }>;
+} | null {
+  const row = asRecord(parsed.received_damage);
+  if (!row) {
+    return null;
+  }
+  const damageTypes = Array.isArray(row.damage_types)
+    ? row.damage_types
+      .map((entry) => asRecord(entry))
+      .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+      .map((entry) => ({
+        type: asText(entry.type),
+        amount: Math.max(0, asNumber(entry.amount, 0)),
+        percent: asNumberOrNull(entry.percent)
+      }))
+      .filter((entry) => entry.type && entry.amount > 0)
+    : [];
+  const damageSources = Array.isArray(row.damage_sources)
+    ? row.damage_sources
+      .map((entry) => asRecord(entry))
+      .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+      .map((entry) => ({
+        name: asText(entry.name),
+        amount: Math.max(0, asNumber(entry.amount, 0)),
+        percent: asNumberOrNull(entry.percent)
+      }))
+      .filter((entry) => entry.name && entry.amount > 0)
+    : [];
+  const total = asNumberOrNull(row.total);
+  const maxDps = asNumberOrNull(row.max_dps);
+  if (total === null && maxDps === null && !damageTypes.length && !damageSources.length) {
+    return null;
+  }
+  return {
+    total,
+    max_dps: maxDps,
+    damage_types: damageTypes,
+    damage_sources: damageSources
+  };
+}
+
+function receivedDamageSummary(receivedDamage: ReturnType<typeof receivedDamageFromParsed>): string {
+  if (!receivedDamage) {
+    return "Incoming damage is not part of the current Hunt Analyser import. Safety is inferred from healing, supplies, place risk, and monster metadata.";
+  }
+  const topType = receivedDamage.damage_types[0];
+  const topSource = receivedDamage.damage_sources[0];
+  const parts = [
+    receivedDamage.total !== null ? `${receivedDamage.total.toLocaleString("en-US")} received damage` : null,
+    receivedDamage.max_dps !== null ? `${receivedDamage.max_dps.toLocaleString("en-US")} max DPS` : null,
+    topType ? `${topType.type} ${topType.percent === null ? "" : `${topType.percent}%`}`.trim() : null,
+    topSource ? `${topSource.name} ${topSource.percent === null ? "" : `${topSource.percent}%`}`.trim() : null
+  ].filter(Boolean);
+  return parts.length ? parts.join(" | ") : "Incoming damage was imported from Input Analyser text.";
+}
+
 function selectedPlaceId(preview: Record<string, unknown>, saved?: Record<string, unknown> | null): number | null {
   const savedMatch = asRecord(saved?.hunting_place_match);
   const location = asRecord(preview.location);
@@ -188,14 +252,18 @@ function readPublicLoot(db: Database.Database, creatureNames: string[], itemName
   const itemPlaceholders = items.map(() => "?").join(",");
   return safeAll<PublicLootRow>(db, `
     SELECT pc.normalized_name AS normalized_creature_name, pcl.normalized_item_name, pcl.item_name,
-           pcl.chance_percent, pcl.rarity
+           pcl.chance_percent, pcl.rarity, pcl.min_count, pcl.max_count, pcl.payload_json,
+           pc.total_kills AS creature_total_kills
     FROM public_creature_loot pcl
     JOIN public_creatures pc ON pc.id = pcl.creature_id
     WHERE pc.normalized_name IN (${creaturePlaceholders})
       AND pcl.normalized_item_name IN (${itemPlaceholders})
   `, ...creatures, ...items).map((row) => ({
     ...row,
-    chance_percent: asNumberOrNull(row.chance_percent)
+    chance_percent: asNumberOrNull(row.chance_percent),
+    min_count: asNumberOrNull(row.min_count),
+    max_count: asNumberOrNull(row.max_count),
+    creature_total_kills: asNumberOrNull(row.creature_total_kills)
   }));
 }
 
@@ -662,11 +730,127 @@ export function buildHuntIntelligence(
     return mode && mode !== "auto";
   }).length;
 
+  const allocatedLootValueByCreature = new Map<string, number>();
+  for (const monster of monsters) {
+    allocatedLootValueByCreature.set(normalizeLootItemName(asText(monster.name)), 0);
+  }
+
+  for (const item of visibleLoot) {
+    const itemName = asText(item.resolved_name || item.name);
+    const normalizedItemName = normalizeLootItemName(asText(item.normalized_name || item.name));
+    const qtyLooted = Math.max(0, asNumber(item.quantity, 0));
+    const totalValue = Math.max(0, asNumber(item.total_value, 0));
+    if (qtyLooted <= 0 || totalValue <= 0) {
+      continue;
+    }
+
+    const candidates = publicLootRows.filter((row) => row.normalized_item_name === normalizedItemName);
+    
+    if (candidates.length === 0) {
+      let highestKillMonsterName = "";
+      let highestKills = -1;
+      for (const monster of monsters) {
+        const name = normalizeLootItemName(asText(monster.name));
+        const count = Math.max(0, asNumber(monster.count, 0));
+        if (count > highestKills) {
+          highestKills = count;
+          highestKillMonsterName = name;
+        }
+      }
+      if (highestKillMonsterName) {
+        allocatedLootValueByCreature.set(
+          highestKillMonsterName,
+          (allocatedLootValueByCreature.get(highestKillMonsterName) ?? 0) + totalValue
+        );
+      }
+      continue;
+    }
+
+    if (candidates.length === 1) {
+      const creatureName = candidates[0].normalized_creature_name;
+      allocatedLootValueByCreature.set(
+        creatureName,
+        (allocatedLootValueByCreature.get(creatureName) ?? 0) + totalValue
+      );
+      continue;
+    }
+
+    let sumLikelihood = 0;
+    const likelihoods = candidates.map((candidate) => {
+      const creatureName = candidate.normalized_creature_name;
+      const monsterObj = monsters.find((m) => normalizeLootItemName(asText(m.name)) === creatureName);
+      const killsInHunt = monsterObj ? Math.max(0, asNumber(monsterObj.count, 0)) : 0;
+
+      let yieldPerKill = 0;
+      try {
+        const payload = JSON.parse(candidate.payload_json || "{}");
+        const totalDrops = Number(payload.total || 0);
+        const totalKills = candidate.creature_total_kills ? Number(candidate.creature_total_kills) : 0;
+        if (totalKills > 0 && totalDrops > 0) {
+          yieldPerKill = totalDrops / totalKills;
+        }
+      } catch {}
+
+      if (yieldPerKill <= 0) {
+        const chance = candidate.chance_percent ?? 0;
+        const min = candidate.min_count ?? 1;
+        const max = candidate.max_count ?? 1;
+        yieldPerKill = (chance / 100) * ((min + max) / 2);
+      }
+
+      const likelihood = yieldPerKill * killsInHunt;
+      sumLikelihood += likelihood;
+
+      return {
+        creatureName,
+        likelihood
+      };
+    });
+
+    if (sumLikelihood === 0) {
+      const equalShare = totalValue / candidates.length;
+      for (const candidate of candidates) {
+        const name = candidate.normalized_creature_name;
+        allocatedLootValueByCreature.set(
+          name,
+          (allocatedLootValueByCreature.get(name) ?? 0) + equalShare
+        );
+      }
+    } else if (qtyLooted === 1) {
+      let highestLikelihood = -1;
+      let selectedCreature = "";
+      for (const entry of likelihoods) {
+        if (entry.likelihood > highestLikelihood) {
+          highestLikelihood = entry.likelihood;
+          selectedCreature = entry.creatureName;
+        }
+      }
+      if (selectedCreature) {
+        allocatedLootValueByCreature.set(
+          selectedCreature,
+          (allocatedLootValueByCreature.get(selectedCreature) ?? 0) + totalValue
+        );
+      }
+    } else {
+      for (const entry of likelihoods) {
+        const share = totalValue * (entry.likelihood / sumLikelihood);
+        allocatedLootValueByCreature.set(
+          entry.creatureName,
+          (allocatedLootValueByCreature.get(entry.creatureName) ?? 0) + share
+        );
+      }
+    }
+  }
+
+  const totalEstimatedLoot = Array.from(allocatedLootValueByCreature.values()).reduce((sum, val) => sum + val, 0);
+
   const creatureRows = monsters.map((monster) => {
     const count = Math.max(0, asNumber(monster.count, 0));
     const normalized = normalizeLootItemName(asText(monster.name));
     const creature = creatureByName.get(normalized);
     const estimatedXp = creature?.experience ? creature.experience * count : null;
+    const estimatedLoot = allocatedLootValueByCreature.get(normalized) ?? 0;
+    const lootPct = totalEstimatedLoot > 0 ? (estimatedLoot / totalEstimatedLoot) * 100 : 0;
     return {
       id: creature?.id ?? null,
       name: asText(monster.name),
@@ -676,19 +860,24 @@ export function buildHuntIntelligence(
       hitpoints: creature?.hitpoints ?? null,
       estimated_xp: estimatedXp,
       xp_pct: null,
+      estimated_loot: Math.round(estimatedLoot),
+      loot_pct: lootPct,
       bestiary_class: creature?.bestiary_class ?? null,
       bestiary_difficulty: creature?.bestiary_difficulty ?? null,
       confidence: buildConfidence(creature ? 0.8 : null, { missingDataReason: creature ? null : "Public creature metadata missing." })
     };
   }).sort((a, b) => b.count - a.count);
+
   const estimatedMonsterXpTotal = creatureRows.reduce((sum, row) => sum + (row.estimated_xp ?? 0), 0);
-  const creatureRowsWithXpPct = creatureRows.map((row) => ({
+  const creatureRowsWithMetrics = creatureRows.map((row) => ({
     ...row,
     xp_pct: row.estimated_xp && estimatedMonsterXpTotal > 0 ? percent(row.estimated_xp, estimatedMonsterXpTotal) : null
   }));
+
   const avgHitpoints = avg(creatureRows.map((row) => row.hitpoints ?? Number.NaN));
   const healing = nullableNumber(parsed.total_healing);
   const damage = nullableNumber(parsed.total_damage);
+  const receivedDamage = receivedDamageFromParsed(parsed);
   const safetyScore = Math.max(0, Math.min(1,
     (supplyRatio === null ? 0.4 : supplyRatio <= 25 ? 0.85 : supplyRatio <= 55 ? 0.55 : 0.25)
     + (riskLabel.toLowerCase().includes("high") ? -0.25 : riskLabel.toLowerCase().includes("low") ? 0.1 : 0)
@@ -847,8 +1036,13 @@ export function buildHuntIntelligence(
       safety_score: Number(safetyScore.toFixed(2)),
       damage_recorded: damage !== null,
       healing_recorded: healing !== null,
-      incoming_damage_recorded: false,
-      incoming_damage_summary: "Incoming damage is not part of the current Hunt Analyser import. Safety is inferred from healing, supplies, place risk, and monster metadata.",
+      incoming_damage_recorded: Boolean(receivedDamage),
+      incoming_damage_summary: receivedDamageSummary(receivedDamage),
+      received_damage: receivedDamage,
+      total_incoming_damage: receivedDamage?.total ?? null,
+      max_incoming_dps: receivedDamage?.max_dps ?? null,
+      incoming_damage_types: receivedDamage?.damage_types ?? [],
+      incoming_damage_sources: receivedDamage?.damage_sources ?? [],
       total_damage: damage,
       total_healing: healing,
       healing_per_kill: healing !== null && totalKills > 0 ? Math.round(healing / totalKills) : null,
@@ -857,8 +1051,8 @@ export function buildHuntIntelligence(
       damage_per_hour: damage !== null ? perHour(damage, durationMinutes) : null,
       risk_label: riskLabel,
       avg_monster_hitpoints: avgHitpoints === null ? null : Math.round(avgHitpoints),
-      summary: damage !== null || healing !== null
-        ? "Combat pressure uses parsed damage and healing from the Hunt Analyser text."
+      summary: damage !== null || healing !== null || receivedDamage
+        ? (receivedDamage ? "Combat pressure uses parsed damage, healing, and received damage from imported analyser text." : "Combat pressure uses parsed damage and healing from the Hunt Analyser text.")
         : "Combat pressure is estimated from supplies, place risk, and monster metadata."
     },
     monster_analysis: {
@@ -866,10 +1060,26 @@ export function buildHuntIntelligence(
       kills_per_hour: killsPerHour,
       estimated_xp_from_creatures: estimatedMonsterXpTotal || null,
       xp_metadata_coverage_pct: percent(creatureRows.filter((row) => row.experience !== null).length, Math.max(1, creatureRows.length)),
-      top_monsters: creatureRowsWithXpPct.slice(0, 8),
-      summary: creatureRowsWithXpPct[0]
-        ? `${creatureRowsWithXpPct[0].name} made up ${creatureRowsWithXpPct[0].kill_pct.toFixed(1)}% of kills.`
-        : "No monster kills were parsed."
+      top_monsters: creatureRowsWithMetrics.slice(0, 8),
+      total_estimated_loot: Math.round(totalEstimatedLoot),
+      summary: (() => {
+        let maxDelta = 0;
+        let notableMonsterRow: typeof creatureRows[0] | null = null;
+        for (const row of creatureRowsWithMetrics) {
+          const delta = (row.loot_pct ?? 0) - (row.kill_pct ?? 0);
+          if (delta > maxDelta) {
+            maxDelta = delta;
+            notableMonsterRow = row;
+          }
+        }
+        if (notableMonsterRow && maxDelta >= 2) {
+          return `${notableMonsterRow.name}s represent only ${Math.round(notableMonsterRow.kill_pct)}% of kills but provide ${Math.round(notableMonsterRow.loot_pct)}% of the loot value.`;
+        }
+        if (creatureRowsWithMetrics[0]) {
+          return `${creatureRowsWithMetrics[0].name} made up ${creatureRowsWithMetrics[0].kill_pct.toFixed(1)}% of kills.`;
+        }
+        return "No monster kills were parsed.";
+      })()
     },
     comparisons,
     recommendations: makeRecommendations({
@@ -900,7 +1110,7 @@ export function buildHuntIntelligence(
       price_overrides: overrides,
       market_snapshot_at: marketRun?.finished_at ?? null,
       monster_metadata_coverage_pct: percent(creatureRows.filter((row) => row.experience !== null || row.hitpoints !== null).length, Math.max(1, creatureRows.length)),
-      received_damage_imported: false,
+      received_damage_imported: Boolean(receivedDamage),
       damage_totals_imported: damage !== null || healing !== null,
       linked_place: placeId ? { id: placeId, name: placeName } : null,
       provenance: [

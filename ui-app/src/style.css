@@ -355,6 +355,18 @@ th {
   margin-bottom: 10px;
 }
 
+.section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
 .section-head h2,
 .drawer-head h2,
 .panel-title {
@@ -1262,6 +1274,14 @@ th {
   font-size: var(--font-small);
 }
 
+.raw-xp-inline {
+  color: #58b7ff;
+  font-size: var(--font-small);
+  font-weight: normal;
+  margin-left: 6px;
+  display: inline-block;
+}
+
 .hero-stat.profit strong {
   color: var(--green);
 }
@@ -1996,6 +2016,52 @@ tr.selected {
 
 .new-hunt-modal {
   width: min(760px, 100%);
+}
+
+.hunt-edit-modal {
+  width: min(1080px, 100%);
+}
+
+.new-hunt-textarea.compact {
+  min-height: 150px;
+}
+
+.raw-input-grid {
+  align-items: stretch;
+}
+
+.sublocation-picker {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(8, 18, 30, 0.34);
+  padding: 12px;
+}
+
+.sublocation-picker h4 {
+  margin: 0;
+}
+
+.sublocation-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.checkbox-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: rgba(7, 17, 29, 0.42);
+  padding: 7px 9px;
+}
+
+.checkbox-row input {
+  width: auto;
 }
 
 .assign-item-modal {

@@ -1,21 +1,25 @@
 <script setup>
 import { computed, ref } from 'vue'
 import {
-  AlertTriangle,
-  BarChart3,
-  Brain,
-  CheckCircle2,
-  Gauge,
-  HeartPulse,
-  Shield,
-  ShieldQuestion,
-  Sparkles,
-  Swords,
-  Trophy,
-  X,
-} from '@lucide/vue'
+  IconAlertTriangle,
+  IconBrain,
+  IconCircleCheck,
+  IconGauge,
+  IconHeartbeat,
+  IconShield,
+  IconSparkles,
+  IconSwords,
+  IconTrophy,
+  IconX,
+  IconCoins,
+  IconPaw,
+  IconChartBar,
+  IconBulb,
+  IconShieldCheck,
+  IconTrendingUp,
+} from '@tabler/icons-vue'
+import TablerIcon from '../common/TablerIcon.vue'
 import ConfidenceBadge from '../common/ConfidenceBadge.vue'
-import EntityLinkPill from '../common/EntityLinkPill.vue'
 import Panel from '../common/Panel.vue'
 import SectionHeader from '../common/SectionHeader.vue'
 
@@ -35,6 +39,20 @@ const showAllLootItems = ref(false)
 const intelligence = computed(() => props.preview.hunt_intelligence || {})
 const verdict = computed(() => intelligence.value.verdict || {})
 const dataQuality = computed(() => intelligence.value.data_quality || {})
+
+const verdictMainIcon = computed(() => {
+  const label = (verdict.value.label || '').toLowerCase()
+  if (label.includes('xp') || label.includes('level')) {
+    return IconTrendingUp
+  }
+  if (label.includes('profit') || label.includes('gold') || label.includes('loot')) {
+    return IconTrophy
+  }
+  if (label.includes('safe') || label.includes('low risk')) {
+    return IconShieldCheck
+  }
+  return IconTrophy
+})
 const lootAnalysis = computed(() => intelligence.value.loot_analysis || {})
 const costAnalysis = computed(() => intelligence.value.cost_analysis || {})
 const combatAnalysis = computed(() => intelligence.value.combat_analysis || {})
@@ -91,6 +109,9 @@ const monsterRows = computed(() => monsterAnalysis.value.top_monsters || [])
 const visibleMonsterRows = computed(() => showAllMonsters.value ? monsterRows.value : monsterRows.value.slice(0, 5))
 const totalKills = computed(() => Number(monsterAnalysis.value.total_kills || props.preview.monsters?.reduce?.((sum, row) => sum + Number(row.count || 0), 0) || 0))
 const hasRecordedCombat = computed(() => combatAnalysis.value.damage_recorded || combatAnalysis.value.healing_recorded)
+const incomingDamageRecorded = computed(() => Boolean(combatAnalysis.value.incoming_damage_recorded))
+const incomingDamageTypes = computed(() => combatAnalysis.value.incoming_damage_types || combatAnalysis.value.received_damage?.damage_types || [])
+const incomingDamageSources = computed(() => combatAnalysis.value.incoming_damage_sources || combatAnalysis.value.received_damage?.damage_sources || [])
 const verdictRecommendation = computed(() => verdict.value.repeat_recommendation || recommendations.value[0] || null)
 const healingRecommendation = computed(() => {
   const healing = combatAnalysis.value.total_healing
@@ -230,9 +251,9 @@ function titleCaseLabel(value) {
 }
 
 function recommendationIcon(tone) {
-  if (tone === 'positive') return CheckCircle2
-  if (tone === 'warning') return AlertTriangle
-  return Brain
+  if (tone === 'positive') return IconCircleCheck
+  if (tone === 'warning') return IconAlertTriangle
+  return IconBrain
 }
 
 function openLootItem(item) {
@@ -246,9 +267,9 @@ function openLootItem(item) {
   <div class="hunt-intelligence">
     <div class="hunt-command-grid">
       <Panel class="verdict-panel" :class="`verdict-${verdict.tone || 'neutral'}`">
-        <SectionHeader title="Hunt Verdict" />
+        <SectionHeader title="Hunt Verdict" :icon="IconTrophy" iconColor="var(--amber)" />
         <div class="verdict-lockup">
-          <Trophy :size="34" />
+          <TablerIcon :name="verdictMainIcon" :size="34" />
           <div>
             <h2>{{ verdict.label || 'Hunt verdict' }}</h2>
             <p>{{ verdict.summary || 'Open or parse a hunt to generate analysis.' }}</p>
@@ -257,7 +278,7 @@ function openLootItem(item) {
         <div v-if="verdictRecommendation" class="recommendation-block">
           <span class="recommendation-heading">Recommendation</span>
           <div class="recommendation-hero" :class="`tone-${verdictRecommendation.tone || 'neutral'}`">
-            <component :is="recommendationIcon(verdictRecommendation.tone)" :size="20" />
+            <TablerIcon :name="recommendationIcon(verdictRecommendation.tone)" :size="20" />
             <div>
               <strong>{{ verdictRecommendation.label }}</strong>
               <span>{{ verdictRecommendation.reason }}</span>
@@ -307,7 +328,7 @@ function openLootItem(item) {
 
     <div class="analysis-grid">
       <Panel variant="analysis" class="loot-panel">
-        <SectionHeader title="Loot Analysis">
+        <SectionHeader title="Loot Analysis" :icon="IconCoins" iconColor="var(--amber)">
           <ConfidenceBadge :confidence="lootAnalysis.confidence" />
         </SectionHeader>
         <div class="loot-layout">
@@ -385,41 +406,65 @@ function openLootItem(item) {
       </Panel>
 
       <Panel variant="analysis" class="combat-panel">
-        <SectionHeader title="Combat & Damage Analysis" :subtitle="combatAnalysis.summary || 'Combat analysis unavailable.'">
-          <Shield :size="18" />
+        <SectionHeader title="Combat & Damage Analysis" :subtitle="combatAnalysis.summary || 'Combat analysis unavailable.'" :icon="IconSwords" iconColor="var(--red)">
+          <TablerIcon :name="IconShield" :size="18" />
         </SectionHeader>
         <div class="combat-metrics">
           <div>
-            <Swords :size="18" />
+            <TablerIcon :name="IconSwords" :size="18" />
             <span>Damage dealt</span>
             <strong>{{ combatAnalysis.total_damage === null || combatAnalysis.total_damage === undefined ? 'n/a' : formatValue(combatAnalysis.total_damage) }}</strong>
           </div>
           <div>
-            <HeartPulse :size="18" />
+            <TablerIcon :name="IconHeartbeat" :size="18" />
             <span>Healing</span>
             <strong>{{ combatAnalysis.total_healing === null || combatAnalysis.total_healing === undefined ? 'n/a' : formatValue(combatAnalysis.total_healing) }}</strong>
           </div>
           <div>
-            <Gauge :size="18" />
+            <TablerIcon :name="IconGauge" :size="18" />
             <span>Healing / kill</span>
             <strong>{{ combatAnalysis.healing_per_kill === null || combatAnalysis.healing_per_kill === undefined ? 'n/a' : formatValue(combatAnalysis.healing_per_kill) }}</strong>
           </div>
           <div>
-            <BarChart3 :size="18" />
+            <TablerIcon :name="IconChartBar" :size="18" />
             <span>Damage / kill</span>
             <strong>{{ combatAnalysis.damage_per_kill === null || combatAnalysis.damage_per_kill === undefined ? 'n/a' : formatValue(combatAnalysis.damage_per_kill) }}</strong>
           </div>
         </div>
-        <div class="unavailable-callout">
-          <ShieldQuestion :size="22" />
-          <div>
-            <strong>Incoming damage not recorded</strong>
-            <span class="incoming-copy">{{ combatAnalysis.incoming_damage_summary || 'Incoming damage sources and damage types are not part of the current Hunt Analyser import.' }}</span>
-            <span>{{ combatAnalysis.risk_label || 'unknown risk' }} · safety {{ pct(Number(combatAnalysis.safety_score || 0) * 100) }}</span>
+        <div v-if="incomingDamageRecorded" class="incoming-damage-grid">
+          <div class="incoming-breakdown damage-taken">
+            <strong>Damage Taken</strong>
+            <span>Total Damage</span>
+            <b>{{ combatAnalysis.total_incoming_damage === null || combatAnalysis.total_incoming_damage === undefined ? 'n/a' : formatValue(combatAnalysis.total_incoming_damage) }}</b>
+            <span>Max-DPS</span>
+            <b>{{ combatAnalysis.max_incoming_dps === null || combatAnalysis.max_incoming_dps === undefined ? 'n/a' : formatValue(combatAnalysis.max_incoming_dps) }}</b>
+          </div>
+          <div class="incoming-breakdown">
+            <strong>Damage Types</strong>
+            <div v-for="row in incomingDamageTypes" :key="`type-${row.type}`" class="incoming-row">
+              <span>{{ titleCaseLabel(row.type) }}</span>
+              <b>{{ formatValue(row.amount) }}</b>
+              <small>{{ row.percent === null || row.percent === undefined ? 'n/a' : `${row.percent}%` }}</small>
+            </div>
+          </div>
+          <div class="incoming-breakdown damage-sources">
+            <strong>Damage Sources</strong>
+            <div v-for="row in incomingDamageSources" :key="`source-${row.name}`" class="incoming-row">
+              <span>{{ titleCaseLabel(row.name) }}</span>
+              <b>{{ formatValue(row.amount) }}</b>
+              <small>{{ row.percent === null || row.percent === undefined ? 'n/a' : `${row.percent}%` }}</small>
+            </div>
           </div>
         </div>
-        <div v-if="hasRecordedCombat" class="safe-callout combat-recommendation" :class="`tone-${healingRecommendation.tone || 'neutral'}`">
-          <Shield :size="22" />
+        <div v-else class="incoming-damage-placeholder">
+          <TablerIcon :name="IconShield" :size="22" class="placeholder-icon" />
+          <div>
+            <strong>No Incoming Damage Breakdown</strong>
+            <span>Import the Hunt's Input Analyser text to view detailed damage taken, types, and sources.</span>
+          </div>
+        </div>
+        <div v-if="hasRecordedCombat || incomingDamageRecorded" class="safe-callout combat-recommendation" :class="`tone-${healingRecommendation.tone || 'neutral'}`">
+          <TablerIcon :name="IconShield" :size="22" />
           <div>
             <strong>{{ healingRecommendation.label }}</strong>
             <span>{{ healingRecommendation.reason }}</span>
@@ -430,47 +475,71 @@ function openLootItem(item) {
 
     <div class="analysis-grid">
       <Panel variant="analysis">
-        <SectionHeader title="Monster Analysis" :subtitle="monsterAnalysis.summary || 'Kill mix, XP contribution, and creature metadata.'">
+        <SectionHeader title="Monster Analysis" subtitle="Kill mix, XP contribution, and estimated loot value per creature." :icon="IconPaw" iconColor="var(--muted)">
           <ConfidenceBadge :confidence="(dataQuality.monster_metadata_coverage_pct || 0) / 100" />
         </SectionHeader>
-        <div class="monster-summary">
-          <div>
-            <span>Total kills</span>
-            <strong>{{ formatValue(monsterAnalysis.total_kills || totalKills) }}</strong>
-            <small>{{ formatValue(monsterAnalysis.kills_per_hour || 0) }} kills/hr</small>
-          </div>
-          <div>
-            <span>Estimated creature XP</span>
-            <strong>{{ monsterAnalysis.estimated_xp_from_creatures ? formatValue(monsterAnalysis.estimated_xp_from_creatures) : 'n/a' }}</strong>
-            <small>{{ pct(monsterAnalysis.xp_metadata_coverage_pct) }} metadata coverage</small>
-          </div>
+        
+        <div class="monster-analysis-table-container">
+          <table class="monster-analysis-table">
+            <thead>
+              <tr>
+                <th>Monster</th>
+                <th class="num-col">Killed</th>
+                <th class="num-col">Kill %</th>
+                <th class="num-col">XP Gain</th>
+                <th class="num-col">XP %</th>
+                <th class="num-col">Est. Loot</th>
+                <th class="num-col">Loot %</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="monster in visibleMonsterRows" :key="monster.name" class="monster-analysis-row">
+                <td>
+                  <div class="monster-name-cell">
+                    <button
+                      class="monster-name-link"
+                      :disabled="!monster.id"
+                      @click="monster.id ? emit('open-creature', monster.id) : null"
+                    >
+                      {{ titleCaseLabel(monster.name) }}
+                    </button>
+                    <div class="monster-progress-track">
+                      <span class="bar-fill" :style="{ width: `${Math.min(100, Number(monster.kill_pct || 0))}%` }"></span>
+                    </div>
+                  </div>
+                </td>
+                <td class="num-col">{{ formatValue(monster.count) }}</td>
+                <td class="num-col">{{ pct(monster.kill_pct) }}</td>
+                <td class="num-col">{{ monster.estimated_xp ? formatValue(monster.estimated_xp) : '0' }}</td>
+                <td class="num-col">{{ pct(monster.xp_pct) }}</td>
+                <td class="num-col">{{ formatValue(monster.estimated_loot || 0) }} gp</td>
+                <td class="num-col">{{ pct(monster.loot_pct) }}</td>
+              </tr>
+              <tr class="total-row">
+                <td>Total</td>
+                <td class="num-col">{{ formatValue(monsterAnalysis.total_kills || totalKills) }}</td>
+                <td class="num-col">100%</td>
+                <td class="num-col">{{ formatValue(monsterAnalysis.estimated_xp_from_creatures || 0) }}</td>
+                <td class="num-col">100%</td>
+                <td class="num-col">{{ formatValue(monsterAnalysis.total_estimated_loot || 0) }} gp</td>
+                <td class="num-col">100%</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <div class="bar-list monster-bars">
-          <button
-            v-for="monster in visibleMonsterRows"
-            :key="monster.name"
-            class="bar-row"
-            :disabled="!monster.id"
-            @click="monster.id ? emit('open-creature', monster.id) : null"
-          >
-            <span class="bar-label">
-              <EntityLinkPill
-                :entity="{ type: 'creature', id: monster.id, name: monster.name }"
-                :unresolved="!monster.id"
-              />
-            </span>
-            <span class="bar-track"><i :style="{ width: `${Math.min(100, Number(monster.kill_pct || 0))}%` }"></i></span>
-            <strong>{{ formatValue(monster.count) }}</strong>
-            <small>{{ pct(monster.kill_pct) }}</small>
-          </button>
-        </div>
+
         <button v-if="monsterRows.length > 5" class="ghost-action compact-toggle" @click="showAllMonsters = !showAllMonsters">
           {{ showAllMonsters ? 'Show fewer monsters' : `View all ${monsterRows.length} monsters` }}
         </button>
+
+        <div v-if="monsterAnalysis.summary" class="monster-analysis-callout">
+          <TablerIcon :name="IconPaw" color="var(--muted)" />
+          <p>{{ monsterAnalysis.summary }}</p>
+        </div>
       </Panel>
 
       <Panel variant="analysis">
-        <SectionHeader title="Hunt Comparison" subtitle="Only baselines with saved data are shown." />
+        <SectionHeader title="Hunt Comparison" subtitle="Only baselines with saved data are shown." :icon="IconChartBar" iconColor="var(--muted)" />
         <div class="comparison-list">
           <div v-for="item in comparisons.filter((row) => Number(row.hunt_count || 0) > 1)" :key="item.label" class="comparison-row">
             <div>
@@ -502,10 +571,10 @@ function openLootItem(item) {
 
     <div class="analysis-grid bottom-grid">
       <Panel variant="analysis">
-        <SectionHeader title="Recommendations" />
+        <SectionHeader title="Recommendations" :icon="IconBulb" iconColor="var(--amber)" />
         <div class="recommendation-list">
           <div v-for="item in recommendations" :key="`${item.label}-${item.reason}`" class="recommendation-row" :class="`tone-${item.tone || 'neutral'}`">
-            <component :is="recommendationIcon(item.tone)" :size="19" />
+            <TablerIcon :name="recommendationIcon(item.tone)" :size="19" />
             <div>
               <strong>{{ item.label }}</strong>
               <span>{{ item.reason }}</span>
@@ -515,15 +584,15 @@ function openLootItem(item) {
       </Panel>
 
       <Panel variant="analysis">
-        <SectionHeader title="Data Quality" subtitle="How much trust to place in this verdict.">
+        <SectionHeader title="Data Quality" subtitle="How much trust to place in this verdict." :icon="IconShieldCheck" iconColor="var(--amber)">
           <ConfidenceBadge :confidence="dataQuality.confidence" />
         </SectionHeader>
         <div class="quality-list">
           <div v-for="item in qualityRows" :key="item.label" class="quality-row">
             <span>{{ item.label }}</span>
             <strong>{{ item.value }}</strong>
-            <CheckCircle2 v-if="item.ok" :size="16" class="good" />
-            <AlertTriangle v-else :size="16" class="bad" />
+            <TablerIcon v-if="item.ok" :name="IconCircleCheck" :size="16" class="good" />
+            <TablerIcon v-else :name="IconAlertTriangle" :size="16" class="bad" />
           </div>
         </div>
         <div v-if="dataQuality.warnings?.length" class="warning-list">
@@ -540,7 +609,7 @@ function openLootItem(item) {
             <h2>All Loot Items</h2>
           </div>
           <button class="icon-btn" title="Close all loot items" @click="showAllLootItems = false">
-            <X :size="16" />
+            <TablerIcon :name="IconX" :size="16" />
           </button>
         </div>
         <div class="modal-body">
@@ -625,7 +694,6 @@ function openLootItem(item) {
 .recommendation-hero span,
 .reason-card span,
 .recommendation-row span,
-.unavailable-callout span,
 .safe-callout span {
   margin: 0;
   color: var(--muted);
@@ -636,8 +704,7 @@ function openLootItem(item) {
 .recommendation-hero > div,
 .reason-card > div,
 .recommendation-row > div,
-.safe-callout > div,
-.unavailable-callout > div {
+.safe-callout > div {
   display: grid;
   gap: 4px;
 }
@@ -657,16 +724,14 @@ function openLootItem(item) {
 .recommendation-hero strong,
 .reason-card strong,
 .recommendation-row strong,
-.safe-callout strong,
-.unavailable-callout strong {
+.safe-callout strong {
   display: block;
 }
 
 .recommendation-hero,
 .reason-card,
 .recommendation-row,
-.safe-callout,
-.unavailable-callout {
+.safe-callout {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
@@ -685,8 +750,7 @@ function openLootItem(item) {
 }
 
 .tone-warning,
-.severity-warning,
-.unavailable-callout {
+.severity-warning {
   border-color: rgba(245, 165, 16, 0.32);
   background: rgba(245, 165, 16, 0.08);
 }
@@ -706,8 +770,36 @@ function openLootItem(item) {
   align-self: end;
 }
 
-.incoming-copy ~ span {
-  display: none;
+.incoming-damage-placeholder {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  border: 1px dashed var(--line-soft);
+  border-radius: 8px;
+  background: rgba(8, 18, 30, 0.24);
+  padding: 14px 16px;
+}
+
+.incoming-damage-placeholder .placeholder-icon {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.incoming-damage-placeholder > div {
+  display: grid;
+  gap: 4px;
+}
+
+.incoming-damage-placeholder strong {
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.incoming-damage-placeholder span {
+  color: var(--muted);
+  font-size: var(--font-small);
+  line-height: 1.45;
 }
 
 .verdict-tags,
@@ -1146,6 +1238,60 @@ function openLootItem(item) {
   margin-bottom: 12px;
 }
 
+.incoming-damage-grid {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.55fr) minmax(0, 1.45fr);
+  gap: 10px;
+}
+
+.incoming-breakdown {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(8, 18, 30, 0.42);
+  padding: 10px;
+}
+
+.incoming-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 48px;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: var(--font-small);
+}
+
+.incoming-row span {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.incoming-row small {
+  text-align: right;
+}
+
+.damage-taken {
+  align-content: start;
+}
+
+.damage-taken span {
+  color: var(--muted);
+  font-size: var(--font-caption);
+}
+
+.damage-taken b {
+  color: var(--ink);
+  font-size: 1.08rem;
+}
+
+.damage-sources {
+  grid-column: 1 / -1;
+}
+
 .combat-metrics div,
 .monster-summary div,
 .quality-row,
@@ -1203,6 +1349,124 @@ function openLootItem(item) {
   margin-top: 10px;
 }
 
+.monster-analysis-table-container {
+  margin-top: 16px;
+  background: rgba(8, 18, 30, 0.2);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.monster-analysis-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-heading);
+}
+
+.monster-analysis-table th {
+  padding: 12px 16px;
+  color: var(--muted);
+  font-size: var(--font-small);
+  font-weight: 600;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line-soft);
+  letter-spacing: 0.05em;
+  background: rgba(8, 18, 30, 0.4);
+}
+
+.monster-analysis-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+  color: var(--ink);
+}
+
+.monster-analysis-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.monster-analysis-table th.num-col,
+.monster-analysis-table td.num-col {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.monster-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.monster-name-link {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 0;
+  text-align: left;
+  font-weight: 600;
+  font-size: inherit;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.monster-name-link:hover:not(:disabled) {
+  color: #79b7ff;
+  text-decoration: underline;
+}
+
+.monster-name-link:disabled {
+  cursor: default;
+}
+
+.monster-progress-track {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(120, 146, 176, 0.18);
+  width: 100%;
+  max-width: 180px;
+}
+
+.monster-progress-track .bar-fill {
+  display: block;
+  height: 100%;
+  background: #7c4dff;
+  border-radius: inherit;
+}
+
+.monster-analysis-table tr.total-row td {
+  background: rgba(8, 18, 30, 0.5);
+  border-top: 2px solid var(--line-soft);
+  border-bottom: none;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.monster-analysis-callout {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(88, 183, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(8, 18, 30, 0.4);
+  padding: 14px 16px;
+  margin-top: 16px;
+}
+
+.monster-analysis-callout span {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.monster-analysis-callout p {
+  margin: 0;
+  font-size: var(--font-caption);
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 @media (max-width: 1180px) {
   .hunt-command-grid,
   .analysis-grid {
@@ -1224,6 +1488,7 @@ function openLootItem(item) {
   .loot-layout,
   .monster-summary,
   .comparison-row,
+  .incoming-damage-grid,
   .bar-row {
     grid-template-columns: 1fr;
   }

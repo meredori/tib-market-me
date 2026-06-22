@@ -1,17 +1,19 @@
 <script setup>
 import { computed, ref } from 'vue'
 import {
-  AlertTriangle,
-  ArrowLeft,
-  CalendarDays,
-  Clock3,
-  Coins,
-  Download,
-  Edit3,
-  ShieldQuestion,
-  Swords,
-  Trash2,
-} from '@lucide/vue'
+  IconAlertTriangle,
+  IconArrowLeft,
+  IconCalendar,
+  IconClock,
+  IconCoins,
+  IconDownload,
+  IconPencil,
+  IconShieldQuestion,
+  IconSwords,
+  IconTrash,
+  IconX,
+} from '@tabler/icons-vue'
+import TablerIcon from '../common/TablerIcon.vue'
 import HuntIntelligence from '../hunts/HuntIntelligence.vue'
 import HuntSummary from '../HuntSummary.vue'
 
@@ -68,10 +70,17 @@ const importedAt = computed(() => activeSaved.value?.uploaded_at || activeParsed
 const durationLabel = computed(() => `${activeParsed.value?.duration_minutes || props.activeSavedHunt?.duration_minutes || 0}m`)
 const killCount = computed(() => (activePreview.value?.monsters || []).reduce((sum, row) => sum + Number(row.count || 0), 0))
 const xpGain = computed(() => Number(activeParsed.value?.total_xp || props.activeSavedHunt?.total_xp || 0))
+const rawXp = computed(() => Number(activeParsed.value?.raw_total_xp || props.activeSavedHunt?.raw_total_xp || 0))
 const profit = computed(() => Number(activeParsed.value?.adjusted_net_profit ?? activeParsed.value?.net_profit ?? props.activeSavedHunt?.net_profit ?? 0))
 const isSavedHunt = computed(() => Boolean(activeSaved.value?.id))
 const isImportReview = computed(() => Boolean(props.hunts.importHuntPreview.value))
 const isUnsavedPreview = computed(() => Boolean(props.hunts.huntPreview.value && !props.hunts.previousHuntPreview.value))
+const previousAreaOptions = computed(() => props.hunts.areaOptionsForPlaceId(props.hunts.previousHuntDraftHuntingPlaceId.value))
+const previousAreaLabel = computed(() => {
+  const selected = props.hunts.previousHuntDraftAreaNames.value || []
+  if (!previousAreaOptions.value.length) return 'No sublocations available'
+  return selected.length ? `${selected.length} selected` : 'All sublocations'
+})
 
 function formatDate(value) {
   if (!value) return 'Date unknown'
@@ -95,8 +104,21 @@ function toggleEditPanel() {
 }
 
 async function saveEditPanel() {
-  emit('save-previous-hunt')
-  showEditPanel.value = false
+  const saved = await props.hunts.savePreviousHuntEdit()
+  if (saved) {
+    showEditPanel.value = false
+  }
+}
+
+function togglePreviousArea(areaName, checked) {
+  const next = new Set(props.hunts.previousHuntDraftAreaNames.value || [])
+  if (checked) {
+    next.add(areaName)
+  } else {
+    next.delete(areaName)
+  }
+  props.hunts.previousHuntDraftAreaNames.value = Array.from(next)
+  props.hunts.markUnsavedHuntChanges()
 }
 
 function huntingPlaceMatch(preview) {
@@ -159,28 +181,28 @@ function placeLevel(candidate) {
     <div class="workspace-main">
       <header class="hunt-details-topbar">
         <button class="ghost-action icon-label topbar-back" title="Back to Hunt History" @click="$emit('open-history', '')">
-          <ArrowLeft :size="16" />
+          <TablerIcon :name="IconArrowLeft" :size="16" />
           <span>Back to Hunt History</span>
         </button>
         <div class="hunt-title-lockup">
-          <Swords :size="23" />
+          <TablerIcon :name="IconSwords" :size="23" />
           <h1>Hunt Details</h1>
         </div>
         <div class="button-row">
           <button v-if="isSavedHunt" class="ghost-action icon-label" title="Edit hunt" @click="toggleEditPanel">
-            <Edit3 :size="15" />
+            <TablerIcon :name="IconPencil" :size="15" />
             <span>Edit</span>
           </button>
           <button v-if="isSavedHunt" class="danger-btn icon-label" :disabled="hunts.huntDeleteBusy.value" title="Delete hunt" @click="hunts.deleteHunt()">
-            <Trash2 :size="15" />
+            <TablerIcon :name="IconTrash" :size="15" />
             <span>Delete</span>
           </button>
           <button v-else-if="isImportReview" class="primary-action icon-label" :disabled="hunts.huntSubmitBusy.value" @click="hunts.saveHuntLogImport">
-            <Download :size="15" />
+            <TablerIcon :name="IconDownload" :size="15" />
             <span>Save Import</span>
           </button>
           <button v-else-if="isUnsavedPreview" class="primary-action icon-label" :disabled="hunts.huntSubmitBusy.value" @click="hunts.submitHuntScaffold">
-            <Download :size="15" />
+            <TablerIcon :name="IconDownload" :size="15" />
             <span>Save Hunt</span>
           </button>
         </div>
@@ -188,28 +210,28 @@ function placeLevel(candidate) {
 
       <section v-if="activePreview" class="hunt-detail-hero panel">
         <div class="hunt-place-summary">
-          <div class="place-avatar"><Swords :size="29" /></div>
+          <div class="place-avatar"><TablerIcon :name="IconSwords" :size="29" /></div>
           <div>
             <h2>{{ placeDisplay.title }}</h2>
             <p v-if="placeDisplay.subtext" class="muted">{{ placeDisplay.subtext }}</p>
           </div>
         </div>
         <div class="hero-stat">
-          <CalendarDays :size="22" />
+          <TablerIcon :name="IconCalendar" :size="22" />
           <div>
             <strong>{{ formatDate(importedAt) }}</strong>
             <span>{{ formatTimeRange() || 'Time unknown' }}</span>
           </div>
         </div>
         <div class="hero-stat">
-          <Clock3 :size="24" />
+          <TablerIcon :name="IconClock" :size="24" />
           <div>
             <strong>{{ durationLabel }}</strong>
             <span>Duration</span>
           </div>
         </div>
         <div class="hero-stat">
-          <Swords :size="24" />
+          <TablerIcon :name="IconSwords" :size="24" />
           <div>
             <strong>{{ formatValue(killCount) }}</strong>
             <span>Kills</span>
@@ -218,12 +240,15 @@ function placeLevel(candidate) {
         <div class="hero-stat">
           <span class="hero-token xp-token">XP</span>
           <div>
-            <strong>{{ formatValue(xpGain) }}</strong>
+            <strong>
+              {{ formatValue(xpGain) }}
+              <span v-if="rawXp && rawXp !== xpGain" class="raw-xp-inline">({{ formatValue(rawXp) }} raw)</span>
+            </strong>
             <span>XP Gain</span>
           </div>
         </div>
         <div class="hero-stat profit">
-          <Coins :size="28" />
+          <TablerIcon :name="IconCoins" :size="28" />
           <div>
             <strong>{{ formatSigned(profit) }}</strong>
             <span>Profit</span>
@@ -232,53 +257,84 @@ function placeLevel(candidate) {
       </section>
 
       <div class="status-row hunt-detail-status">
-        <span v-if="hunts.hasUnsavedHuntChanges.value" class="status-badge warning"><AlertTriangle :size="15" /> Unsaved changes</span>
-        <span v-if="hunts.hydrationInfo.value" class="status-badge warning"><AlertTriangle :size="15" /> {{ hunts.hydrationInfo.value }}</span>
+        <span v-if="hunts.hasUnsavedHuntChanges.value" class="status-badge warning"><TablerIcon :name="IconAlertTriangle" :size="15" /> Unsaved changes</span>
+        <span v-if="hunts.hydrationInfo.value" class="status-badge warning"><TablerIcon :name="IconAlertTriangle" :size="15" /> {{ hunts.hydrationInfo.value }}</span>
         <span v-if="hunts.huntInfo.value" class="muted">{{ hunts.huntInfo.value }}</span>
       </div>
 
-      <article v-if="showEditPanel && hunts.previousHuntPreview.value" class="panel hunt-edit-panel">
-        <div class="section-head compact">
-          <h2>Edit Hunt</h2>
-          <button class="ghost-action" @click="showEditPanel = false">Close</button>
-        </div>
-        <div class="hunt-edit-grid">
-          <label>Name<input v-model="hunts.previousHuntDraftLabel.value" @input="hunts.markUnsavedHuntChanges" /></label>
-          <div class="location-field">
-            <label>
-              Location
-              <input
-                :value="hunts.previousHuntDraftLocation.value"
-                placeholder="Type 3 characters or choose a hunting spot"
-                @focus="hunts.openHuntingPlacePicker('previous', hunts.previousHuntDraftLocation)"
-                @click="hunts.openHuntingPlacePicker('previous', hunts.previousHuntDraftLocation)"
-                @keydown.escape="hunts.closeHuntingPlacePicker"
-                @input="hunts.updateLocationSearch(hunts.previousHuntDraftLocation, hunts.previousHuntDraftHuntingPlaceId, $event.target.value)"
-              />
-            </label>
-            <div v-if="hunts.activeHuntingPlacePicker.value === 'previous'" class="location-menu">
-              <button class="location-option muted-option" @mousedown.prevent="hunts.selectHuntingPlaceFromOptions('', [], hunts.previousHuntDraftLocation, hunts.previousHuntDraftHuntingPlaceId)">
-                None
-              </button>
-              <button
-                v-for="candidate in huntingPlaceOptions(huntingPlaceMatch(hunts.previousHuntPreview.value), hunts)"
-                :key="`previous-inline-place-${candidate.id}`"
-                class="location-option"
-                @mousedown.prevent="hunts.selectHuntingPlace(candidate, hunts.previousHuntDraftLocation, hunts.previousHuntDraftHuntingPlaceId)"
-              >
-                <span>{{ optionLabel(candidate) }}</span>
-                <small>{{ placeLevel(candidate) ? `Level ${placeLevel(candidate)}` : 'Level n/a' }}</small>
-              </button>
+      <div v-if="showEditPanel && hunts.previousHuntPreview.value" class="modal-backdrop" @click="showEditPanel = false">
+        <section class="modal-card hunt-edit-modal" @click.stop>
+          <div class="modal-head">
+            <div>
+              <h3>Edit Hunt</h3>
+              <p class="muted">Update saved hunt details and raw analyser inputs.</p>
+            </div>
+            <button class="icon-btn" title="Close edit hunt" @click="showEditPanel = false"><TablerIcon :name="IconX" :size="17" /></button>
+          </div>
+          <div class="hunt-edit-grid">
+            <label>Name<input v-model="hunts.previousHuntDraftLabel.value" @input="hunts.markUnsavedHuntChanges" /></label>
+            <div class="location-field">
+              <label>
+                Location
+                <input
+                  :value="hunts.previousHuntDraftLocation.value"
+                  placeholder="Type 3 characters or choose a hunting spot"
+                  @focus="hunts.openHuntingPlacePicker('previous', hunts.previousHuntDraftLocation)"
+                  @click="hunts.openHuntingPlacePicker('previous', hunts.previousHuntDraftLocation)"
+                  @keydown.escape="hunts.closeHuntingPlacePicker"
+                  @input="hunts.updateLocationSearch(hunts.previousHuntDraftLocation, hunts.previousHuntDraftHuntingPlaceId, $event.target.value)"
+                />
+              </label>
+              <div v-if="hunts.activeHuntingPlacePicker.value === 'previous'" class="location-menu">
+                <button class="location-option muted-option" @mousedown.prevent="hunts.selectHuntingPlaceFromOptions('', [], hunts.previousHuntDraftLocation, hunts.previousHuntDraftHuntingPlaceId)">
+                  None
+                </button>
+                <button
+                  v-for="candidate in huntingPlaceOptions(huntingPlaceMatch(hunts.previousHuntPreview.value), hunts)"
+                  :key="`previous-inline-place-${candidate.id}`"
+                  class="location-option"
+                  @mousedown.prevent="hunts.selectHuntingPlace(candidate, hunts.previousHuntDraftLocation, hunts.previousHuntDraftHuntingPlaceId, hunts.previousHuntDraftAreaNames)"
+                >
+                  <span>{{ optionLabel(candidate) }}</span>
+                  <small>{{ placeLevel(candidate) ? `Level ${placeLevel(candidate)}` : 'Level n/a' }}</small>
+                </button>
+              </div>
+            </div>
+            <label>Character<input v-model="hunts.previousHuntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
+            <label>Tags<input v-model="hunts.previousHuntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
+          </div>
+          <div v-if="previousAreaOptions.length" class="sublocation-picker">
+            <div class="section-head compact">
+              <h4>Sublocations</h4>
+              <span class="muted">{{ previousAreaLabel }}</span>
+            </div>
+            <div class="sublocation-options">
+              <label v-for="areaName in previousAreaOptions" :key="areaName" class="checkbox-row">
+                <input
+                  type="checkbox"
+                  :checked="hunts.previousHuntDraftAreaNames.value.includes(areaName)"
+                  @change="togglePreviousArea(areaName, $event.target.checked)"
+                />
+                <span>{{ areaName }}</span>
+              </label>
             </div>
           </div>
-          <label>Character<input v-model="hunts.previousHuntDraftCharacter.value" placeholder="Optional character" @input="hunts.markUnsavedHuntChanges" /></label>
-          <label>Tags<input v-model="hunts.previousHuntDraftTags.value" placeholder="comma,separated,tags" @input="hunts.markUnsavedHuntChanges" /></label>
-        </div>
-        <div class="button-row split">
-          <button :disabled="hunts.huntSubmitBusy.value" @click="saveEditPanel">Save Changes</button>
-          <button class="ghost-action" @click="showEditPanel = false">Cancel</button>
-        </div>
-      </article>
+          <div class="modal-grid raw-input-grid">
+            <label class="block-label">
+              Hunt analyser text
+              <textarea v-model="hunts.previousHuntPreview.value.raw_text" class="new-hunt-textarea" @input="hunts.markUnsavedHuntChanges"></textarea>
+            </label>
+            <label class="block-label">
+              Input analyser text
+              <textarea v-model="hunts.previousHuntDraftInputAnalyserText.value" class="new-hunt-textarea compact" placeholder="Paste received damage text here" @input="hunts.markUnsavedHuntChanges"></textarea>
+            </label>
+          </div>
+          <div class="button-row split mt-14">
+            <button class="ghost-action" @click="showEditPanel = false">Cancel</button>
+            <button :disabled="hunts.huntSubmitBusy.value" @click="saveEditPanel">Save Changes</button>
+          </div>
+        </section>
+      </div>
 
       <HuntIntelligence
         v-if="activePreview"
@@ -324,7 +380,7 @@ function placeLevel(candidate) {
       </details>
 
       <article v-if="!activePreview" class="panel empty-state">
-        <ShieldQuestion :size="32" />
+        <TablerIcon :name="IconShieldQuestion" :size="32" />
         <h2>No active hunt preview</h2>
         <p class="muted">Parse a new session, review a log import, or open a saved hunt to populate the HuntLens workspace.</p>
       </article>

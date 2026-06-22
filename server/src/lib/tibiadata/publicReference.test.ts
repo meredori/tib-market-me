@@ -387,7 +387,11 @@ describe("public Tibia reference data", () => {
       ["/api/v1/creatures", { page: 1, pageSize: 250, totalCount: 1, items: [{ id: 101, name: "Dragon" }] }],
       ["/api/v1/creatures/list", { creatures: [{ id: 101, name: "Dragon" }] }],
       ["/api/v1/creatures/101", creaturePayload()],
-      ["/api/v1/creatures/101/loot", { lootStatistics: [{ itemName: "Dragon Ham", chance: "1-3", rarity: "common", raw: "1-3|Dragon Ham|common" }] }],
+      ["/api/loot/Dragon", {
+        kills: "100",
+        name: "Dragon",
+        loot: [{ itemName: "Dragon Ham", times: "10", amount: "1-3" }]
+      }],
       ["/api/v1/hunting-places/list", { huntingPlaces: [{ id: 201, name: "Dragon Lair" }] }],
       ["/api/v1/hunting-places/201", huntingPlacePayload()]
     ]);
@@ -433,10 +437,10 @@ describe("public Tibia reference data", () => {
     expect(db.prepare("SELECT detail_status FROM public_creatures WHERE id = 101").get()).toEqual({ detail_status: "enriched" });
     expect(db.prepare("SELECT item_name, chance_percent, min_count, max_count, rarity, amount_text FROM public_creature_loot WHERE creature_id = 101").get()).toEqual({
       item_name: "Dragon Ham",
-      chance_percent: null,
+      chance_percent: 10,
       min_count: 1,
       max_count: 3,
-      rarity: "common",
+      rarity: null,
       amount_text: "1-3"
     });
     expect(db.prepare("SELECT detail_status FROM public_hunting_places WHERE id = 201").get()).toEqual({ detail_status: "enriched" });
@@ -466,7 +470,7 @@ describe("public Tibia reference data", () => {
     });
   });
 
-  it("uses creature detail loot before calling the separate loot endpoint", async () => {
+  it("always fetches loot from the separate loot endpoint even if creature detail has embedded loot", async () => {
     upsertPublicCreature(db, { id: 101, name: "Dragon" }, "2026-06-10T00:00:00Z");
     const routes = new Map<string, unknown>([
       ["/api/v1/creatures/101", {
@@ -475,6 +479,11 @@ describe("public Tibia reference data", () => {
           ...creaturePayload(),
           loot: [{ itemId: 302, itemName: "Dragon Ham", chancePercent: "12%", amount: "1-3", rarity: "common" }]
         }
+      }],
+      ["/api/loot/Dragon", {
+        kills: "100",
+        name: "Dragon",
+        loot: [{ itemName: "Dragon Ham", times: "12", amount: "1-3" }]
       }]
     ]);
     const fetchMock = vi.fn(async (url: string) => {
@@ -490,17 +499,17 @@ describe("public Tibia reference data", () => {
     const enriched = await enrichPublicReferenceData(db, { creatureLimit: 1, huntingPlaceLimit: 0 });
 
     expect(enriched).toMatchObject({ creatures: 1, creature_loot_rows: 1 });
-    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v1/creatures/101/loot"), expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/loot/Dragon"), expect.anything());
     expect(db.prepare("SELECT item_id, item_name, chance_percent, min_count, max_count FROM public_creature_loot WHERE creature_id = 101").get()).toEqual({
-      item_id: 302,
+      item_id: null,
       item_name: "Dragon Ham",
       chance_percent: 12,
       min_count: 1,
       max_count: 3
     });
     expect(enriched.job.metadata).toMatchObject({
-      creature_loot_from_details: 1,
-      creature_loot_fallback_fetches: 0
+      creature_loot_from_details: 0,
+      creature_loot_fallback_fetches: 1
     });
   });
 
@@ -531,7 +540,12 @@ describe("public Tibia reference data", () => {
               expect.objectContaining({
                 endpoint: "GET /api/v1/creatures/{name-or-id}",
                 expected_shape: "CreatureDetailsResponse",
-                required_fields: expect.arrayContaining(["lootStatistics", "lastUpdated"])
+                required_fields: expect.arrayContaining(["images", "lastUpdated"])
+              }),
+              expect.objectContaining({
+                endpoint: "GET https://tibiawiki.dev/api/loot/{name}",
+                expected_shape: "TibiaWikiDevLootResponse",
+                required_fields: expect.arrayContaining(["kills", "name", "loot"])
               }),
               expect.objectContaining({
                 endpoint: "GET /api/v1/hunting-places/{name-or-id}",
@@ -631,10 +645,12 @@ describe("public Tibia reference data", () => {
       ["/api/v1/creatures", { page: 1, pageSize: 250, totalCount: 1, items: [{ id: 101, name: "Dragon" }] }],
       ["/api/v1/creatures/list", { creatures: [{ id: 101, name: "Dragon" }] }],
       ["/api/v1/creatures/101", creaturePayload()],
-      ["/api/v1/creatures/101/loot", {
-        lootStatistics: [
-          { itemName: "Dragon Ham", chance: "1-3", rarity: "common", raw: "1-3|Dragon Ham|common" },
-          { itemName: "dragon ham", chance: "1-3", rarity: "common", raw: "1-3|Dragon Ham|common" }
+      ["/api/loot/Dragon", {
+        kills: "100",
+        name: "Dragon",
+        loot: [
+          { itemName: "Dragon Ham", times: "10", amount: "1-3" },
+          { itemName: "dragon ham", times: "10", amount: "1-3" }
         ]
       }],
       ["/api/v1/hunting-places/list", { huntingPlaces: [] }]
@@ -751,7 +767,7 @@ describe("public Tibia reference data", () => {
       hunting_place_creatures: 0
     });
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v1/creatures/101"), expect.anything());
-    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v1/creatures/101/loot"), expect.anything());
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/loot/"), expect.anything());
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v1/hunting-places/201"), expect.anything());
   });
 
@@ -875,11 +891,11 @@ describe("public Tibia reference data", () => {
 
     const routes = new Map<string, unknown>([
       ["/api/v1/creatures/101", creaturePayload()],
-      ["/api/v1/creatures/101/loot", { loot: [] }],
+      ["/api/loot/Dragon", { kills: "0", name: "Dragon", loot: [] }],
       ["/api/v1/creatures/102", { id: 102, name: "Demon", hitpoints: 8200 }],
-      ["/api/v1/creatures/102/loot", { loot: [] }],
+      ["/api/loot/Demon", { kills: "0", name: "Demon", loot: [] }],
       ["/api/v1/creatures/103", { id: 103, name: "Rat", hitpoints: 20 }],
-      ["/api/v1/creatures/103/loot", { loot: [] }],
+      ["/api/loot/Rat", { kills: "0", name: "Rat", loot: [] }],
       ["/api/v1/hunting-places/201", huntingPlacePayload()],
       ["/api/v1/hunting-places/202", { id: 202, name: "Demon Lair", creatures: [{ creatureId: 102, creatureName: "Demon" }] }],
       ["/api/v1/hunting-places/203", { id: 203, name: "Rat Cave", creatures: [{ creatureId: 103, creatureName: "Rat" }] }]
@@ -911,11 +927,11 @@ describe("public Tibia reference data", () => {
     upsertPublicCreature(db, { id: 103, name: "Rat" }, "2026-06-12T00:00:00Z");
     const routes = new Map<string, unknown>([
       ["/api/v1/creatures/101", { id: 101, name: "Dragon", hitpoints: 1000 }],
-      ["/api/v1/creatures/101/loot", { loot: [] }],
+      ["/api/loot/Dragon", { kills: "0", name: "Dragon", loot: [] }],
       ["/api/v1/creatures/102", { id: 102, name: "Demon", hitpoints: 8200 }],
-      ["/api/v1/creatures/102/loot", { loot: [] }],
+      ["/api/loot/Demon", { kills: "0", name: "Demon", loot: [] }],
       ["/api/v1/creatures/103", { id: 103, name: "Rat", hitpoints: 20 }],
-      ["/api/v1/creatures/103/loot", { loot: [] }]
+      ["/api/loot/Rat", { kills: "0", name: "Rat", loot: [] }]
     ]);
     let active = 0;
     let maxActive = 0;
@@ -956,7 +972,11 @@ describe("public Tibia reference data", () => {
     upsertPublicCreature(db, { id: 102, name: "Demon" }, "2026-06-11T00:00:00Z");
     const routes = new Map<string, unknown>([
       ["/api/v1/creatures/102", { id: 102, name: "Demon", hitpoints: 8200 }],
-      ["/api/v1/creatures/102/loot", { loot: [{ itemId: 302, itemName: "Demon Horn", chancePercent: "1%" }] }]
+      ["/api/loot/Demon", {
+        kills: "100",
+        name: "Demon",
+        loot: [{ itemName: "Demon Horn", times: "1", amount: "1" }]
+      }]
     ]);
     const fetchMock = vi.fn(async (url: string) => {
       const path = new URL(url).pathname;

@@ -7,6 +7,7 @@ import {
   huntSessionSignatureFromRaw,
   isInsideDirectory,
   parseHuntSessionText,
+  parseReceivedDamageText,
   rawTextHash,
   readHuntLogFiles
 } from "./parser";
@@ -196,6 +197,26 @@ function positiveIdOrNull(value: unknown): number | null {
   return parsed && parsed > 0 ? Math.trunc(parsed) : null;
 }
 
+function coerceAreaNames(value: unknown): string[] {
+  const source = Array.isArray(value) ? value : [];
+  return Array.from(new Set(source.map((entry) => cleanDisplayText(entry)).filter(Boolean))).slice(0, 30);
+}
+
+function parseJsonList(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== "string" || !value.trim()) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function listHuntLogImportCandidates(
   db: Database.Database,
   buildPreview: BuildPreview
@@ -315,12 +336,14 @@ export function deleteHuntLogImportFile(db: Database.Database, payload: unknown)
 function buildHuntInput(db: Database.Database, payload: unknown): HuntInput {
   const row = asRecord(payload) ?? {};
   const rawText = asText(row.raw_text).replace(/<\/??hunt>/gi, "").trim();
+  const inputAnalyserText = asText(row.input_analyser_text).replace(/<\/??input>/gi, "").trim();
   let parsedText = rawText.trim() ? parseHuntSessionText(rawText) : null;
   if (parsedText) {
     parsedText = {
       ...parsedText,
       total_damage: parsedText.total_damage ?? asNumberOrNull(row.total_damage),
-      total_healing: parsedText.total_healing ?? asNumberOrNull(row.total_healing)
+      total_healing: parsedText.total_healing ?? asNumberOrNull(row.total_healing),
+      received_damage: parsedText.received_damage ?? parseReceivedDamageText(inputAnalyserText)
     };
   }
   const fallbackTotalXp = asNumber(row.total_xp, parsedText?.total_xp ?? 0);
@@ -370,9 +393,11 @@ function buildHuntInput(db: Database.Database, payload: unknown): HuntInput {
     hunting_place_match_readiness_reason: null,
     hunting_place_noise_creatures_json: "[]",
     hunting_place_match_manual: manualHuntingPlaceId ? 1 : 0,
+    hunting_place_area_names: coerceAreaNames(row.hunting_place_area_names),
     tags: coerceTags(row.tags),
     excluded_item_names: coerceExcludedItemNames(row.excluded_item_names),
     raw_text: rawText,
+    input_analyser_text: inputAnalyserText,
     processed_json: processedJson,
     raw_text_hash: rawTextHash(rawText)
   };
@@ -438,9 +463,11 @@ export function createHuntUpload(db: Database.Database, payload: unknown): Recor
         tags_json,
         excluded_items_json,
         raw_text,
+        input_analyser_text,
         processed_json,
         raw_text_hash,
         location_name,
+        hunting_place_area_names_json,
         boost_factor,
         character_name,
         character_vocation,
@@ -460,7 +487,7 @@ export function createHuntUpload(db: Database.Database, payload: unknown): Recor
         hunting_place_match_readiness_reason,
         hunting_place_noise_creatures_json,
         hunting_place_match_manual
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
     )
     .run(
@@ -475,9 +502,11 @@ export function createHuntUpload(db: Database.Database, payload: unknown): Recor
       JSON.stringify(input.tags),
       JSON.stringify(input.excluded_item_names),
       input.raw_text,
+      input.input_analyser_text,
       input.processed_json,
       input.raw_text_hash,
       input.location_name,
+      JSON.stringify(input.hunting_place_area_names),
       computeBoostFactor(input.raw_total_xp, input.total_xp),
       input.character_name,
       input.character_vocation,
@@ -529,9 +558,11 @@ export function updateHuntUpload(
         tags_json = ?,
         excluded_items_json = ?,
         raw_text = ?,
+        input_analyser_text = ?,
         processed_json = ?,
         raw_text_hash = ?,
         location_name = ?,
+        hunting_place_area_names_json = ?,
         boost_factor = ?,
         character_name = ?,
         character_vocation = ?,
@@ -566,9 +597,11 @@ export function updateHuntUpload(
       JSON.stringify(input.tags),
       JSON.stringify(input.excluded_item_names),
       input.raw_text,
+      input.input_analyser_text,
       input.processed_json,
       input.raw_text_hash,
       input.location_name,
+      JSON.stringify(input.hunting_place_area_names),
       computeBoostFactor(input.raw_total_xp, input.total_xp),
       input.character_name,
       input.character_vocation,
@@ -789,23 +822,45 @@ export function searchHuntingPlaces(db: Database.Database, query: string): Recor
         place.max_level,
         place.detail_status,
         COALESCE((
+          SELECT json_group_array(json_object(
+            'area_name', ordered.area_name,
+            'display_order', ordered.display_order,
+            'creature_count', ordered.creature_count
+          ))
+          FROM (
+            SELECT area_name, display_order, creature_count
+            FROM public_hunting_place_area_summaries area
+            WHERE area.hunting_place_id = place.id
+            ORDER BY COALESCE(display_order, rowid), rowid
+          ) ordered
+        ), '[]') AS area_summaries_json,
+        COALESCE((
           SELECT COUNT(*)
           FROM public_hunting_place_creatures creature
           WHERE creature.hunting_place_id = place.id
         ), 0) AS creature_count
       FROM public_hunting_places place
-      WHERE ? = '' OR place.normalized_name LIKE ? OR LOWER(COALESCE(place.location, '')) LIKE ?
+      WHERE ? = ''
+        OR place.normalized_name LIKE ?
+        OR LOWER(COALESCE(place.location, '')) LIKE ?
+        OR EXISTS (
+          SELECT 1
+          FROM public_hunting_place_area_summaries area
+          WHERE area.hunting_place_id = place.id
+            AND LOWER(area.area_name) LIKE ?
+        )
       ORDER BY
         CASE WHEN place.normalized_name = ? THEN 0 ELSE 1 END,
         place.name
       LIMIT 80
     `
     )
-    .all(normalizedQuery, like, like, normalizedQuery) as Array<Record<string, unknown>>;
+    .all(normalizedQuery, like, like, like, normalizedQuery) as Array<Record<string, unknown>>;
 
   const queryTokens = normalizedQuery.split(/\s+/).filter((token) => token.length >= 3);
   function score(row: Record<string, unknown>): number {
-    const haystack = normalizeLootItemName(`${asText(row.normalized_name)} ${asText(row.location)}`);
+    const areaNames = parseJsonList(row.area_summaries_json).map((area) => asText(asRecord(area)?.area_name ?? area));
+    const haystack = normalizeLootItemName(`${asText(row.normalized_name)} ${asText(row.location)} ${areaNames.join(" ")}`);
     if (!normalizedQuery) {
       return 0;
     }
@@ -834,6 +889,15 @@ export function searchHuntingPlaces(db: Database.Database, query: string): Recor
       max_level: asNumberOrNull(row.max_level),
       detail_status: asText(row.detail_status) || "pending",
       creature_count: asNumber(row.creature_count, 0),
+      area_summaries: parseJsonList(row.area_summaries_json)
+        .map((area) => asRecord(area))
+        .filter((area): area is Record<string, unknown> => Boolean(area))
+        .map((area) => ({
+          area_name: cleanDisplayText(area.area_name),
+          display_order: asNumberOrNull(area.display_order),
+          creature_count: asNumberOrNull(area.creature_count)
+        }))
+        .filter((area) => area.area_name),
       confidence: Number(confidence.toFixed(4))
     }))
   };
@@ -856,7 +920,9 @@ function getHuntUploadRow(db: Database.Database, huntId: number): Record<string,
         ended_at,
         tags_json,
         excluded_items_json,
+        input_analyser_text,
         location_name,
+        hunting_place_area_names_json,
         location_confidence,
         boost_factor,
         character_name,
@@ -966,6 +1032,15 @@ function normalizeHuntRow(row: Record<string, unknown>): Record<string, unknown>
     }
   }
 
+  let huntingPlaceAreaNames: string[] = [];
+  if (typeof row.hunting_place_area_names_json === "string") {
+    try {
+      huntingPlaceAreaNames = coerceAreaNames(JSON.parse(row.hunting_place_area_names_json));
+    } catch {
+      huntingPlaceAreaNames = [];
+    }
+  }
+
   return {
     id: asNumber(row.id, 0),
     label: asText(row.label),
@@ -982,6 +1057,7 @@ function normalizeHuntRow(row: Record<string, unknown>): Record<string, unknown>
     started_at: row.started_at ?? null,
     ended_at: row.ended_at ?? null,
     location_name: row.location_name ?? null,
+    hunting_place_area_names: huntingPlaceAreaNames,
     location_confidence: asNumber(row.location_confidence, 0),
     boost_factor: row.boost_factor ?? computeBoostFactor(rawTotalXp, totalXp),
     character_name: row.character_name ?? null,
@@ -1005,7 +1081,8 @@ function normalizeHuntRow(row: Record<string, unknown>): Record<string, unknown>
       noise_creatures: noiseCreatures
     },
     tags,
-    excluded_item_names: excludedItemNames
+    excluded_item_names: excludedItemNames,
+    input_analyser_text: asText(row.input_analyser_text)
   };
 }
 
@@ -1026,7 +1103,9 @@ export function listHuntUploads(db: Database.Database): Record<string, unknown> 
         ended_at,
         tags_json,
         excluded_items_json,
+        input_analyser_text,
         location_name,
+        hunting_place_area_names_json,
         location_confidence,
         boost_factor,
         character_name,
@@ -1309,7 +1388,8 @@ export async function getHuntUploadPreview(
     parsed: import("./types").ParsedHuntText,
     rawText: string,
     excludedItemNames: string[],
-    explicitLocationName: string | null
+    explicitLocationName: string | null,
+    inputAnalyserText: string
   ) => Promise<Record<string, unknown>>,
   buildPreview: BuildPreview
 ): Promise<Record<string, unknown> | null> {
@@ -1321,8 +1401,10 @@ export async function getHuntUploadPreview(
         label,
         uploaded_at,
         raw_text,
+        input_analyser_text,
         processed_json,
         location_name,
+        hunting_place_area_names_json,
         character_name,
         character_vocation,
         character_level,
@@ -1363,6 +1445,8 @@ export async function getHuntUploadPreview(
     }
   }
   const rawText = asText(row.raw_text);
+  const inputAnalyserText = asText(row.input_analyser_text);
+  const parsedReceivedDamage = parseReceivedDamageText(inputAnalyserText);
   let rawParsed: import("./types").ParsedHuntText | null = null;
   let parsed: import("./types").ParsedHuntText | null = null;
   if (typeof row.processed_json === "string" && row.processed_json.trim()) {
@@ -1386,6 +1470,7 @@ export async function getHuntUploadPreview(
           total_supply_cost: asNumberOrNull(processedParsed.total_supply_cost),
           total_damage: asNumberOrNull(processedParsed.total_damage) ?? rawParsed?.total_damage ?? null,
           total_healing: asNumberOrNull(processedParsed.total_healing) ?? rawParsed?.total_healing ?? null,
+          received_damage: asRecord(processedParsed.received_damage) as import("./types").ParsedReceivedDamage | null ?? parsedReceivedDamage,
           started_at: firstText(processedParsed.started_at),
           ended_at: firstText(processedParsed.ended_at),
           hunt_date: firstText(processedParsed.hunt_date),
@@ -1407,9 +1492,10 @@ export async function getHuntUploadPreview(
   }
 
   const preview = parsed
-    ? await buildPreviewFromParsed(parsed, rawText, excludedItemNames, asText(row.location_name).trim() || null)
+    ? await buildPreviewFromParsed(parsed, rawText, excludedItemNames, asText(row.location_name).trim() || null, inputAnalyserText)
     : await buildPreview({
       raw_text: rawText,
+      input_analyser_text: inputAnalyserText,
       excluded_item_names: excludedItemNames,
       location_name: row.location_name
     });
@@ -1430,7 +1516,10 @@ export async function getHuntUploadPreview(
       character_level: asNumberOrNull(row.character_level),
       character_world: row.character_world ?? null,
       character_lookup_at: row.character_lookup_at ?? null,
+      hunting_place_area_names: normalized.hunting_place_area_names,
       hunting_place_match: normalized.hunting_place_match
-    }
+    },
+    input_analyser_text: inputAnalyserText,
+    hunting_place_area_names: normalized.hunting_place_area_names
   };
 }

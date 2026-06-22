@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "../../config";
-import type { ParsedHuntText } from "./types";
+import type { ParsedHuntText, ParsedReceivedDamage } from "./types";
 import {
   asNumber,
   asRecord,
@@ -25,6 +25,75 @@ function parseLineValue(raw: string, label: string): number | null {
   const rx = new RegExp(`^\\s*${label}:\\s*([\\d,]+)\\s*$`, "im");
   const match = raw.match(rx);
   return parseNumberToken(match?.[1] ?? null);
+}
+
+function parsePercentToken(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) ? Number(parsed.toFixed(1)) : null;
+}
+
+function parseReceivedDamageRows(raw: string, header: string): Array<{ name: string; amount: number; percent: number | null }> {
+  const lines = raw.split(/\r?\n/);
+  const startIndex = lines.findIndex((line) => line.trim().toLowerCase() === header.toLowerCase());
+  if (startIndex < 0) {
+    return [];
+  }
+
+  const out: Array<{ name: string; amount: number; percent: number | null }> = [];
+  for (let i = startIndex + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line.trim()) {
+      continue;
+    }
+    if (/^\S.+$/i.test(line) && !/^\s/.test(line)) {
+      break;
+    }
+    const match = line.match(/^\s*(.+?)\s+([\d,]+)(?:\s+\(([\d.]+)%\))?\s*$/);
+    if (!match) {
+      continue;
+    }
+    const amount = parseNumberToken(match[2]);
+    const name = asText(match[1]).trim();
+    if (amount === null || amount < 0 || !name) {
+      continue;
+    }
+    out.push({ name, amount, percent: parsePercentToken(match[3]) });
+  }
+  return out;
+}
+
+export function parseReceivedDamageText(rawText: string): ParsedReceivedDamage | null {
+  const cleaned = rawText.replace(/<\/?input>/gi, "").trim();
+  if (!cleaned || !/Received Damage/i.test(cleaned)) {
+    return null;
+  }
+
+  const total = parseLineValue(cleaned, "Total");
+  const maxDps = parseLineValue(cleaned, "Max-DPS");
+  const damageTypes = parseReceivedDamageRows(cleaned, "Damage Types").map((row) => ({
+    type: row.name,
+    amount: row.amount,
+    percent: row.percent
+  }));
+  const damageSources = parseReceivedDamageRows(cleaned, "Damage Sources").map((row) => ({
+    name: row.name,
+    amount: row.amount,
+    percent: row.percent
+  }));
+
+  if (total === null && maxDps === null && !damageTypes.length && !damageSources.length) {
+    return null;
+  }
+
+  return {
+    total,
+    max_dps: maxDps,
+    damage_types: damageTypes,
+    damage_sources: damageSources
+  };
 }
 
 function sortedCountRows(rows: Array<{ name: string; count: number }>): Array<{ name: string; count: number }> {

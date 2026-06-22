@@ -29,11 +29,20 @@ export type HuntInput = {
   hunting_place_match_readiness_reason: string | null;
   hunting_place_noise_creatures_json: string;
   hunting_place_match_manual: number;
+  hunting_place_area_names: string[];
   tags: string[];
   excluded_item_names: string[];
   raw_text: string;
+  input_analyser_text: string;
   processed_json: string;
   raw_text_hash: string;
+};
+
+export type ParsedReceivedDamage = {
+  total: number | null;
+  max_dps: number | null;
+  damage_types: Array<{ type: string; amount: number; percent: number | null }>;
+  damage_sources: Array<{ name: string; amount: number; percent: number | null }>;
 };
 
 export type ParsedHuntText = {
@@ -45,6 +54,7 @@ export type ParsedHuntText = {
   total_supply_cost: number | null;
   total_damage?: number | null;
   total_healing?: number | null;
+  received_damage?: ParsedReceivedDamage | null;
   started_at: string | null;
   ended_at: string | null;
   hunt_date: string | null;

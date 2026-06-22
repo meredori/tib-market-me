@@ -80,6 +80,7 @@ export function parseHuntPayload(value: unknown): Record<string, unknown> {
   return {
     ...body,
     raw_text: parseString(body.raw_text, "raw_text", { required: true, maxLength: 200000 }),
+    input_analyser_text: parseString(body.input_analyser_text, "input_analyser_text", { maxLength: 50000 }),
     label: parseOptionalString(body.label, "label", { maxLength: 120 }),
     location_name: parseOptionalString(body.location_name, "location_name", { maxLength: 120 }),
     character_name: parseOptionalString(body.character_name, "character_name", { maxLength: 60 }),
@@ -92,6 +93,10 @@ export function parseHuntPayload(value: unknown): Record<string, unknown> {
     tags: parseStringArray(body.tags, "tags", { maxEntries: 20, maxLength: 40 }),
     excluded_item_names: parseStringArray(body.excluded_item_names, "excluded_item_names", {
       maxEntries: 100,
+      maxLength: 120
+    }),
+    hunting_place_area_names: parseStringArray(body.hunting_place_area_names, "hunting_place_area_names", {
+      maxEntries: 30,
       maxLength: 120
     })
   };

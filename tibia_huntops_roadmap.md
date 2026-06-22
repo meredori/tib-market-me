@@ -43,9 +43,11 @@ The following functionality already exists and should not be rebuilt as future r
 ### Hunt Tracking And Analysis
 
 - Hunt analyser paste/import flow.
+- Optional Input Analyser paste for received/incoming damage.
 - Saved hunt records.
-- Hunt result tracking for profit, XP, loot, supplies, damage, healing, and related metrics.
+- Hunt result tracking for profit, XP, loot, supplies, damage, healing, incoming damage, and related metrics.
 - Character context association on saved hunts.
+- Linked hunting-place sublocations/floors can be stored per hunt, with no selection meaning all sublocations.
 - Loot enrichment with known pricing where available.
 - Item-level price overrides.
 - Hunt History / Previous Hunts screen with edit, delete, search, sort, and filtering.

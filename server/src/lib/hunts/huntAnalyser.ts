@@ -5,7 +5,7 @@ import {
 import { hydrateMissingHuntingPlaceDetailsForMatch, matchHuntToHuntingPlaces } from "./huntingPlaceMatcher";
 import { buildHuntIntelligence } from "./intelligence";
 import { enrichLootItems } from "./lootEnrichment";
-import { parseHuntSessionText } from "./parser";
+import { parseHuntSessionText, parseReceivedDamageText } from "./parser";
 import {
   computeBoostFactor,
   createHuntUpload,
@@ -36,7 +36,8 @@ async function buildHuntPreviewFromParsed(
   parsed: ParsedHuntText,
   rawText: string,
   excludedItemNames: string[],
-  explicitLocationName: string | null = null
+  explicitLocationName: string | null = null,
+  inputAnalyserText = ""
 ): Promise<Record<string, unknown>> {
   const durationMinutes = Math.max(1, Math.round(parsed.duration_minutes ?? 1));
   const totalXp = Math.max(0, Math.round(parsed.total_xp ?? 0));
@@ -58,6 +59,7 @@ async function buildHuntPreviewFromParsed(
     locationName: explicitLocationName ?? locationSuggestion.name
   });
   const boostFactor = computeBoostFactor(rawTotalXp, totalXp);
+  const receivedDamage = parsed.received_damage ?? parseReceivedDamageText(inputAnalyserText);
 
   const preview: Record<string, unknown> = {
     suggested_label: parsed.label ?? "Untitled Hunt",
@@ -70,6 +72,7 @@ async function buildHuntPreviewFromParsed(
       total_supply_cost: totalSupply,
       total_damage: parsed.total_damage ?? null,
       total_healing: parsed.total_healing ?? null,
+      received_damage: receivedDamage,
       net_profit: netProfit,
       adjusted_net_profit: adjustedNetProfit,
       xp_per_hour: Math.round(totalXp / hours),
@@ -97,7 +100,8 @@ async function buildHuntPreviewFromParsed(
       hunting_place_match: huntingPlaceMatch
     },
     suggestions: enriched.suggestions,
-    raw_text: rawText
+    raw_text: rawText,
+    input_analyser_text: inputAnalyserText
   };
   return {
     ...preview,
@@ -108,6 +112,7 @@ async function buildHuntPreviewFromParsed(
 export async function parseHuntPreview(db: Database.Database, payload: unknown): Promise<Record<string, unknown>> {
   const row = asRecord(payload) ?? {};
   const rawText = asText(row.raw_text).replace(/<\/??hunt>/gi, "").trim();
+  const inputAnalyserText = asText(row.input_analyser_text).replace(/<\/??input>/gi, "").trim();
   const excludedItemNames = coerceExcludedItemNames(row.excluded_item_names);
   const explicitLocationName = asText(row.location_name).trim() || null;
 
@@ -120,7 +125,8 @@ export async function parseHuntPreview(db: Database.Database, payload: unknown):
     parseHuntSessionText(rawText),
     rawText,
     excludedItemNames,
-    explicitLocationName
+    explicitLocationName,
+    inputAnalyserText
   );
 }
 
@@ -143,12 +149,13 @@ export async function getHuntUploadPreview(
   const preview = await getRepositoryHuntUploadPreview(
     db,
     huntId,
-    (parsed, rawText, excludedItemNames, explicitLocationName) => buildHuntPreviewFromParsed(
+    (parsed, rawText, excludedItemNames, explicitLocationName, inputAnalyserText) => buildHuntPreviewFromParsed(
       db,
       parsed,
       rawText,
       excludedItemNames,
-      explicitLocationName
+      explicitLocationName,
+      inputAnalyserText
     ),
     (payload) => parseHuntPreview(db, payload)
   );

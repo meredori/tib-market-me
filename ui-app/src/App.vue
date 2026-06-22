@@ -128,6 +128,7 @@ const savedLocationKindFilter = ref('')
 const savedHuntSort = ref('date_desc')
 const isNewHuntModalOpen = ref(false)
 const newHuntRawText = ref('')
+const newHuntInputAnalyserText = ref('')
 const newHuntContext = ref(null)
 const isAssignItemModalOpen = ref(false)
 const assignItemTarget = ref(null)
@@ -974,23 +975,27 @@ async function savePreviousHuntEditAndReturn() {
 function startNewHunt() {
   isNewHuntModalOpen.value = true
   newHuntRawText.value = ''
+  newHuntInputAnalyserText.value = ''
   newHuntContext.value = null
 }
 
 function startRecommendedHunt(recommendation) {
   isNewHuntModalOpen.value = true
   newHuntRawText.value = ''
+  newHuntInputAnalyserText.value = ''
   newHuntContext.value = recommendation || null
 }
 
 function closeNewHuntModal() {
   isNewHuntModalOpen.value = false
   newHuntRawText.value = ''
+  newHuntInputAnalyserText.value = ''
   newHuntContext.value = null
 }
 
 async function parseNewHuntFromModal() {
   hunts.huntForm.raw_text = newHuntRawText.value
+  hunts.huntForm.input_analyser_text = newHuntInputAnalyserText.value
   activeSection.value = 'hunts'
   huntEditReturnSection.value = null
   workspaceTab.value = 'overview'
@@ -998,6 +1003,7 @@ async function parseNewHuntFromModal() {
   hunts.clearHuntLogImportReview()
   hunts.clearHuntPreview()
   hunts.huntForm.raw_text = newHuntRawText.value
+  hunts.huntForm.input_analyser_text = newHuntInputAnalyserText.value
   await hunts.parseHuntText([])
   if (hunts.huntPreview.value) {
     if (newHuntContext.value?.place?.name) {
@@ -1488,6 +1494,7 @@ onBeforeUnmount(() => {
     <NewHuntModal
       v-if="isNewHuntModalOpen"
       v-model:raw-text="newHuntRawText"
+      v-model:input-analyser-text="newHuntInputAnalyserText"
       :busy="hunts.huntParseBusy.value"
       :context="newHuntContext"
       @close="closeNewHuntModal"

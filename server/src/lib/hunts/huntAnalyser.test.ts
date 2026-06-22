@@ -6,8 +6,10 @@ import {
   deleteHuntUpload,
   hydrateHuntItemDetails,
   parseHuntPreview,
+  searchHuntingPlaces,
   updateHuntUpload
 } from "./huntAnalyser";
+import { parseReceivedDamageText } from "./parser";
 import { existingHuntsByImportIdentity, getHuntUploadPreview } from "./repository";
 import { rematchHuntUpload, rematchHuntUploads } from "./repository";
 import { matchHuntToHuntingPlaces } from "./huntingPlaceMatcher";
@@ -96,6 +98,21 @@ function magicianQuarterHunt(): string {
     "  9x a white mushroom",
     "  1x a powder herb",
     "  4x a dead frog"
+  ].join("\n");
+}
+
+function receivedDamageSample(): string {
+  return [
+    "Received Damage",
+    "Total: 14,426",
+    "Max-DPS: 903",
+    "Damage Types",
+    "  Physical 10,606 (73.5%)",
+    "  Earth 3,820 (26.5%)",
+    "Damage Sources",
+    "  exotic cave spider 8,283 (57.4%)",
+    "  exotic bat 5,795 (40.2%)",
+    "  (other) 348 (2.4%)"
   ].join("\n");
 }
 
@@ -229,6 +246,43 @@ afterEach(() => {
 });
 
 describe("hunt analyser preview", () => {
+  it("parses received damage input analyser text", () => {
+    expect(parseReceivedDamageText(receivedDamageSample())).toEqual({
+      total: 14_426,
+      max_dps: 903,
+      damage_types: [
+        { type: "Physical", amount: 10_606, percent: 73.5 },
+        { type: "Earth", amount: 3_820, percent: 26.5 }
+      ],
+      damage_sources: [
+        { name: "exotic cave spider", amount: 8_283, percent: 57.4 },
+        { name: "exotic bat", amount: 5_795, percent: 40.2 },
+        { name: "(other)", amount: 348, percent: 2.4 }
+      ]
+    });
+  });
+
+  it("surfaces received damage in preview combat intelligence", async () => {
+    const preview = await parseHuntPreview(previewDb(), {
+      raw_text: customHunt(),
+      input_analyser_text: receivedDamageSample()
+    });
+    const intelligence = preview.hunt_intelligence as Record<string, any>;
+
+    expect(preview.parsed).toEqual(expect.objectContaining({
+      received_damage: expect.objectContaining({ total: 14_426, max_dps: 903 })
+    }));
+    expect(intelligence.combat_analysis).toEqual(expect.objectContaining({
+      incoming_damage_recorded: true,
+      total_incoming_damage: 14_426,
+      max_incoming_dps: 903,
+      incoming_damage_types: expect.arrayContaining([
+        expect.objectContaining({ type: "Physical", amount: 10_606, percent: 73.5 })
+      ])
+    }));
+    expect(intelligence.data_quality.received_damage_imported).toBe(true);
+  });
+
   it("uses cached item details without remote fetches", async () => {
     const fetchMock = vi.fn();
     setItemDetailFetchForTests(fetchMock as unknown as typeof fetch);
@@ -477,6 +531,61 @@ describe("hunt analyser preview", () => {
     expect(preview?.parsed).toEqual(expect.objectContaining({
       total_damage: 111_010,
       total_healing: 4_551
+    }));
+  });
+
+  it("fills saved hunt received damage from input analyser text when processed JSON is older", async () => {
+    const rawText = magicianQuarterHunt();
+    const oldProcessed = {
+      parsed: {
+        label: "dark apprentices - 2026-06-20",
+        duration_minutes: 50,
+        raw_total_xp: 57_944,
+        total_xp: 100_469,
+        total_loot_gold: 13_872,
+        total_supply_cost: 3_920,
+        monsters: [
+          { name: "dark apprentice", count: 259 }
+        ],
+        loot_items: [
+          { name: "a gold coin", quantity: 8056, normalized_name: "gold coin" }
+        ]
+      }
+    };
+    const db = createMockDb((sql) => {
+      if (sql.includes("FROM hunt_uploads") && sql.includes("WHERE id = ?")) {
+        return {
+          get: vi.fn(() => ({
+            id: 20,
+            label: "dark apprentices - 2026-06-20",
+            uploaded_at: "2026-06-20T12:16:44.000Z",
+            raw_text: rawText,
+            input_analyser_text: receivedDamageSample(),
+            processed_json: JSON.stringify(oldProcessed),
+            location_name: "Magician Quarter/Academy of Magic",
+            hunting_place_area_names_json: JSON.stringify(["Basement"]),
+            tags_json: "[]",
+            excluded_items_json: "[]",
+            hunting_place_match_status: "manual",
+            hunting_place_match_manual: 1
+          }))
+        };
+      }
+      return {};
+    });
+    const preview = await getHuntUploadPreview(
+      db,
+      20,
+      async (parsed, _raw, _excluded, _location, inputAnalyserText) => ({ parsed, input_analyser_text: inputAnalyserText }),
+      async () => ({ parsed: null })
+    );
+
+    expect(preview?.parsed).toEqual(expect.objectContaining({
+      received_damage: expect.objectContaining({ total: 14_426, max_dps: 903 })
+    }));
+    expect(preview?.input_analyser_text).toBe(receivedDamageSample());
+    expect(preview?.saved_hunt).toEqual(expect.objectContaining({
+      hunting_place_area_names: ["Basement"]
     }));
   });
 
@@ -803,6 +912,40 @@ describe("hunt to public hunting-place matching", () => {
 });
 
 describe("hunt repository semantics", () => {
+  it("returns ordered area summaries in hunting place search", () => {
+    const db = createMockDb((sql) => {
+      if (sql.includes("FROM public_hunting_places place")) {
+        return {
+          all: vi.fn(() => [{
+            id: 88,
+            name: "Exotic Cave",
+            normalized_name: "exotic cave",
+            location: "Issavi",
+            min_level: 150,
+            max_level: 250,
+            detail_status: "enriched",
+            creature_count: 2,
+            area_summaries_json: JSON.stringify([
+              { area_name: "Upper Floor", display_order: 0, creature_count: 2 },
+              { area_name: "Lower Floor", display_order: 1, creature_count: 3 }
+            ])
+          }])
+        };
+      }
+      return {};
+    });
+
+    const result = searchHuntingPlaces(db, "lower floor") as Record<string, any>;
+
+    expect(result.items[0]).toMatchObject({
+      id: 88,
+      area_summaries: [
+        { area_name: "Upper Floor", display_order: 0, creature_count: 2 },
+        { area_name: "Lower Floor", display_order: 1, creature_count: 3 }
+      ]
+    });
+  });
+
   it("keeps create, update, and delete semantics stable", () => {
     const inserted = {
       id: 7,

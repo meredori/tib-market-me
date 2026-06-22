@@ -8,11 +8,12 @@ import {
 
 defineProps({
   rawText: { type: String, default: '' },
+  inputAnalyserText: { type: String, default: '' },
   busy: { type: Boolean, default: false },
   context: { type: Object, default: null },
 })
 
-defineEmits(['update:rawText', 'close', 'parse'])
+defineEmits(['update:rawText', 'update:inputAnalyserText', 'close', 'parse'])
 </script>
 
 <template>
@@ -35,6 +36,15 @@ defineEmits(['update:rawText', 'close', 'parse'])
           class="new-hunt-textarea"
           placeholder="Paste hunt session text here"
           @input="$emit('update:rawText', $event.target.value)"
+        ></textarea>
+      </label>
+      <label class="block-label mt-10">
+        Input analyser text
+        <textarea
+          :value="inputAnalyserText"
+          class="new-hunt-textarea compact"
+          placeholder="Paste received damage text here"
+          @input="$emit('update:inputAnalyserText', $event.target.value)"
         ></textarea>
       </label>
       <div class="status-badge warning mt-10">

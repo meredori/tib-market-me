@@ -6,6 +6,7 @@ import { fetchAndCacheItemDetail, getCachedItemDetail } from "../hunts/itemDetai
 import { asNumberOrNull, asRecord, asText, firstNumber, firstText, nowIso } from "../hunts/utils";
 
 const DEFAULT_PUBLIC_DATA_BASE_URL = "https://tibiadata.bytewizards.de";
+const TIBIAWIKI_DEV_LOOT_BASE_URL = "https://tibiawiki.dev/api/loot";
 
 export type PublicReferenceSyncOptions = {
   creatureLimit?: number;
@@ -530,6 +531,48 @@ function preferLootRow(existing: NormalizedLootRow, next: NormalizedLootRow): No
 function normalizedLootRows(payload: unknown): { rows: NormalizedLootRow[]; duplicates: number } {
   const byName = new Map<string, NormalizedLootRow>();
   let duplicates = 0;
+
+  const root = jsonRecord(payload);
+  if ("kills" in root && Array.isArray(root.loot)) {
+    const kills = asNumberOrNull(root.kills) ?? 0;
+    for (const item of root.loot) {
+      const row = jsonRecord(item);
+      const itemName = firstText(row.itemName, row.item_name, row.name);
+      if (!itemName || itemName.toLowerCase() === "empty") {
+        continue;
+      }
+      const normalizedItemName = normalizePublicName(itemName);
+      const times = asNumberOrNull(row.times);
+      const chancePercent = (kills > 0 && times !== null) ? (times / kills) * 100 : null;
+
+      const range = amountRangeFromText(row.amount);
+      const minCount = range.min ?? 1;
+      const maxCount = range.max ?? 1;
+      const amountText = range.text || "1";
+
+      const normalized: NormalizedLootRow = {
+        item_id: firstNumber(row.itemId, row.item_id),
+        item_name: itemName,
+        normalized_item_name: normalizedItemName,
+        chance_percent: chancePercent,
+        min_count: minCount,
+        max_count: maxCount,
+        rarity: firstText(row.rarity) || null,
+        amount_text: amountText,
+        payload_json: JSON.stringify(row)
+      };
+
+      const existing = byName.get(normalizedItemName);
+      if (existing) {
+        duplicates += 1;
+        byName.set(normalizedItemName, preferLootRow(existing, normalized));
+      } else {
+        byName.set(normalizedItemName, normalized);
+      }
+    }
+    return { rows: Array.from(byName.values()), duplicates };
+  }
+
   for (const row of lootRows(payload)) {
     const normalized = normalizeLootRow(row);
     if (!normalized) {
@@ -738,7 +781,25 @@ export class PublicTibiaDataClient {
   }
 
   async getCreatureLoot(idOrName: number | string): Promise<unknown> {
-    return this.getJson(`/api/v1/creatures/${encodeURIComponent(String(idOrName))}/loot`);
+    const name = String(idOrName);
+    const formattedName = name.replace(/\s+/g, "_");
+    const url = `${TIBIAWIKI_DEV_LOOT_BASE_URL}/${encodeURIComponent(formattedName)}`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    let response: Response;
+    try {
+      response = await publicFetch()(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (response.status === 404) {
+      return { name, kills: "0", loot: [] };
+    }
+    if (!response.ok) {
+      throw new PublicReferenceHttpError(url, response.status);
+    }
+    return response.json();
   }
 
   async listHuntingPlaces(): Promise<unknown[]> {
@@ -812,16 +873,15 @@ function publicReferenceContract(): Record<string, unknown> {
           {
             endpoint: "GET /api/v1/creatures/{name-or-id}",
             expected_shape: "CreatureDetailsResponse",
-            required_fields: ["id", "name", "hitpoints", "experience", "structuredData", "lootStatistics", "images", "lastUpdated"],
+            required_fields: ["id", "name", "hitpoints", "experience", "structuredData", "images", "lastUpdated"],
             timestamp_field: "lastUpdated",
-            note: "lootStatistics is authoritative for loot; /loot is only a fallback when this array is absent or empty."
+            note: "Loot is always fetched from the tibiawiki.dev API rather than creature details."
           },
           {
-            endpoint: "GET /api/v1/creatures/{name-or-id}/loot",
-            expected_shape: "LootStatisticDetailsResponse",
-            required_fields: ["creatureId", "creatureName", "lootStatistics", "lastUpdated"],
-            timestamp_field: "lastUpdated",
-            fallback_only: true
+            endpoint: "GET https://tibiawiki.dev/api/loot/{name}",
+            expected_shape: "TibiaWikiDevLootResponse",
+            required_fields: ["kills", "name", "loot"],
+            note: "Provides detailed drop counts to compute actual drop percentages."
           },
           {
             endpoint: "GET /api/v1/hunting-places/{name-or-id}",
@@ -1146,8 +1206,7 @@ async function runPublicReferenceEnrichmentJob(
         if (!creature) {
           throw new Error(`Could not normalize creature detail for ${name ?? id}`);
         }
-        const hasEmbeddedLoot = payloadHasLootRows(details);
-        const loot = hasEmbeddedLoot ? details : await client.getCreatureLoot(creature.id);
+        const loot = await client.getCreatureLoot(creature.name);
         const lootResult = await replacePublicCreatureLootWithItemDetails(db, creature.id, loot, fetchedAt);
         markCreatureDetailState(db, creature.id, "enriched", fetchedAt);
         return {
@@ -1158,8 +1217,8 @@ async function runPublicReferenceEnrichmentJob(
           duplicate_loot_rows: lootResult.duplicates,
           item_details_fetched: lootResult.item_details_fetched,
           unresolved_loot_items: lootResult.unresolved_items,
-          loot_from_details: hasEmbeddedLoot ? 1 : 0,
-          loot_fallback_fetches: hasEmbeddedLoot ? 0 : 1
+          loot_from_details: 0,
+          loot_fallback_fetches: 1
         };
       } catch (error) {
         markCreatureDetailState(db, id, "failed", nowIso(), error);
@@ -1413,6 +1472,13 @@ export function upsertPublicCreature(db: Database.Database, payload: unknown, fe
 
 export function replacePublicCreatureLoot(db: Database.Database, creatureId: number, payload: unknown, fetchedAt = nowIso()): number {
   const { rows } = normalizedLootRows(payload);
+
+  const root = jsonRecord(payload);
+  const kills = asNumberOrNull(root.kills);
+  if (kills !== null) {
+    db.prepare("UPDATE public_creatures SET total_kills = ? WHERE id = ?").run(kills, Math.trunc(creatureId));
+  }
+
   db.prepare("DELETE FROM public_creature_loot WHERE creature_id = ?").run(Math.trunc(creatureId));
   const insert = db.prepare(
     `
@@ -1500,6 +1566,13 @@ async function replacePublicCreatureLootWithItemDetails(
   fetchedAt = nowIso()
 ): Promise<CreatureLootReplaceResult> {
   const { rows, duplicates } = normalizedLootRows(payload);
+
+  const root = jsonRecord(payload);
+  const kills = asNumberOrNull(root.kills);
+  if (kills !== null) {
+    db.prepare("UPDATE public_creatures SET total_kills = ? WHERE id = ?").run(kills, Math.trunc(creatureId));
+  }
+
   const details = await resolveLootItemDetails(db, rows);
   db.prepare("DELETE FROM public_creature_loot WHERE creature_id = ?").run(Math.trunc(creatureId));
   const insert = db.prepare(
