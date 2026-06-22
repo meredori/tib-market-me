@@ -262,6 +262,7 @@ function placeLevel(candidate) {
         :item-image-path="itemImagePath"
         @open-item="$emit('open-item', $event)"
         @open-creature="$emit('open-creature', $event)"
+        @open-hunt="$emit('open-hunt', $event)"
       />
       <details v-if="activePreview" class="raw-audit panel">
         <summary>Raw imported data and full loot audit</summary>

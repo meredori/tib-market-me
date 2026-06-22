@@ -33,7 +33,7 @@ const props = defineProps({
   itemImagePath: { type: Function, required: true },
 })
 
-const emit = defineEmits(['open-item', 'open-creature'])
+const emit = defineEmits(['open-item', 'open-creature', 'open-hunt'])
 
 const showAllMonsters = ref(false)
 
@@ -46,12 +46,13 @@ const costAnalysis = computed(() => intelligence.value.cost_analysis || {})
 const combatAnalysis = computed(() => intelligence.value.combat_analysis || {})
 const monsterAnalysis = computed(() => intelligence.value.monster_analysis || {})
 const comparisons = computed(() => intelligence.value.comparisons || [])
+const similarHunts = computed(() => intelligence.value.similar_hunts || [])
 const recommendations = computed(() => intelligence.value.recommendations || [])
 const reasons = computed(() => intelligence.value.performance_reasons || [])
 const parsed = computed(() => props.preview.parsed || {})
 
 const preferredComparison = computed(() => {
-  return comparisons.value.find((item) => item.label === 'Same linked place')
+  return comparisons.value.find((item) => item.label === 'Same hunting spot')
     || null
 })
 
@@ -60,6 +61,7 @@ const totalLootValue = computed(() => Number(lootAnalysis.value.total_loot_value
 const monsterRows = computed(() => monsterAnalysis.value.top_monsters || [])
 const visibleMonsterRows = computed(() => showAllMonsters.value ? monsterRows.value : monsterRows.value.slice(0, 5))
 const totalKills = computed(() => Number(monsterAnalysis.value.total_kills || props.preview.monsters?.reduce?.((sum, row) => sum + Number(row.count || 0), 0) || 0))
+const comparisonRows = computed(() => comparisons.value)
 const hasRecordedCombat = computed(() => combatAnalysis.value.damage_recorded || combatAnalysis.value.healing_recorded)
 const incomingDamageRecorded = computed(() => Boolean(combatAnalysis.value.incoming_damage_recorded))
 const incomingDamageTypes = computed(() => combatAnalysis.value.incoming_damage_types || combatAnalysis.value.received_damage?.damage_types || [])
@@ -323,11 +325,11 @@ function openLootItem(item) {
     </div>
 
     <div class="analysis-grid">
-      <Panel variant="analysis">
+      <Panel variant="analysis" class="monster-panel">
         <SectionHeader title="Monster Analysis" subtitle="Kill mix, XP contribution, and estimated loot value per creature." :icon="IconPaw" iconColor="var(--muted)">
           <ConfidenceBadge :confidence="(dataQuality.monster_metadata_coverage_pct || 0) / 100" />
         </SectionHeader>
-        
+
         <div class="monster-analysis-table-container">
           <table class="monster-analysis-table">
             <thead>
@@ -387,32 +389,58 @@ function openLootItem(item) {
         </div>
       </Panel>
 
-      <Panel variant="analysis">
+      <Panel variant="analysis" class="comparison-panel">
         <SectionHeader title="Hunt Comparison" subtitle="Only baselines with saved data are shown." :icon="IconChartBar" iconColor="var(--muted)" />
         <div class="comparison-list">
-          <div v-for="item in comparisons.filter((row) => Number(row.hunt_count || 0) > 1)" :key="item.label" class="comparison-row">
-            <div>
+          <div v-for="item in comparisonRows" :key="item.label" class="comparison-card">
+            <div class="comparison-card-head">
               <strong>{{ item.label }}</strong>
               <span>{{ item.hunt_count }} hunt(s)</span>
             </div>
-            <div>
-              <small>Profit/hr</small>
-              <b :class="signedDelta(item.profit_delta_pct).tone">{{ signedDelta(item.profit_delta_pct).text }}</b>
-              <span>{{ formatValue(item.profit_per_hour) }}</span>
-            </div>
-            <div>
-              <small>XP/hr</small>
-              <b :class="signedDelta(item.xp_delta_pct).tone">{{ signedDelta(item.xp_delta_pct).text }}</b>
-              <span>{{ formatValue(item.xp_per_hour) }}</span>
-            </div>
-            <div>
-              <small>Supplies/hr</small>
-              <b :class="signedDelta(item.supplies_delta_pct, true).tone">{{ signedDelta(item.supplies_delta_pct, true).text }}</b>
-              <span>{{ formatValue(item.supplies_per_hour) }}</span>
+            <div class="comparison-metric-grid">
+              <div>
+                <small>Profit/hr</small>
+                <b :class="signedDelta(item.profit_delta_pct).tone">{{ signedDelta(item.profit_delta_pct).text }}</b>
+                <span>{{ formatValue(item.profit_per_hour) }} gp</span>
+              </div>
+              <div>
+                <small>XP/hr</small>
+                <b :class="signedDelta(item.xp_delta_pct).tone">{{ signedDelta(item.xp_delta_pct).text }}</b>
+                <span>{{ formatValue(item.xp_per_hour) }}</span>
+              </div>
+              <div>
+                <small>Supplies/hr</small>
+                <b :class="signedDelta(item.supplies_delta_pct, true).tone">{{ signedDelta(item.supplies_delta_pct, true).text }}</b>
+                <span>{{ formatValue(item.supplies_per_hour) }} gp</span>
+              </div>
             </div>
           </div>
-          <div v-if="!comparisons.filter((row) => Number(row.hunt_count || 0) > 1).length" class="empty-inline">
-            Save more hunts to build same-place, character, recent, and monster-mix baselines.
+        </div>
+        <div class="similar-hunts-table">
+          <span class="loot-chart-title">Similar hunts</span>
+          <button
+            v-for="hunt in similarHunts"
+            :key="`similar-hunt-${hunt.id}`"
+            class="similar-hunt-row"
+            @click="emit('open-hunt', hunt)"
+          >
+            <span>
+              <strong>{{ hunt.location_name || hunt.label }}</strong>
+              <small>{{ (hunt.match_reasons || []).join(' · ') || 'similar saved hunt' }}</small>
+            </span>
+            <b>{{ formatValue(hunt.profit_per_hour) }} gp/hr</b>
+            <b>{{ formatValue(hunt.xp_per_hour) }} XP/hr</b>
+            <small>{{ hunt.date ? hunt.date.slice(0, 10) : 'saved hunt' }}</small>
+          </button>
+          <div v-if="!similarHunts.length" class="similar-hunt-empty">
+            No other saved hunts match this spot, monster mix, or level range yet.
+          </div>
+        </div>
+        <div v-if="!comparisonRows.length" class="incoming-damage-placeholder comparison-empty">
+          <TablerIcon :name="IconChartBar" :size="22" class="placeholder-icon" />
+          <div>
+            <strong>No Comparison Baselines Yet</strong>
+            <span>Save more hunts to build same-spot, monster-mix, and similar-level baselines.</span>
           </div>
         </div>
       </Panel>
@@ -593,10 +621,8 @@ function openLootItem(item) {
 .metric-tile b,
 .loot-total span,
 .loot-total small,
-.monster-summary span,
-.monster-summary small,
-.comparison-row small,
-.comparison-row span,
+.comparison-card small,
+.comparison-card span,
 .quality-row span {
   color: var(--muted);
   font-size: var(--font-caption);
@@ -702,26 +728,6 @@ function openLootItem(item) {
   background: rgba(120, 146, 176, 0.08);
 }
 
-.monster-summary {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(260px, 0.78fr);
-  gap: 14px;
-  align-items: start;
-  margin-bottom: 12px;
-}
-
-.monster-summary strong {
-  display: block;
-  margin: 4px 0;
-  color: var(--amber);
-  font-size: 1.2rem;
-}
-
-.bar-list {
-  display: grid;
-  gap: 8px;
-}
-
 .combat-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -784,14 +790,18 @@ function openLootItem(item) {
 }
 
 .combat-metrics div,
-.monster-summary div,
-.quality-row,
-.comparison-row {
+.quality-row {
   min-width: 0;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: rgba(8, 18, 30, 0.46);
   padding: 10px;
+}
+
+.comparison-card {
+  min-width: 0;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 9px 0 10px;
 }
 
 .combat-metrics div {
@@ -804,20 +814,125 @@ function openLootItem(item) {
   font-size: 1.05rem;
 }
 
-.comparison-row {
+.comparison-card {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) repeat(3, minmax(94px, 0.7fr));
+  grid-template-columns: minmax(150px, 0.55fr) minmax(0, 1.45fr);
   gap: 10px;
   align-items: center;
 }
 
-.comparison-row > div {
-  display: grid;
-  gap: 2px;
+.comparison-card:first-child {
+  padding-top: 2px;
 }
 
-.comparison-row b {
+.comparison-card:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.comparison-card-head {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.comparison-card-head strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--font-heading);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comparison-card-head span {
+  display: block;
+}
+
+.comparison-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.comparison-metric-grid > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.comparison-card b {
   font-size: 0.95rem;
+}
+
+.similar-hunts-table {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+}
+
+.similar-hunt-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(92px, auto) minmax(92px, auto) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(8, 18, 30, 0.28);
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.similar-hunt-row:hover {
+  background: rgba(8, 18, 30, 0.48);
+}
+
+.similar-hunt-row span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.similar-hunt-row strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--font-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.similar-hunt-row small {
+  color: var(--muted);
+  font-size: var(--font-caption);
+}
+
+.similar-hunt-row b {
+  color: var(--ink);
+  font-size: var(--font-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.similar-hunt-empty {
+  border: 1px dashed var(--line-soft);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: var(--font-small);
+  padding: 10px;
+}
+
+.comparison-card .good {
+  color: var(--green);
+}
+
+.comparison-card .bad {
+  color: var(--red);
+}
+
+.comparison-card .muted {
+  color: var(--muted);
 }
 
 .quality-row {
@@ -835,45 +950,76 @@ function openLootItem(item) {
   padding: 12px;
 }
 
+.comparison-empty {
+  margin-top: 0;
+}
+
 .compact-toggle {
   justify-self: start;
   margin-top: 10px;
 }
 
+.monster-panel,
+.comparison-panel {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.comparison-panel {
+  grid-template-rows: auto auto;
+}
+
+.comparison-panel .comparison-list {
+  align-content: start;
+}
+
 .monster-analysis-table-container {
-  margin-top: 16px;
-  background: rgba(8, 18, 30, 0.2);
-  border: 1px solid var(--line-soft);
+  background: rgba(8, 18, 30, 0.16);
+  border: 1px solid transparent;
   border-radius: 8px;
   overflow-x: auto;
 }
 
 .monster-analysis-table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-heading);
+  min-width: 760px;
+  border-collapse: separate;
+  border-spacing: 0 9px;
+  font-size: var(--font-body);
 }
 
 .monster-analysis-table th {
-  padding: 12px 16px;
+  padding: 0 12px 2px;
   color: var(--muted);
-  font-size: var(--font-small);
-  font-weight: 600;
+  font-size: var(--font-label);
+  font-weight: 800;
   text-transform: uppercase;
-  border-bottom: 1px solid var(--line-soft);
   letter-spacing: 0.05em;
-  background: rgba(8, 18, 30, 0.4);
 }
 
 .monster-analysis-table td {
-  padding: 14px 16px;
+  border-top: 1px solid var(--line-soft);
   border-bottom: 1px solid var(--line-soft);
+  background: rgba(8, 18, 30, 0.34);
+  padding: 10px 12px;
   vertical-align: middle;
   color: var(--ink);
 }
 
-.monster-analysis-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.02);
+.monster-analysis-table tbody tr td:first-child {
+  border-left: 1px solid var(--line-soft);
+  border-radius: 8px 0 0 8px;
+  text-align: left;
+}
+
+.monster-analysis-table tbody tr td:last-child {
+  border-right: 1px solid var(--line-soft);
+  border-radius: 0 8px 8px 0;
+}
+
+.monster-analysis-table tbody tr:hover td {
+  background: rgba(8, 18, 30, 0.52);
 }
 
 .monster-analysis-table th.num-col,
@@ -883,10 +1029,11 @@ function openLootItem(item) {
 }
 
 .monster-name-cell {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 6px;
   align-items: stretch;
+  justify-items: start;
+  text-align: left;
 }
 
 .monster-name-link {
@@ -895,8 +1042,8 @@ function openLootItem(item) {
   color: var(--ink);
   padding: 0;
   text-align: left;
-  font-weight: 600;
-  font-size: inherit;
+  font-size: var(--font-heading);
+  font-weight: 700;
   cursor: pointer;
   align-self: flex-start;
 }
@@ -912,26 +1059,24 @@ function openLootItem(item) {
 
 .monster-progress-track {
   display: block;
-  height: 6px;
+  height: 7px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(120, 146, 176, 0.18);
   width: 100%;
-  max-width: 180px;
 }
 
 .monster-progress-track .bar-fill {
   display: block;
   height: 100%;
-  background: #7c4dff;
+  background: linear-gradient(90deg, var(--amber), #7c3aed);
   border-radius: inherit;
 }
 
 .monster-analysis-table tr.total-row td {
-  background: rgba(8, 18, 30, 0.5);
-  border-top: 2px solid var(--line-soft);
-  border-bottom: none;
-  font-weight: 600;
+  background: rgba(8, 18, 30, 0.58);
+  border-color: rgba(120, 146, 176, 0.28);
+  font-weight: 700;
   color: var(--ink);
 }
 
@@ -976,24 +1121,17 @@ function openLootItem(item) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .loot-layout,
-  .monster-summary,
-  .comparison-row,
-  .incoming-damage-grid,
-  .bar-row {
+  .comparison-metric-grid,
+  .similar-hunt-row,
+  .incoming-damage-grid {
     grid-template-columns: 1fr;
-  }
-
-  .bar-row {
-    justify-items: stretch;
   }
 }
 
 @media (max-width: 480px) {
   .metric-tile-grid,
   .combat-metrics,
-  .reason-grid,
-  .loot-summary-tiles {
+  .reason-grid {
     grid-template-columns: 1fr;
   }
 }

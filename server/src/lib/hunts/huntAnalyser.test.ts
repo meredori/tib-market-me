@@ -13,6 +13,7 @@ import { parseReceivedDamageText } from "./parser";
 import { existingHuntsByImportIdentity, getHuntUploadPreview } from "./repository";
 import { rematchHuntUpload, rematchHuntUploads } from "./repository";
 import { matchHuntToHuntingPlaces } from "./huntingPlaceMatcher";
+import { buildHuntIntelligence } from "./intelligence";
 import { resetItemDetailFetchForTests, setItemDetailFetchForTests } from "./itemDetailCache";
 import type { ItemDetailCacheRow, LootLookupRow } from "./types";
 
@@ -426,6 +427,18 @@ describe("hunt analyser preview", () => {
     expect((preview.hunt_intelligence as Record<string, any>).key_metrics).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: "profit_per_hour", delta_pct: expect.any(Number) })
     ]));
+    expect((preview.hunt_intelligence as Record<string, any>).comparisons.map((item: Record<string, unknown>) => item.label)).toEqual([
+      "Same hunting spot",
+      "Similar monster mix",
+      "Similar level range"
+    ]);
+    expect((preview.hunt_intelligence as Record<string, any>).similar_hunts[0]).toEqual(expect.objectContaining({
+      id: 1,
+      label: "Older",
+      profit_per_hour: expect.any(Number),
+      xp_per_hour: expect.any(Number),
+      score: expect.any(Number)
+    }));
   });
 
   it("classifies strong XP, expensive, and safe slow hunts", async () => {
@@ -440,6 +453,29 @@ describe("hunt analyser preview", () => {
     expect((xpPreview.hunt_intelligence as Record<string, any>).verdict.label).toBe("Strong XP hunt");
     expect((expensivePreview.hunt_intelligence as Record<string, any>).verdict.label).toBe("Expensive hunt");
     expect((safePreview.hunt_intelligence as Record<string, any>).verdict.label).toBe("Safe but slow hunt");
+  });
+
+  it("does not include the open hunt in similar hunts", async () => {
+    const db = previewDb({
+      loot: { "rare gem": lootRow("rare gem", 100_000) },
+      history: [
+        { id: 7, label: "Current saved hunt", duration_minutes: 30, total_xp: 100_000, raw_total_xp: 100_000, total_loot_gold: 100_000, total_supply_cost: 5_000, uploaded_at: "2026-06-14T00:00:00.000Z", public_hunting_place_id: 22 },
+        { id: 8, label: "Older same spot", duration_minutes: 30, total_xp: 90_000, raw_total_xp: 90_000, total_loot_gold: 70_000, total_supply_cost: 5_000, uploaded_at: "2026-06-10T00:00:00.000Z", public_hunting_place_id: 22 }
+      ]
+    });
+    const preview = await parseHuntPreview(db, { raw_text: customHunt({ lootLines: "  1x rare gem" }) });
+    const intelligence = buildHuntIntelligence(db, preview, {
+      id: 7,
+      label: "Current saved hunt",
+      location_name: "bugs",
+      hunting_place_match: { selected_hunting_place_id: 22 }
+    });
+
+    expect((intelligence as Record<string, any>).similar_hunts.map((item: Record<string, unknown>) => item.id)).not.toContain(7);
+    expect((intelligence as Record<string, any>).similar_hunts[0]).toEqual(expect.objectContaining({
+      id: 8,
+      label: "Older same spot"
+    }));
   });
 
   it("preserves parsed damage and healing totals in combat intelligence", async () => {

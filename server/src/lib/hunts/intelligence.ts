@@ -304,6 +304,8 @@ function historyMetric(row: HistoryRow) {
   return {
     id: row.id,
     label: row.label,
+    location_name: row.location_name,
+    character_name: row.character_name,
     profit,
     profit_per_hour: perHour(profit, row.duration_minutes),
     loot_per_hour: perHour(row.total_loot_gold, row.duration_minutes),
@@ -343,19 +345,27 @@ function parsedMonsterSignature(row: HistoryRow): Map<string, number> {
       : Array.isArray(processed.monsters)
         ? processed.monsters
         : [];
-    const total = monsters.reduce((sum: number, monster: Record<string, unknown>) => sum + Math.max(0, asNumber(monster.count, 0)), 0);
-    const out = new Map<string, number>();
-    for (const monster of monsters) {
-      const name = normalizeLootItemName(asText(monster.name));
-      const count = Math.max(0, asNumber(monster.count, 0));
-      if (name && count > 0 && total > 0) {
-        out.set(name, count / total);
-      }
-    }
-    return out;
+    return monsterSignature(monsters);
   } catch {
     return new Map();
   }
+}
+
+function monsterSignature(monsters: Array<Record<string, unknown>>): Map<string, number> {
+  const total = monsters.reduce((sum, monster) => sum + Math.max(0, asNumber(monster.count, 0)), 0);
+  const weighted = monsters
+    .map((monster) => ({
+      name: normalizeLootItemName(asText(monster.name)),
+      count: Math.max(0, asNumber(monster.count, 0))
+    }))
+    .filter((monster) => monster.name && monster.count > 0 && total > 0)
+    .sort((a, b) => b.count - a.count);
+  const scores = weighted.map((monster, index) => {
+    const rankWeight = index === 0 ? 1.8 : index === 1 ? 1.25 : 1;
+    return { name: monster.name, score: (monster.count / total) * rankWeight };
+  });
+  const scoreTotal = scores.reduce((sum, monster) => sum + monster.score, 0);
+  return new Map(scores.map((monster) => [monster.name, scoreTotal > 0 ? monster.score / scoreTotal : 0]));
 }
 
 function signatureOverlap(a: Map<string, number>, b: Map<string, number>): number {
@@ -399,11 +409,12 @@ function topComparisons(
   placeId: number | null
 ) {
   const savedId = asNumberOrNull(saved?.id);
-  const characterName = asText(saved?.character_name).trim();
   const currentLevel = asNumberOrNull(saved?.character_level);
   const currentRow: ReturnType<typeof historyMetric> = {
     id: savedId ?? 0,
     label: asText(saved?.label) || "Current hunt",
+    location_name: asText(saved?.location_name) || null,
+    character_name: asText(saved?.character_name) || null,
     profit: 0,
     profit_per_hour: current.profit_per_hour,
     loot_per_hour: current.loot_per_hour,
@@ -417,26 +428,14 @@ function topComparisons(
     date: null
   };
   const historicalRows = history.filter((row) => row.id !== savedId);
-  const rows = [currentRow, ...historicalRows.map(historyMetric)];
   const canonical = history.filter((row) => row.id !== savedId && asText(row.hunting_place_match_mode) !== "mixed_route");
   const samePlace = [currentRow, ...(placeId ? canonical.filter((row) => row.public_hunting_place_id === placeId).map(historyMetric) : [])];
-  const sameCharacter = characterName
-    ? [currentRow, ...historicalRows.filter((row) => asText(row.character_name).toLowerCase() === characterName.toLowerCase()).map(historyMetric)]
-    : [currentRow];
-  const last10 = rows.slice(0, 10);
   const currentSignature = new Map<string, number>();
   const monsters = Array.isArray(preview.monsters) ? preview.monsters as Array<Record<string, unknown>> : [];
-  const totalKills = monsters.reduce((sum, monster) => sum + Math.max(0, asNumber(monster.count, 0)), 0);
-  for (const monster of monsters) {
-    const name = normalizeLootItemName(asText(monster.name));
-    const count = Math.max(0, asNumber(monster.count, 0));
-    if (name && count > 0 && totalKills > 0) {
-      currentSignature.set(name, count / totalKills);
-    }
-  }
+  for (const [name, pct] of monsterSignature(monsters)) currentSignature.set(name, pct);
   const similar = historicalRows
     .map((row) => ({ row, overlap: signatureOverlap(currentSignature, parsedMonsterSignature(row)) }))
-    .filter((entry) => entry.overlap >= 0.5)
+    .filter((entry) => entry.overlap >= 0.45)
     .sort((a, b) => b.overlap - a.overlap)
     .slice(0, 9)
     .map((entry) => historyMetric(entry.row));
@@ -448,13 +447,67 @@ function topComparisons(
   const levelWindow = tibiaLevelWindow(currentLevel);
 
   return [
-    comparisonSummary("All saved hunts", rows, current),
+    comparisonSummary("Same hunting spot", samePlace, current),
+    comparisonSummary("Similar monster mix", similarWithCurrent, current),
     { ...comparisonSummary("Similar level range", similarLevelRange, current), level_window: levelWindow },
-    comparisonSummary("Same linked place", samePlace, current),
-    comparisonSummary("Same character", sameCharacter, current),
-    comparisonSummary("Last 10 hunts", last10, current),
-    comparisonSummary("Similar monster mix", similarWithCurrent, current)
   ];
+}
+
+function topSimilarHunts(input: {
+  preview: Record<string, unknown>;
+  saved: Record<string, unknown> | null;
+  history: HistoryRow[];
+  currentLevel: number | null;
+  placeId: number | null;
+}): Array<Record<string, unknown>> {
+  const savedId = asNumberOrNull(input.saved?.id);
+  const monsters = Array.isArray(input.preview.monsters) ? input.preview.monsters as Array<Record<string, unknown>> : [];
+  const currentSignature = monsterSignature(monsters);
+  const historicalRows = input.history.filter((row) => row.id !== savedId);
+  const metrics = historicalRows.map((row) => {
+    const metricRow = historyMetric(row);
+    const sameSpot = Boolean(input.placeId && asText(row.hunting_place_match_mode) !== "mixed_route" && row.public_hunting_place_id === input.placeId);
+    const monsterOverlap = signatureOverlap(currentSignature, parsedMonsterSignature(row));
+    const sameLevelRange = sameTibiaLevelWindow(input.currentLevel, metricRow.character_level);
+    return { row, metric: metricRow, sameSpot, monsterOverlap, sameLevelRange };
+  }).filter((entry) => entry.sameSpot || entry.monsterOverlap >= 0.35 || entry.sameLevelRange);
+
+  const maxProfit = Math.max(1, ...metrics.map((entry) => Math.max(0, entry.metric.profit_per_hour)));
+  const maxXp = Math.max(1, ...metrics.map((entry) => Math.max(0, entry.metric.xp_per_hour)));
+  const maxSupplies = Math.max(1, ...metrics.map((entry) => Math.max(0, entry.metric.supplies_per_hour)));
+
+  return metrics
+    .map((entry) => {
+      const similarityScore =
+        (entry.sameSpot ? 55 : 0)
+        + (entry.monsterOverlap * 30)
+        + (entry.sameLevelRange ? 15 : 0);
+      const performanceScore =
+        (Math.max(0, entry.metric.profit_per_hour) / maxProfit) * 18
+        + (Math.max(0, entry.metric.xp_per_hour) / maxXp) * 10
+        - (Math.max(0, entry.metric.supplies_per_hour) / maxSupplies) * 4;
+      const reasons = [
+        entry.sameSpot ? "same spot" : null,
+        entry.monsterOverlap >= 0.35 ? `${Math.round(entry.monsterOverlap * 100)}% monster mix` : null,
+        entry.sameLevelRange ? "level range" : null
+      ].filter(Boolean);
+      return {
+        id: entry.metric.id,
+        label: entry.metric.label,
+        location_name: entry.metric.location_name,
+        character_name: entry.metric.character_name,
+        profit_per_hour: entry.metric.profit_per_hour,
+        xp_per_hour: entry.metric.xp_per_hour,
+        supplies_per_hour: entry.metric.supplies_per_hour,
+        kills_per_hour: entry.metric.kills_per_hour,
+        date: entry.metric.date,
+        similarity_score: Number(similarityScore.toFixed(1)),
+        score: Number((similarityScore + performanceScore).toFixed(1)),
+        match_reasons: reasons
+      };
+    })
+    .sort((a, b) => Number(b.score) - Number(a.score))
+    .slice(0, 5);
 }
 
 function metric(
@@ -689,9 +742,11 @@ export function buildHuntIntelligence(
   const killsPerHour = perHour(totalKills, durationMinutes);
   const current = { profit_per_hour: profitPerHour, loot_per_hour: lootPerHour, xp_per_hour: xpPerHour, supplies_per_hour: suppliesPerHour, kills_per_hour: killsPerHour, profit_margin_pct: profitMargin };
   const comparisons = topComparisons(preview, savedHunt, history, current, placeId);
+  const currentLevel = asNumberOrNull(savedHunt?.character_level);
+  const similarHunts = topSimilarHunts({ preview, saved: savedHunt, history, currentLevel, placeId });
   const allComparison = comparisons[0];
   const similarLevelComparison = comparisons.find((item) => item.label === "Similar level range") ?? allComparison;
-  const samePlaceComparison = comparisons.find((item) => item.label === "Same linked place") ?? similarLevelComparison;
+  const samePlaceComparison = comparisons.find((item) => item.label === "Same hunting spot") ?? similarLevelComparison;
   const savedIdForHistory = asNumberOrNull(savedHunt?.id);
   const historyAvailable = history.some((row) => row.id !== savedIdForHistory);
   const monsterNames = monsters.map((monster) => asText(monster.name));
@@ -1135,6 +1190,7 @@ export function buildHuntIntelligence(
       })()
     },
     comparisons,
+    similar_hunts: similarHunts,
     recommendations: makeRecommendations({
       verdictLabel: verdict.label,
       profitPerHour,
