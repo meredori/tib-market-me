@@ -22,6 +22,8 @@ import TablerIcon from '../common/TablerIcon.vue'
 import ConfidenceBadge from '../common/ConfidenceBadge.vue'
 import Panel from '../common/Panel.vue'
 import SectionHeader from '../common/SectionHeader.vue'
+import HuntVerdict from './HuntVerdict.vue'
+import LootAnalysis from './LootAnalysis.vue'
 
 const props = defineProps({
   preview: { type: Object, required: true },
@@ -34,25 +36,11 @@ const props = defineProps({
 const emit = defineEmits(['open-item', 'open-creature'])
 
 const showAllMonsters = ref(false)
-const showAllLootItems = ref(false)
 
 const intelligence = computed(() => props.preview.hunt_intelligence || {})
 const verdict = computed(() => intelligence.value.verdict || {})
 const dataQuality = computed(() => intelligence.value.data_quality || {})
 
-const verdictMainIcon = computed(() => {
-  const label = (verdict.value.label || '').toLowerCase()
-  if (label.includes('xp') || label.includes('level')) {
-    return IconTrendingUp
-  }
-  if (label.includes('profit') || label.includes('gold') || label.includes('loot')) {
-    return IconTrophy
-  }
-  if (label.includes('safe') || label.includes('low risk')) {
-    return IconShieldCheck
-  }
-  return IconTrophy
-})
 const lootAnalysis = computed(() => intelligence.value.loot_analysis || {})
 const costAnalysis = computed(() => intelligence.value.cost_analysis || {})
 const combatAnalysis = computed(() => intelligence.value.combat_analysis || {})
@@ -68,43 +56,7 @@ const preferredComparison = computed(() => {
 })
 
 const comparisonLabel = computed(() => preferredComparison.value ? 'same hunt location' : 'same hunt location')
-const lootItems = computed(() => lootAnalysis.value.top_value_items || [])
-const notableDrops = computed(() => lootAnalysis.value.notable_drops || [])
-const valueSegments = computed(() => lootAnalysis.value.value_segments?.length ? lootAnalysis.value.value_segments : lootItems.value.slice(0, 5))
-const lootBreakdownSegments = computed(() => valueSegments.value.map((item) => ({
-  ...item,
-  displayName: titleCaseLabel(item.name),
-})))
-const fullLootBreakdownRows = computed(() => {
-  const rows = (props.preview.loot_items || [])
-    .filter((item) => !item.excluded)
-    .map((item) => {
-      const value = Number(item.total_value ?? item.value ?? 0)
-      const total = totalLootValue.value
-      return {
-        item_id: item.item_id || null,
-        name: item.resolved_name || item.name,
-        displayName: titleCaseLabel(item.resolved_name || item.name),
-        quantity: item.quantity,
-        value,
-        contribution_pct: total > 0 ? Number(((value / total) * 100).toFixed(1)) : 0,
-      }
-    })
-    .filter((item) => item.name)
-    .sort((a, b) => Number(b.value || 0) - Number(a.value || 0) || String(a.name).localeCompare(String(b.name)))
-  return rows
-})
-const hasCollapsedLootItems = computed(() => fullLootBreakdownRows.value.length > lootBreakdownSegments.value.filter((item) => item.name !== 'Other items').length)
 const totalLootValue = computed(() => Number(lootAnalysis.value.total_loot_value || parsed.value.adjusted_loot_gold || parsed.value.total_loot_gold || 0))
-const lootConfidencePct = computed(() => {
-  const score = lootAnalysis.value.confidence?.score
-  return score === null || score === undefined ? null : Math.round(Number(score) * 100)
-})
-const lootConfidenceText = computed(() => {
-  if (lootConfidencePct.value === null) return 'Unknown'
-  if (lootAnalysis.value.unknown_price_count) return `${lootConfidencePct.value}% priced`
-  return `${lootConfidencePct.value}%`
-})
 const monsterRows = computed(() => monsterAnalysis.value.top_monsters || [])
 const visibleMonsterRows = computed(() => showAllMonsters.value ? monsterRows.value : monsterRows.value.slice(0, 5))
 const totalKills = computed(() => Number(monsterAnalysis.value.total_kills || props.preview.monsters?.reduce?.((sum, row) => sum + Number(row.count || 0), 0) || 0))
@@ -162,16 +114,7 @@ const metricTiles = computed(() => {
   ]
 })
 
-const lootChartStyle = computed(() => {
-  let cursor = 0
-  const parts = valueSegments.value.slice(0, 5).map((item, index) => {
-    const share = Math.max(0, Number(item.contribution_pct || 0))
-    const start = cursor
-    cursor += share
-    return `${segmentColor(item, index)} ${start}% ${Math.min(100, cursor)}%`
-  })
-  return { background: `conic-gradient(${parts.length ? parts.join(', ') : '#243346 0 100%'})` }
-})
+
 
 const qualityRows = computed(() => [
   { label: 'Market data age', value: freshnessLabel(dataQuality.value.freshness), ok: dataQuality.value.freshness?.status === 'fresh' },
@@ -219,11 +162,7 @@ function signedDelta(value, goodWhenLower = false, suffix = '%') {
   return { text: `${numeric > 0 ? '+' : ''}${numeric.toFixed(1).replace(/\.0$/, '')}${suffix}`, tone: good ? 'good' : bad ? 'bad' : 'muted' }
 }
 
-function segmentColor(item, index = 0) {
-  const colors = ['#f5a510', '#7c3aed', '#ef4444', '#2dd4bf', '#8fa1b6']
-  const colorIndex = Number.isFinite(Number(item?.color_index)) ? Number(item.color_index) : index
-  return colors[Math.max(0, Math.min(colors.length - 1, colorIndex))]
-}
+
 
 function freshnessLabel(freshness) {
   if (!freshness) return 'missing'
@@ -266,32 +205,10 @@ function openLootItem(item) {
 <template>
   <div class="hunt-intelligence">
     <div class="hunt-command-grid">
-      <Panel class="verdict-panel" :class="`verdict-${verdict.tone || 'neutral'}`">
-        <SectionHeader title="Hunt Verdict" :icon="IconTrophy" iconColor="var(--amber)" />
-        <div class="verdict-lockup">
-          <TablerIcon :name="verdictMainIcon" :size="34" />
-          <div>
-            <h2>{{ verdict.label || 'Hunt verdict' }}</h2>
-            <p>{{ verdict.summary || 'Open or parse a hunt to generate analysis.' }}</p>
-          </div>
-        </div>
-        <div v-if="verdictRecommendation" class="recommendation-block">
-          <span class="recommendation-heading">Recommendation</span>
-          <div class="recommendation-hero" :class="`tone-${verdictRecommendation.tone || 'neutral'}`">
-            <TablerIcon :name="recommendationIcon(verdictRecommendation.tone)" :size="20" />
-            <div>
-              <strong>{{ verdictRecommendation.label }}</strong>
-              <span>{{ verdictRecommendation.reason }}</span>
-            </div>
-          </div>
-        </div>
-        <div class="verdict-tags">
-          <span v-for="tag in verdict.tags || []" :key="tag.key || tag.label" :class="`tag-${tag.tone || 'neutral'}`">
-            <strong>{{ tag.value }}</strong>
-            {{ tag.label }}
-          </span>
-        </div>
-      </Panel>
+      <HuntVerdict
+        :verdict="verdict"
+        :recommendation="verdictRecommendation"
+      />
 
       <Panel variant="analysis" class="metrics-panel">
         <SectionHeader title="Key Metrics" :subtitle="`Compared with ${comparisonLabel}`" />
@@ -313,9 +230,9 @@ function openLootItem(item) {
           <SectionHeader title="Why This Hunt Scored This Way" />
           <div class="reason-grid">
             <div v-for="reason in reasons.slice(0, 4)" :key="reason.label" class="reason-card" :class="`severity-${reason.severity}`">
-              <Sparkles v-if="reason.severity === 'positive'" :size="19" />
-              <AlertTriangle v-else-if="reason.severity === 'warning'" :size="19" />
-              <Brain v-else :size="19" />
+              <TablerIcon v-if="reason.severity === 'positive'" :name="IconSparkles" :size="19" />
+              <TablerIcon v-else-if="reason.severity === 'warning'" :name="IconAlertTriangle" :size="19" />
+              <TablerIcon v-else :name="IconBrain" :size="19" />
               <div>
                 <strong>{{ titleCaseLabel(reason.label) }}</strong>
                 <span>{{ reason.reason }}</span>
@@ -327,83 +244,15 @@ function openLootItem(item) {
     </div>
 
     <div class="analysis-grid">
-      <Panel variant="analysis" class="loot-panel">
-        <SectionHeader title="Loot Analysis" :icon="IconCoins" iconColor="var(--amber)">
-          <ConfidenceBadge :confidence="lootAnalysis.confidence" />
-        </SectionHeader>
-        <div class="loot-layout">
-          <div class="loot-contributors">
-            <div class="loot-summary-tiles">
-              <div>
-                <span>Total loot value</span>
-                <strong class="loot-value">{{ formatValue(totalLootValue) }} gp</strong>
-                <small>Sum of all priced loot</small>
-              </div>
-              <div>
-                <span>Pricing confidence</span>
-                <strong class="good">{{ lootConfidenceText }}</strong>
-                <small v-if="lootAnalysis.unknown_price_count">{{ lootAnalysis.unknown_price_count }} missing price(s)</small>
-                <small v-else>All items have market prices</small>
-              </div>
-            </div>
-            <span class="loot-chart-title">Top value contributors</span>
-            <div class="bar-list loot-breakdown-list">
-              <button
-                v-for="(item, index) in lootBreakdownSegments"
-                :key="item.name"
-                class="loot-breakdown-row"
-                :disabled="!item.item_id"
-                @click="openLootItem(item)"
-              >
-                <span class="loot-breakdown-item">
-                  <img v-if="item.item_id" class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.displayName" loading="lazy" />
-                  <span v-else class="loot-image-placeholder">ID</span>
-                  <span>{{ item.displayName }}</span>
-                  <small v-if="item.quantity">({{ formatValue(item.quantity) }})</small>
-                </span>
-                <strong>{{ formatValue(item.value ?? item.total_value) }} gp</strong>
-                <small>{{ pct(item.contribution_pct) }}</small>
-                <span class="bar-track"><i :style="{ width: `${Math.min(100, Number(item.contribution_pct || 0))}%`, background: segmentColor(item, index) }"></i></span>
-              </button>
-            </div>
-            <button v-if="hasCollapsedLootItems" class="ghost-action view-all-loot" @click="showAllLootItems = true">
-              View all items
-            </button>
-            <div v-if="lootAnalysis.unknown_price_count" class="loot-flags">
-              <span class="status-badge warning">{{ lootAnalysis.unknown_price_count }} missing price(s)</span>
-            </div>
-          </div>
-          <div class="loot-breakdown-card">
-            <span class="loot-chart-title">Loot value breakdown</span>
-            <div class="donut-wrap">
-              <div class="loot-donut" :style="lootChartStyle">
-                <span>{{ formatValue(totalLootValue) }}</span>
-                <small>gp</small>
-              </div>
-            </div>
-            <div class="loot-legend">
-              <div v-for="(segment, index) in valueSegments" :key="segment.name" class="legend-row">
-                <i :style="{ background: segmentColor(segment, index) }"></i>
-                <strong>{{ titleCaseLabel(segment.name) }}</strong>
-                <span>{{ pct(segment.contribution_pct) }}</span>
-              </div>
-              <div v-if="notableDrops.length" class="rarity-highlights">
-                <b>Rarity Highlights</b>
-                <button
-                  v-for="drop in notableDrops"
-                  :key="drop.name"
-                  class="rarity-row"
-                  :disabled="!drop.item_id"
-                  @click="drop.item_id ? emit('open-item', drop.item_id) : null"
-                >
-                  <span>{{ drop.quantity }}x {{ drop.name }}</span>
-                  <em>{{ drop.rarity || 'Unknown' }}</em>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Panel>
+      <LootAnalysis
+        :loot-analysis="lootAnalysis"
+        :loot-items="preview.loot_items || []"
+        :adjusted-loot-gold="parsed.adjusted_loot_gold"
+        :total-loot-gold="parsed.total_loot_gold"
+        :format-value="formatValue"
+        :item-image-path="itemImagePath"
+        @open-item="$emit('open-item', $event)"
+      />
 
       <Panel variant="analysis" class="combat-panel">
         <SectionHeader title="Combat & Damage Analysis" :subtitle="combatAnalysis.summary || 'Combat analysis unavailable.'" :icon="IconSwords" iconColor="var(--red)">
@@ -601,40 +450,7 @@ function openLootItem(item) {
       </Panel>
     </div>
 
-    <div v-if="showAllLootItems" class="modal-backdrop" @click="showAllLootItems = false">
-      <section class="modal-card loot-breakdown-modal" @click.stop>
-        <div class="modal-head">
-          <div>
-            <span class="eyebrow">Loot Analysis</span>
-            <h2>All Loot Items</h2>
-          </div>
-          <button class="icon-btn" title="Close all loot items" @click="showAllLootItems = false">
-            <TablerIcon :name="IconX" :size="16" />
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="bar-list loot-breakdown-list full-loot-list">
-            <button
-              v-for="(item, index) in fullLootBreakdownRows"
-              :key="`${item.name}-${index}`"
-              class="loot-breakdown-row"
-              :disabled="!item.item_id"
-              @click="openLootItem(item)"
-            >
-              <span class="loot-breakdown-item">
-                <img v-if="item.item_id" class="loot-item-image" :src="itemImagePath(item.item_id)" :alt="item.displayName" loading="lazy" />
-                <span v-else class="loot-image-placeholder">ID</span>
-                <span>{{ item.displayName }}</span>
-                <small v-if="item.quantity">({{ formatValue(item.quantity) }})</small>
-              </span>
-              <strong>{{ formatValue(item.value) }} gp</strong>
-              <small>{{ pct(item.contribution_pct) }}</small>
-              <span class="bar-track"><i :style="{ width: `${Math.min(100, Number(item.contribution_pct || 0))}%`, background: segmentColor(item, index) }"></i></span>
-            </button>
-          </div>
-        </div>
-      </section>
-    </div>
+
   </div>
 </template>
 
@@ -657,107 +473,6 @@ function openLootItem(item) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-}
-
-.verdict-panel {
-  display: grid;
-  gap: 12px;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  border-color: rgba(83, 216, 106, 0.32);
-}
-
-.verdict-warning,
-.verdict-danger {
-  border-color: rgba(245, 165, 16, 0.42);
-}
-
-.verdict-lockup {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-}
-
-.verdict-lockup h2 {
-  margin: 0 0 7px;
-  color: var(--green);
-  font-size: 1.55rem;
-  line-height: 1.08;
-}
-
-.verdict-warning .verdict-lockup h2,
-.verdict-danger .verdict-lockup h2 {
-  color: var(--amber);
-}
-
-.verdict-lockup p,
-.recommendation-hero span,
-.reason-card span,
-.recommendation-row span,
-.safe-callout span {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--font-small);
-  line-height: 1.4;
-}
-
-.recommendation-hero > div,
-.reason-card > div,
-.recommendation-row > div,
-.safe-callout > div {
-  display: grid;
-  gap: 4px;
-}
-
-.recommendation-block {
-  display: grid;
-  gap: 7px;
-}
-
-.recommendation-heading {
-  color: var(--muted);
-  font-size: var(--font-label);
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.recommendation-hero strong,
-.reason-card strong,
-.recommendation-row strong,
-.safe-callout strong {
-  display: block;
-}
-
-.recommendation-hero,
-.reason-card,
-.recommendation-row,
-.safe-callout {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  background: rgba(7, 17, 29, 0.46);
-  padding: 10px;
-}
-
-.tone-positive,
-.severity-positive,
-.safe-callout {
-  border-color: rgba(83, 216, 106, 0.3);
-  background: rgba(83, 216, 106, 0.08);
-}
-
-.tone-warning,
-.severity-warning {
-  border-color: rgba(245, 165, 16, 0.32);
-  background: rgba(245, 165, 16, 0.08);
-}
-
-.tone-neutral {
-  border-color: var(--line-soft);
-  background: rgba(120, 146, 176, 0.08);
 }
 
 .combat-panel {
@@ -935,55 +650,64 @@ function openLootItem(item) {
   gap: 10px;
 }
 
-.loot-layout,
+.safe-callout,
+.reason-card,
+.recommendation-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(7, 17, 29, 0.46);
+  padding: 10px;
+}
+
+.safe-callout > div,
+.reason-card > div,
+.recommendation-row > div {
+  display: grid;
+  gap: 4px;
+}
+
+.safe-callout span,
+.reason-card span,
+.recommendation-row span {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-small);
+  line-height: 1.4;
+}
+
+.safe-callout strong,
+.reason-card strong,
+.recommendation-row strong {
+  display: block;
+}
+
+.severity-positive,
+.tone-positive {
+  border-color: rgba(83, 216, 106, 0.3);
+  background: rgba(83, 216, 106, 0.08);
+}
+
+.severity-warning,
+.tone-warning {
+  border-color: rgba(245, 165, 16, 0.32);
+  background: rgba(245, 165, 16, 0.08);
+}
+
+.tone-neutral {
+  border-color: var(--line-soft);
+  background: rgba(120, 146, 176, 0.08);
+}
+
 .monster-summary {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(260px, 0.78fr);
   gap: 14px;
   align-items: start;
   margin-bottom: 12px;
-}
-
-.loot-contributors,
-.loot-breakdown-card {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-
-.loot-breakdown-card {
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  background: rgba(8, 18, 30, 0.34);
-  padding: 12px;
-}
-
-.loot-summary-tiles {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.loot-summary-tiles div {
-  min-width: 0;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  background: rgba(8, 18, 30, 0.46);
-  padding: 10px;
-}
-
-.loot-summary-tiles span,
-.loot-summary-tiles small {
-  display: block;
-  color: var(--muted);
-  font-size: var(--font-caption);
-}
-
-.loot-summary-tiles strong {
-  display: block;
-  margin: 4px 0;
-  overflow-wrap: anywhere;
-  font-size: 1.18rem;
 }
 
 .monster-summary strong {
@@ -993,242 +717,9 @@ function openLootItem(item) {
   font-size: 1.2rem;
 }
 
-.donut-wrap {
-  display: grid;
-  place-items: center;
-  margin: 4px 0;
-}
-
-.loot-donut {
-  display: grid;
-  place-items: center;
-  width: 126px;
-  height: 126px;
-  border-radius: 50%;
-  position: relative;
-}
-
-.loot-donut::after {
-  content: "";
-  position: absolute;
-  inset: 24px;
-  border-radius: 50%;
-  background: #0a1622;
-  border: 1px solid var(--line-soft);
-}
-
-.loot-donut span,
-.loot-donut small {
-  z-index: 1;
-}
-
-.loot-donut span {
-  align-self: end;
-  font-weight: 800;
-}
-
-.loot-donut small {
-  align-self: start;
-  color: var(--muted);
-}
-
-.loot-legend {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-.loot-chart-title {
-  color: var(--muted);
-  font-size: var(--font-label);
-  text-transform: uppercase;
-}
-
-.legend-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  color: var(--muted);
-  font-size: var(--font-small);
-}
-
-.legend-row i {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-}
-
-.legend-row strong {
-  overflow: hidden;
-  color: var(--ink);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rarity-highlights {
-  display: grid;
-  gap: 5px;
-  margin-top: 7px;
-  padding-top: 9px;
-  border-top: 1px solid var(--line-soft);
-}
-
-.rarity-highlights b {
-  color: var(--green);
-  font-size: var(--font-caption);
-}
-
-.rarity-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  min-height: 26px;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: var(--ink);
-  text-align: left;
-}
-
-.rarity-row:hover {
-  background: transparent;
-}
-
-.rarity-row:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
-.rarity-row span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rarity-row em {
-  align-self: center;
-  border: 1px solid rgba(83, 216, 106, 0.26);
-  border-radius: 5px;
-  background: rgba(83, 216, 106, 0.08);
-  color: var(--green);
-  font-size: var(--font-label);
-  font-style: normal;
-  padding: 2px 5px;
-}
-
 .bar-list {
   display: grid;
   gap: 8px;
-}
-
-.bar-row {
-  display: grid;
-  grid-template-columns: minmax(170px, 1fr) minmax(90px, 0.55fr) auto 48px;
-  align-items: center;
-  gap: 9px;
-  min-height: 38px;
-  width: 100%;
-  border-color: var(--line-soft);
-  background: rgba(8, 18, 30, 0.34);
-  text-align: left;
-}
-
-.bar-row:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
-.bar-label {
-  min-width: 0;
-}
-
-.bar-track {
-  display: block;
-  height: 7px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(120, 146, 176, 0.18);
-}
-
-.bar-track i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--amber), #7c3aed);
-}
-
-.monster-bars .bar-track i {
-  background: linear-gradient(90deg, #58b7ff, var(--cyan));
-}
-
-.loot-breakdown-list {
-  gap: 9px;
-}
-
-.view-all-loot {
-  justify-self: start;
-}
-
-.loot-breakdown-row {
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) auto 54px;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  min-height: 46px;
-  border-color: var(--line-soft);
-  background: rgba(8, 18, 30, 0.34);
-  text-align: left;
-}
-
-.loot-breakdown-row .bar-track {
-  grid-column: 1 / -1;
-}
-
-.loot-breakdown-row:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
-.loot-breakdown-item {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  min-width: 0;
-}
-
-.loot-breakdown-item > span:last-child {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ink);
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.loot-breakdown-item small {
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.loot-breakdown-row > strong {
-  color: var(--ink);
-  white-space: nowrap;
-}
-
-.loot-breakdown-modal {
-  max-width: 760px;
-}
-
-.loot-breakdown-modal .modal-body {
-  max-height: min(68vh, 620px);
-  overflow: auto;
-}
-
-.full-loot-list {
-  min-width: 0;
 }
 
 .combat-metrics {

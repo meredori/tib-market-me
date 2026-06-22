@@ -1,4 +1,4 @@
-﻿# Tibia Market UI Style Guide & Design System
+# Tibia Market UI Style Guide & Design System
 
 This guide is the source of truth for UI conventions, design tokens, and component patterns across the Tibia Market application. It is written *from the ground up* around the three canonical reference implementations that define what production quality looks like:
 
@@ -148,50 +148,34 @@ Never use arbitrary `font-size` values. Use the predefined scale tokens:
 
 ---
 
-## 3. Reference Component: Hunt Hero
+## 3. Reusable Component: Hunt Hero
 
-> **Source**: `HuntsWorkspaceView.vue`, lines 211-257 (CSS in `style.css`)
+> **Source**: [HuntHero.vue](file:///c:/code/Tibia%20market/ui-app/src/components/hunts/HuntHero.vue) (CSS classes globally in `style.css`)
 
-The Hunt Hero is the page-level identity strip. It combines location identity on the left with five scannable stat cells on the right. It is a `.panel` that overrides the default panel padding to `0` and manages its own internal cell spacing.
+The Hunt Hero is the page-level identity strip, modularized into `<HuntHero>`. It combines location identity on the left with five scannable stat cells on the right. It is a `.panel` that overrides the default panel padding to `0` and manages its own internal cell spacing.
 
-### Structure
+### Usage
 
-```html
-<section class="hunt-detail-hero panel">
-
-  <!-- Left identity cell -->
-  <div class="hunt-place-summary">
-    <div class="place-avatar">
-      <TablerIcon :name="IconSwords" :size="29" />
-    </div>
-    <div>
-      <h2>Location name</h2>
-      <p class="muted">Subtext / variant</p>
-    </div>
-  </div>
-
-  <!-- Stat cells (x5) -->
-  <div class="hero-stat">
-    <TablerIcon :name="IconCalendar" :size="18" />
-    <div>
-      <strong>Value</strong>
-      <span>Label</span>
-    </div>
-  </div>
-
-  <!-- Profit stat (positive tint on value) -->
-  <div class="hero-stat profit">
-    <TablerIcon :name="IconCoins" :size="18" />
-    <div>
-      <strong>+12,500 gp</strong>
-      <span>Profit</span>
-    </div>
-  </div>
-
-</section>
+```vue
+<HuntHero
+  v-if="activePreview"
+  :active-preview="activePreview"
+  :active-saved-hunt="activeSavedHunt"
+  :clean-display-text="hunts.cleanDisplayText"
+  :format-value="formatValue"
+  :format-signed="formatSigned"
+/>
 ```
 
-### Layout
+### Props
+
+- `activePreview`: `Object` (required) — The current hunt preview data containing `parsed`, `saved_hunt`, etc.
+- `activeSavedHunt`: `Object` (default: `null`) — The active saved hunt from parent database state.
+- `cleanDisplayText`: `Function` (required) — Parent utility to clean location/spot names.
+- `formatValue`: `Function` (required) — Utility to format generic numbers.
+- `formatSigned`: `Function` (required) — Utility to format signed numbers (profit/loss).
+
+### Global CSS Rules in `style.css` used by `<HuntHero>`
 
 ```css
 .hunt-detail-hero {
@@ -202,23 +186,10 @@ The Hunt Hero is the page-level identity strip. It combines location identity on
   overflow: hidden;
 }
 
-.hunt-place-summary,
-.hero-stat {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 18px;
-  min-width: 0;
-}
-
 .hero-stat {
   border-left: 1px solid var(--line-soft);
 }
-```
 
-### Place Avatar
-
-```css
 .place-avatar {
   flex: 0 0 64px;
   width: 64px;
@@ -231,20 +202,12 @@ The Hunt Hero is the page-level identity strip. It combines location identity on
   border: 1px solid rgba(120, 146, 176, 0.28);
   color: #c7d7ff;
 }
-```
 
-### Stat Cell Typography
-
-```css
 .hero-stat div    { display: grid; gap: 4px; min-width: 0; }
 .hero-stat strong { font-size: var(--font-value); }
 .hero-stat span   { color: var(--muted); font-size: var(--font-small); }
 .hero-stat.profit strong { color: var(--green); }
-```
 
-### Hero Tokens (inline badges inside stat cells)
-
-```css
 .hero-token {
   flex: 0 0 40px;
   width: 40px;
@@ -260,11 +223,7 @@ The Hunt Hero is the page-level identity strip. It combines location identity on
   color: #d8ebff;
   font-weight: 800;
 }
-```
 
-### Responsive
-
-```css
 @media (max-width: 820px) {
   .hunt-detail-hero {
     grid-template-columns: 1fr 1fr;
@@ -272,60 +231,32 @@ The Hunt Hero is the page-level identity strip. It combines location identity on
   .hunt-place-summary {
     grid-column: 1 / -1;
   }
-  .hero-stat {
-    border-left: none;
-    border-top: 1px solid var(--line-soft);
-  }
 }
 ```
 
 ---
 
-## 4. Reference Component: Hunt Verdict
+## 4. Reusable Component: Hunt Verdict
 
-> **Source**: `HuntIntelligence.vue`, lines 269-294; scoped CSS lines 662-844
+> **Source**: [HuntVerdict.vue](file:///c:/code/Tibia%20market/ui-app/src/components/hunts/HuntVerdict.vue)
 
-The Hunt Verdict card is a tone-driven status panel. The border color, heading color, and recommendation block all shift together based on a single verdict tone. This is the canonical pattern for any card that represents a qualitative outcome.
+The Hunt Verdict card is a tone-driven status panel, modularized into `<HuntVerdict>`. The border color, heading color, and recommendation block all shift together based on a single verdict tone. This is the canonical pattern for any card that represents a qualitative outcome.
 
-### Structure
+### Usage
 
-```html
-<Panel class="verdict-panel" :class="`verdict-${tone}`">
-
-  <SectionHeader title="Hunt Verdict" :icon="IconTrophy" iconColor="var(--amber)" />
-
-  <!-- Primary lockup: icon + label + summary -->
-  <div class="verdict-lockup">
-    <TablerIcon :name="verdictMainIcon" :size="34" />
-    <div>
-      <h2>Excellent Hunt</h2>
-      <p>Strong profit with high kill efficiency.</p>
-    </div>
-  </div>
-
-  <!-- Recommendation block -->
-  <div class="recommendation-block">
-    <span class="recommendation-heading">Recommendation</span>
-    <div class="recommendation-hero tone-positive">
-      <TablerIcon :name="IconCircleCheck" :size="20" />
-      <div>
-        <strong>Keep Hunting Here</strong>
-        <span>Consistent profit above average.</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Tag strip -->
-  <div class="verdict-tags">
-    <span class="tag-good"><strong>+15k</strong> profit</span>
-    <span class="tag-neutral"><strong>82%</strong> efficiency</span>
-    <span class="tag-bad"><strong>High</strong> supply cost</span>
-  </div>
-
-</Panel>
+```vue
+<HuntVerdict
+  :verdict="verdict"
+  :recommendation="verdictRecommendation"
+/>
 ```
 
-### Panel & Tone System
+### Props
+
+- `verdict`: `Object` (required) — Verdict object containing `label`, `summary`, `tone`, and `tags`.
+- `recommendation`: `Object` (default: `null`) — Recommendation details containing `label`, `reason`, and `tone`.
+
+### Scoped CSS Rules inside `<HuntVerdict>`
 
 ```css
 .verdict-panel {
@@ -337,11 +268,7 @@ The Hunt Verdict card is a tone-driven status panel. The border color, heading c
 .verdict-panel              { border-color: rgba(83, 216, 106, 0.32); }
 .verdict-warning,
 .verdict-danger             { border-color: rgba(245, 165, 16, 0.42); }
-```
 
-### Verdict Lockup
-
-```css
 .verdict-lockup {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -353,22 +280,7 @@ The Hunt Verdict card is a tone-driven status panel. The border color, heading c
 
 .verdict-warning .verdict-lockup h2,
 .verdict-danger  .verdict-lockup h2 { color: var(--amber); }
-```
 
-**Icon selection logic:**
-
-| Verdict label contains | Icon |
-|:---|:---|
-| `xp`, `level` | `IconTrendingUp` |
-| `profit`, `gold`, `loot` | `IconTrophy` |
-| `safe`, `low risk` | `IconShieldCheck` |
-| *(default)* | `IconTrophy` |
-
-### Recommendation Block
-
-The `.recommendation-hero` with tone class is the canonical inner card pattern. It is also used for `.reason-card` in the Why-Scored grid.
-
-```css
 .recommendation-hero {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -383,28 +295,14 @@ The `.recommendation-hero` with tone class is the canonical inner card pattern. 
 .tone-positive { border-color: rgba(83, 216, 106, 0.30); background: rgba(83, 216, 106, 0.08); }
 .tone-warning  { border-color: rgba(245, 165, 16, 0.32);  background: rgba(245, 165, 16, 0.08); }
 .tone-neutral  { border-color: var(--line-soft);           background: rgba(120, 146, 176, 0.08); }
-```
 
-```css
 .recommendation-heading {
   color: var(--muted);
   font-size: var(--font-label);
   font-weight: 800;
   text-transform: uppercase;
 }
-```
 
-**Icon selection for recommendation tone:**
-
-| Tone | Icon |
-|:---|:---|
-| `positive` | `IconCircleCheck` |
-| `warning` | `IconAlertTriangle` |
-| `neutral` | `IconBrain` |
-
-### Verdict Tags
-
-```css
 .verdict-tags {
   align-self: end;
   margin-top: auto;
@@ -429,34 +327,40 @@ The `.recommendation-hero` with tone class is the canonical inner card pattern. 
 
 ---
 
-## 5. Reference Component: Loot Analysis
+## 5. Reusable Component: Loot Analysis
 
-> **Source**: `HuntIntelligence.vue`, lines 330-406; scoped CSS lines 938-1232
+> **Source**: [LootAnalysis.vue](file:///c:/code/Tibia%20market/ui-app/src/components/hunts/LootAnalysis.vue)
 
-Loot Analysis is the most structurally complete panel in the app. It defines the standards for: panel variant usage, section header composition, two-column data layouts, item row structure, progress bars, donut charts, legends, and modal overflow. When designing any data-rich panel, model it on Loot Analysis.
+Loot Analysis is the most structurally complete panel in the app, modularized into `<LootAnalysis>`. It defines the standards for: panel variant usage, section header composition, two-column data layouts, item row structure, progress bars, donut charts, legends, and modal overflow.
 
-### Panel Setup
+### Usage
 
-```html
-<Panel variant="analysis" class="loot-panel">
-  <SectionHeader title="Loot Analysis" :icon="IconCoins" iconColor="var(--amber)">
-    <ConfidenceBadge :confidence="lootAnalysis.confidence" />
-  </SectionHeader>
-
-  <div class="loot-layout">
-    <div class="loot-contributors"> ... </div>
-    <div class="loot-breakdown-card"> ... </div>
-  </div>
-</Panel>
+```vue
+<LootAnalysis
+  :loot-analysis="lootAnalysis"
+  :loot-items="preview.loot_items || []"
+  :adjusted-loot-gold="parsed.adjusted_loot_gold"
+  :total-loot-gold="parsed.total_loot_gold"
+  :format-value="formatValue"
+  :item-image-path="itemImagePath"
+  @open-item="$emit('open-item', $event)"
+/>
 ```
 
-The `variant="analysis"` Panel applies:
-```css
-background: linear-gradient(180deg, rgba(21, 32, 45, 0.96), rgba(12, 23, 34, 0.96));
-box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
-```
+### Props
 
-### Two-Column Layout
+- `lootAnalysis`: `Object` (required) — Main loot analysis metadata.
+- `lootItems`: `Array` (required) — Raw list of loot items (`preview.loot_items`).
+- `adjustedLootGold`: `Number` (default: `0`) — Net adjusted gold value.
+- `totalLootGold`: `Number` (default: `0`) — Falling back total gold value.
+- `formatValue`: `Function` (required) — Number formatter utility.
+- `itemImagePath`: `Function` (required) — Image URL resolver utility.
+
+### Events
+
+- `@open-item`: Emits the `itemId` (string) of the clicked loot item to parent modals/dialog controllers.
+
+### Scoped CSS Rules inside `<LootAnalysis>`
 
 ```css
 .loot-layout {
@@ -465,11 +369,7 @@ box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
   gap: 14px;
   align-items: start;
 }
-```
 
-### Summary Tiles (Top of Left Column)
-
-```css
 .loot-summary-tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -484,38 +384,13 @@ box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
 }
 
 .loot-summary-tiles strong { font-size: 1.18rem; }
-```
 
-### Section Sub-Labels
-
-```css
 .loot-chart-title {
   color: var(--muted);
   font-size: var(--font-label);
   text-transform: uppercase;
 }
-```
 
-### Item Rows (Contributor List)
-
-Each item is a clickable button row — the canonical pattern for any ranked contributor list:
-
-```html
-<button class="loot-breakdown-row">
-  <span class="loot-breakdown-item">
-    <img class="loot-item-image" src="..." />
-    <span>Item Name</span>
-    <small>(x12)</small>
-  </span>
-  <strong class="loot-value">45,200 gp</strong>
-  <small>38%</small>
-  <span class="bar-track">
-    <i :style="{ width: '38%', background: segmentColor }"></i>
-  </span>
-</button>
-```
-
-```css
 .loot-breakdown-row {
   display: grid;
   grid-template-columns: minmax(160px, 1fr) auto 54px;
@@ -534,11 +409,7 @@ Each item is a clickable button row — the canonical pattern for any ranked con
 .loot-breakdown-row .bar-track {
   grid-column: 1 / -1;
 }
-```
 
-**Progress bar:**
-
-```css
 .bar-track {
   display: block;
   height: 7px;
@@ -551,29 +422,12 @@ Each item is a clickable button row — the canonical pattern for any ranked con
   display: block;
   height: 100%;
   border-radius: inherit;
-  /* Width and background set via inline :style */
 }
-```
 
-**Segment color scale** (apply by 0-based index):
-
-| Index | Color | Name |
-|:---:|:---|:---|
-| 0 | `#f5a510` | Amber (primary) |
-| 1 | `#7c3aed` | Purple |
-| 2 | `#ef4444` | Red |
-| 3 | `#2dd4bf` | Teal |
-| 4 | `#8fa1b6` | Muted grey (catch-all) |
-
-```css
 .loot-item-image        { width: 24px; height: 24px; object-fit: contain; }
 .loot-image-placeholder { width: 24px; height: 24px; border-radius: 4px; background: var(--surface-3); }
 .loot-value             { color: var(--amber); }
-```
 
-### Donut Chart (Right Column)
-
-```css
 .donut-wrap {
   display: flex;
   justify-content: center;
@@ -587,7 +441,6 @@ Each item is a clickable button row — the canonical pattern for any ranked con
   width: 126px;
   height: 126px;
   border-radius: 50%;
-  /* background: conic-gradient(...) — set inline per data */
 }
 
 .loot-donut::after {
@@ -601,24 +454,11 @@ Each item is a clickable button row — the canonical pattern for any ranked con
 
 .loot-donut span  { z-index: 1; align-self: end;  font-weight: 800; }
 .loot-donut small { z-index: 1; align-self: start; color: var(--muted); }
-```
 
-### Legend
-
-```css
 .loot-legend {
   display: grid;
   gap: 6px;
   margin-top: 10px;
-}
-
-.legend-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  color: var(--muted);
-  font-size: var(--font-small);
 }
 
 .legend-row i {
@@ -626,22 +466,11 @@ Each item is a clickable button row — the canonical pattern for any ranked con
   height: 10px;
   border-radius: 3px;
 }
-```
 
-### Rarity Highlights
-
-```css
 .rarity-highlights b {
   color: var(--muted);
   font-size: var(--font-label);
   text-transform: uppercase;
-}
-
-.rarity-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
 }
 
 .rarity-row em {
@@ -653,22 +482,14 @@ Each item is a clickable button row — the canonical pattern for any ranked con
   background: rgba(83, 216, 106, 0.08);
   color: var(--green);
 }
-```
 
-### Right Column Card Container
-
-```css
 .loot-breakdown-card {
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: rgba(8, 18, 30, 0.34);
   padding: 12px;
 }
-```
 
-### View-All Modal
-
-```css
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -677,11 +498,6 @@ Each item is a clickable button row — the canonical pattern for any ranked con
   align-items: center;
   justify-content: center;
   z-index: 200;
-}
-
-.loot-breakdown-modal {
-  width: 580px;
-  max-width: calc(100vw - 40px);
 }
 
 .full-loot-list {

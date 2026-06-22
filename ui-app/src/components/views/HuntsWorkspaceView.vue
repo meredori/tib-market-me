@@ -16,6 +16,7 @@ import {
 import TablerIcon from '../common/TablerIcon.vue'
 import HuntIntelligence from '../hunts/HuntIntelligence.vue'
 import HuntSummary from '../HuntSummary.vue'
+import HuntHero from '../hunts/HuntHero.vue'
 
 const props = defineProps({
   hunts: { type: Object, required: true },
@@ -44,34 +45,6 @@ const showEditPanel = ref(false)
 const activePreview = computed(() => props.hunts.activeHuntPreview.value || null)
 const activeParsed = computed(() => activePreview.value?.parsed || {})
 const activeSaved = computed(() => activePreview.value?.saved_hunt || null)
-const placeLabel = computed(() => {
-  return props.hunts.cleanDisplayText(
-    activePreview.value?.location?.selected_name
-    || activePreview.value?.location?.suggested_name
-    || activeSaved.value?.hunting_place_match?.selected_hunting_place_name
-    || props.activeSavedHunt?.location_name
-    || 'Unassigned'
-  )
-})
-const placeDisplay = computed(() => {
-  const label = placeLabel.value
-  const slashIndex = label.indexOf('/')
-  if (slashIndex === -1) {
-    return { title: label, subtext: '' }
-  }
-  const title = label.slice(0, slashIndex).trim()
-  const subtext = label.slice(slashIndex + 1).trim()
-  return {
-    title: title || label,
-    subtext,
-  }
-})
-const importedAt = computed(() => activeSaved.value?.uploaded_at || activeParsed.value?.ended_at || activeParsed.value?.hunt_date || null)
-const durationLabel = computed(() => `${activeParsed.value?.duration_minutes || props.activeSavedHunt?.duration_minutes || 0}m`)
-const killCount = computed(() => (activePreview.value?.monsters || []).reduce((sum, row) => sum + Number(row.count || 0), 0))
-const xpGain = computed(() => Number(activeParsed.value?.total_xp || props.activeSavedHunt?.total_xp || 0))
-const rawXp = computed(() => Number(activeParsed.value?.raw_total_xp || props.activeSavedHunt?.raw_total_xp || 0))
-const profit = computed(() => Number(activeParsed.value?.adjusted_net_profit ?? activeParsed.value?.net_profit ?? props.activeSavedHunt?.net_profit ?? 0))
 const isSavedHunt = computed(() => Boolean(activeSaved.value?.id))
 const isImportReview = computed(() => Boolean(props.hunts.importHuntPreview.value))
 const isUnsavedPreview = computed(() => Boolean(props.hunts.huntPreview.value && !props.hunts.previousHuntPreview.value))
@@ -81,23 +54,6 @@ const previousAreaLabel = computed(() => {
   if (!previousAreaOptions.value.length) return 'No sublocations available'
   return selected.length ? `${selected.length} selected` : 'All sublocations'
 })
-
-function formatDate(value) {
-  if (!value) return 'Date unknown'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 16)
-  return parsed.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-function formatTimeRange() {
-  const start = activeParsed.value?.started_at
-  const end = activeParsed.value?.ended_at
-  if (!start || !end) return ''
-  const startDate = new Date(start)
-  const endDate = new Date(end)
-  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return ''
-  return `${startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-}
 
 function toggleEditPanel() {
   showEditPanel.value = !showEditPanel.value
@@ -208,53 +164,14 @@ function placeLevel(candidate) {
         </div>
       </header>
 
-      <section v-if="activePreview" class="hunt-detail-hero panel">
-        <div class="hunt-place-summary">
-          <div class="place-avatar"><TablerIcon :name="IconSwords" :size="29" /></div>
-          <div>
-            <h2>{{ placeDisplay.title }}</h2>
-            <p v-if="placeDisplay.subtext" class="muted">{{ placeDisplay.subtext }}</p>
-          </div>
-        </div>
-        <div class="hero-stat">
-          <TablerIcon :name="IconCalendar" :size="22" />
-          <div>
-            <strong>{{ formatDate(importedAt) }}</strong>
-            <span>{{ formatTimeRange() || 'Time unknown' }}</span>
-          </div>
-        </div>
-        <div class="hero-stat">
-          <TablerIcon :name="IconClock" :size="24" />
-          <div>
-            <strong>{{ durationLabel }}</strong>
-            <span>Duration</span>
-          </div>
-        </div>
-        <div class="hero-stat">
-          <TablerIcon :name="IconSwords" :size="24" />
-          <div>
-            <strong>{{ formatValue(killCount) }}</strong>
-            <span>Kills</span>
-          </div>
-        </div>
-        <div class="hero-stat">
-          <span class="hero-token xp-token">XP</span>
-          <div>
-            <strong>
-              {{ formatValue(xpGain) }}
-              <span v-if="rawXp && rawXp !== xpGain" class="raw-xp-inline">({{ formatValue(rawXp) }} raw)</span>
-            </strong>
-            <span>XP Gain</span>
-          </div>
-        </div>
-        <div class="hero-stat profit">
-          <TablerIcon :name="IconCoins" :size="28" />
-          <div>
-            <strong>{{ formatSigned(profit) }}</strong>
-            <span>Profit</span>
-          </div>
-        </div>
-      </section>
+      <HuntHero
+        v-if="activePreview"
+        :active-preview="activePreview"
+        :active-saved-hunt="activeSavedHunt"
+        :clean-display-text="hunts.cleanDisplayText"
+        :format-value="formatValue"
+        :format-signed="formatSigned"
+      />
 
       <div class="status-row hunt-detail-status">
         <span v-if="hunts.hasUnsavedHuntChanges.value" class="status-badge warning"><TablerIcon :name="IconAlertTriangle" :size="15" /> Unsaved changes</span>
