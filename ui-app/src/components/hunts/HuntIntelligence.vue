@@ -1048,10 +1048,21 @@ function openLootItem(item) {
 
 .monster-analysis-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 0;
   border-collapse: separate;
   border-spacing: 0 9px;
   font-size: var(--font-body);
+}
+
+.monster-analysis-table,
+.monster-analysis-table th,
+.monster-analysis-table td {
+  min-width: 0;
+}
+
+.monster-analysis-table th,
+.monster-analysis-table td {
+  word-break: break-word;
 }
 
 .monster-analysis-table th {

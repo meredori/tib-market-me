@@ -1536,10 +1536,42 @@ th {
   gap: 3px;
   border-bottom: 1px solid var(--line-soft);
   padding-bottom: 7px;
+  min-width: 0;
 }
 
 .monster-row {
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+}
+
+.monster-row .entity-link-pill,
+.monster-row .pill,
+.monster-row .entity-link-pill span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monster-row strong {
+  min-width: 44px;
+  text-align: right;
+}
+
+@media (max-width: 820px) {
+  .monster-list {
+    gap: 5px;
+  }
+
+  .monster-row {
+    gap: 2px;
+    padding-bottom: 6px;
+  }
+
+  .monster-row strong {
+    font-size: 0.95rem;
+  }
 }
 
 .suggestions-panel {
