@@ -81,6 +81,18 @@ const missingHuntWarningTooltip = computed(() => {
   if (!missingHuntWarnings.value.length) return ''
   return `Missing warning data: ${missingHuntWarnings.value.join(', ')}`
 })
+const activeHuntCharacterSummary = computed(() => {
+  const preview = activePreview.value || {}
+  const saved = activeSaved.value || props.activeSavedHunt || {}
+  const name = String(saved.character_name || preview.character_name || '').trim()
+  const level = saved.character_level ?? activeParsed.value?.character_level
+  const normalizedLevel = Number(level)
+  const hasLevel = Number.isFinite(normalizedLevel) && normalizedLevel > 0
+  if (name && hasLevel) return `${name} | Level ${normalizedLevel}`
+  if (name) return name
+  if (hasLevel) return `Level ${normalizedLevel}`
+  return ''
+})
 
 function hasText(value) {
   return String(value || '').trim().length > 0
@@ -174,6 +186,7 @@ function placeLevel(candidate) {
         <div class="hunt-title-lockup">
           <TablerIcon :name="IconSwords" :size="23" />
           <h1>Hunt Details</h1>
+          <span v-if="activeHuntCharacterSummary" class="hunt-title-character">{{ activeHuntCharacterSummary }}</span>
           <button
             v-if="missingHuntWarnings.length"
             class="hunt-missing-trigger"

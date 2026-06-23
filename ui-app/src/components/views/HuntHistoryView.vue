@@ -82,6 +82,13 @@ function missingDataTooltip(row) {
   const warnings = missingWarningItems(row)
   return warnings.length ? `Missing warning data: ${warnings.join(', ')}` : ''
 }
+
+function characterLabel(row) {
+  const name = String(row?.character_name || '').trim()
+  if (!name) return 'n/a'
+  const level = Number(row?.character_level)
+  return Number.isFinite(level) && level > 0 ? `${name} (${level})` : name
+}
 </script>
 
 <template>
@@ -230,7 +237,7 @@ function missingDataTooltip(row) {
                   <span class="status-badge" :class="locationKindClass(row)">{{ locationKind(row) }}</span>
                 </div>
               </td>
-              <td>{{ row.character_name || 'n/a' }}</td>
+              <td>{{ characterLabel(row) }}</td>
               <td>{{ row.duration_minutes }}m</td>
               <td>{{ formatSigned(row.net_profit) }}</td>
               <td>{{ formatValue(row.xp_per_hour) }}</td>
