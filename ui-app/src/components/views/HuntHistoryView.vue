@@ -1,5 +1,6 @@
 <script setup>
 import {
+  AlertTriangle,
   RefreshCw,
   Trash2,
 } from '@lucide/vue'
@@ -56,6 +57,30 @@ function locationKindClass(row) {
 
 function linkedHuntingPlaceId(row) {
   return row?.hunting_place_match?.selected_hunting_place_id || null
+}
+
+function hasText(value) {
+  return String(value || '').trim().length > 0
+}
+
+function missingWarningItems(row) {
+  const hasCharacter = hasText(row?.character_name)
+  const hasLevel = Number(row?.character_level) > 0
+  const hasLocation = hasText(row?.location_name) || Boolean(row?.hunting_place_match?.selected_hunting_place_id)
+  return [
+    !hasCharacter ? 'Character' : null,
+    !hasLevel ? 'Level' : null,
+    !hasLocation ? 'Location' : null,
+  ].filter(Boolean)
+}
+
+function missingDataTone(row) {
+  return missingWarningItems(row).length ? 'warning' : ''
+}
+
+function missingDataTooltip(row) {
+  const warnings = missingWarningItems(row)
+  return warnings.length ? `Missing warning data: ${warnings.join(', ')}` : ''
 }
 </script>
 
@@ -172,9 +197,22 @@ function linkedHuntingPlaceId(row) {
         <template #row="{ items }">
             <tr v-for="row in items" :key="row.id" :class="{ selected: hunts.editingHuntId.value === row.id }">
               <td>
-                <button class="item-link" :disabled="hunts.previousHuntBusy.value" @click="$emit('open-hunt', row)">
-                  {{ row.label || `Hunt ${row.id}` }}
-                </button>
+                <div class="hunt-history-title">
+                  <button class="item-link" :disabled="hunts.previousHuntBusy.value" @click="$emit('open-hunt', row)">
+                    {{ row.label || `Hunt ${row.id}` }}
+                  </button>
+                  <span
+                    v-if="missingDataTone(row)"
+                    class="hunt-history-missing-trigger"
+                    :class="`tone-${missingDataTone(row)}`"
+                    :title="missingDataTooltip(row)"
+                    :aria-label="missingDataTooltip(row)"
+                    tabindex="0"
+                    role="img"
+                  >
+                    <AlertTriangle :size="15" />
+                  </span>
+                </div>
               </td>
               <td>
                 <button

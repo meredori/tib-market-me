@@ -6,6 +6,7 @@ import {
   IconCircleCheck,
   IconGauge,
   IconHeartbeat,
+  IconInfoCircle,
   IconShield,
   IconSparkles,
   IconSwords,
@@ -31,6 +32,8 @@ const props = defineProps({
   formatValue: { type: Function, required: true },
   formatSigned: { type: Function, required: true },
   itemImagePath: { type: Function, required: true },
+  missingWarningItems: { type: Array, default: () => [] },
+  missingInfoItems: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['open-item', 'open-creature', 'open-hunt'])
@@ -48,6 +51,24 @@ const monsterAnalysis = computed(() => intelligence.value.monster_analysis || {}
 const comparisons = computed(() => intelligence.value.comparisons || [])
 const similarHunts = computed(() => intelligence.value.similar_hunts || [])
 const recommendations = computed(() => intelligence.value.recommendations || [])
+const missingRecommendationRows = computed(() => {
+  const rows = []
+  if (props.missingWarningItems.length) {
+    rows.push({
+      label: 'Missing Information',
+      reason: props.missingWarningItems.join(', '),
+      tone: 'warning',
+    })
+  }
+  if (props.missingInfoItems.length) {
+    rows.push({
+      label: 'Improve Data',
+      reason: 'Add the Input Analyser text for incoming damage, damage types, and source detail.',
+      tone: 'info',
+    })
+  }
+  return rows
+})
 const reasons = computed(() => intelligence.value.performance_reasons || [])
 const parsed = computed(() => props.preview.parsed || {})
 
@@ -232,6 +253,7 @@ function titleCaseLabel(value) {
 function recommendationIcon(tone) {
   if (tone === 'positive') return IconCircleCheck
   if (tone === 'warning') return IconAlertTriangle
+  if (tone === 'info') return IconInfoCircle
   return IconBrain
 }
 
@@ -496,6 +518,13 @@ function openLootItem(item) {
       <Panel variant="analysis">
         <SectionHeader title="Recommendations" :icon="IconBulb" iconColor="var(--amber)" />
         <div class="recommendation-list">
+          <div v-for="item in missingRecommendationRows" :key="`missing-${item.label}`" class="recommendation-row" :class="`tone-${item.tone || 'neutral'}`">
+            <TablerIcon :name="recommendationIcon(item.tone)" :size="19" />
+            <div>
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.reason }}</span>
+            </div>
+          </div>
           <div v-for="item in recommendations" :key="`${item.label}-${item.reason}`" class="recommendation-row" :class="`tone-${item.tone || 'neutral'}`">
             <TablerIcon :name="recommendationIcon(item.tone)" :size="19" />
             <div>
@@ -772,6 +801,11 @@ function openLootItem(item) {
 .tone-neutral {
   border-color: var(--line-soft);
   background: rgba(120, 146, 176, 0.08);
+}
+
+.tone-info {
+  border-color: rgba(88, 183, 255, 0.3);
+  background: rgba(88, 183, 255, 0.08);
 }
 
 .combat-metrics {

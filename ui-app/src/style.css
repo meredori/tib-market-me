@@ -1212,6 +1212,61 @@ th {
   margin: 0;
 }
 
+.hunt-missing-trigger {
+  align-items: center;
+  background: rgba(245, 165, 16, 0.1);
+  border: 1px solid rgba(245, 165, 16, 0.36);
+  border-radius: 50%;
+  color: var(--amber);
+  cursor: help;
+  display: inline-flex;
+  flex: 0 0 34px;
+  height: 34px;
+  justify-content: center;
+  position: relative;
+  width: 34px;
+  padding: 0;
+}
+
+.hunt-missing-trigger:hover,
+.hunt-missing-trigger:focus-visible {
+  background: rgba(245, 165, 16, 0.16);
+  outline: none;
+}
+
+.hunt-missing-tooltip {
+  background: rgba(7, 17, 29, 0.98);
+  border: 1px solid rgba(245, 165, 16, 0.36);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+  color: var(--ink);
+  font-size: var(--font-caption);
+  font-weight: 700;
+  left: 50%;
+  line-height: 1.35;
+  max-width: min(260px, calc(100vw - 32px));
+  opacity: 0;
+  padding: 8px 10px;
+  pointer-events: none;
+  position: absolute;
+  text-align: left;
+  top: calc(100% + 8px);
+  transform: translateX(-50%) translateY(-2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  visibility: hidden;
+  white-space: normal;
+  width: max-content;
+  z-index: 20;
+}
+
+.hunt-missing-trigger:hover .hunt-missing-tooltip,
+.hunt-missing-trigger:focus-visible .hunt-missing-tooltip,
+.hunt-missing-trigger:active .hunt-missing-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  visibility: visible;
+}
+
 .hunt-detail-hero {
   align-items: stretch;
   display: grid;
@@ -1304,6 +1359,36 @@ th {
 
 .hunt-detail-status:empty {
   display: none;
+}
+
+.hunt-history-title {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.hunt-history-title .item-link {
+  min-width: 0;
+}
+
+.hunt-history-missing-trigger {
+  align-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 50%;
+  display: inline-flex;
+  flex: 0 0 24px;
+  height: 24px;
+  justify-content: center;
+  min-height: 24px;
+  width: 24px;
+}
+
+.hunt-history-missing-trigger.tone-warning {
+  background: rgba(245, 165, 16, 0.1);
+  border-color: rgba(245, 165, 16, 0.36);
+  color: var(--amber);
 }
 
 .hunt-edit-panel {

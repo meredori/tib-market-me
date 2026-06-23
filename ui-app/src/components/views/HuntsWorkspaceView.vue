@@ -54,6 +54,37 @@ const previousAreaLabel = computed(() => {
   if (!previousAreaOptions.value.length) return 'No sublocations available'
   return selected.length ? `${selected.length} selected` : 'All sublocations'
 })
+const missingHuntWarnings = computed(() => {
+  const preview = activePreview.value || {}
+  const saved = activeSaved.value || props.activeSavedHunt || {}
+  const locationMatch = preview.location?.hunting_place_match || saved.hunting_place_match || {}
+  const hasCharacter = hasText(saved.character_name || preview.character_name)
+  const hasLevel = Number(saved.character_level ?? preview.character_level ?? activeParsed.value?.character_level) > 0
+  const hasLocation = hasText(
+    saved.location_name
+    || preview.location_name
+    || preview.location?.selected_name
+    || preview.location?.suggested_name
+    || locationMatch.selected_hunting_place_name
+  ) || Boolean(saved.public_hunting_place_id || locationMatch.selected_hunting_place_id)
+  return [
+    !hasCharacter ? 'Character' : null,
+    !hasLevel ? 'Level' : null,
+    !hasLocation ? 'Location' : null,
+  ].filter(Boolean)
+})
+const missingHuntInfo = computed(() => {
+  const inputAnalyserText = activePreview.value?.input_analyser_text || activeSaved.value?.input_analyser_text || ''
+  return hasText(inputAnalyserText) ? [] : ['Input analyser text']
+})
+const missingHuntWarningTooltip = computed(() => {
+  if (!missingHuntWarnings.value.length) return ''
+  return `Missing warning data: ${missingHuntWarnings.value.join(', ')}`
+})
+
+function hasText(value) {
+  return String(value || '').trim().length > 0
+}
 
 function toggleEditPanel() {
   showEditPanel.value = !showEditPanel.value
@@ -143,6 +174,16 @@ function placeLevel(candidate) {
         <div class="hunt-title-lockup">
           <TablerIcon :name="IconSwords" :size="23" />
           <h1>Hunt Details</h1>
+          <button
+            v-if="missingHuntWarnings.length"
+            class="hunt-missing-trigger"
+            type="button"
+            :title="missingHuntWarningTooltip"
+            :aria-label="missingHuntWarningTooltip"
+          >
+            <TablerIcon :name="IconAlertTriangle" :size="17" />
+            <span class="hunt-missing-tooltip">{{ missingHuntWarningTooltip }}</span>
+          </button>
         </div>
         <div class="button-row">
           <button v-if="isSavedHunt" class="ghost-action icon-label" title="Edit hunt" @click="toggleEditPanel">
@@ -260,6 +301,8 @@ function placeLevel(candidate) {
         :format-value="formatValue"
         :format-signed="formatSigned"
         :item-image-path="itemImagePath"
+        :missing-warning-items="missingHuntWarnings"
+        :missing-info-items="missingHuntInfo"
         @open-item="$emit('open-item', $event)"
         @open-creature="$emit('open-creature', $event)"
         @open-hunt="$emit('open-hunt', $event)"
