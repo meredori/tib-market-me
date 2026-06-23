@@ -590,7 +590,7 @@ function topSimilarHunts(input: {
       };
     })
     .sort((a, b) => Number(b.score) - Number(a.score))
-    .slice(0, 5);
+    .slice(0, 3);
 }
 
 function metric(

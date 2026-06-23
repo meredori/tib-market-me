@@ -1433,7 +1433,8 @@ export function upsertPublicCreature(db: Database.Database, payload: unknown, fe
   const creatureFreshness = freshness(creature.last_updated ?? creature.fetched_at, {
     lastVerified: creature.fetched_at,
     staleAfterHours: 24 * 30,
-    agingAfterHours: 24 * 14
+    agingAfterHours: 24 * 14,
+    nowMs: Date.parse(fetchedAt)
   });
   const creatureConfidence = confidence(creature.hitpoints !== null || creature.experience !== null || creature.bestiary_class !== null ? 0.85 : 0.45, {
     estimated: true,
@@ -1676,7 +1677,8 @@ export function upsertPublicHuntingPlace(db: Database.Database, payload: unknown
   const placeFreshness = freshness(place.last_updated ?? place.fetched_at, {
     lastVerified: place.fetched_at,
     staleAfterHours: 24 * 30,
-    agingAfterHours: 24 * 14
+    agingAfterHours: 24 * 14,
+    nowMs: Date.parse(fetchedAt)
   });
   const placeConfidence = confidence(place.min_level !== null || place.location !== null || place.risk_level !== null ? 0.8 : 0.45, {
     estimated: true,
