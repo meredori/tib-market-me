@@ -13,6 +13,8 @@
     "build:fe": "npm --prefix ui-app run build",
     "preview:fe": "npm --prefix ui-app run preview",
     "preview:inspect": "npm --prefix ui-app run preview -- --host 127.0.0.1 --port 4173",
+    "visual:baseline": "playwright test -c playwright.visual.config.cjs --update-snapshots",
+    "visual:check": "playwright test -c playwright.visual.config.cjs",
     "generate:items": "node ./scripts/tibia-assets-generate.cjs -p ./assets/appearances.dat -c ./assets/catalog-content.json -m items -o ./assets/generated/items-archive",
     "stage:items": "npm --prefix server run stage:items",
     "prebuild": "npm run generate:items && npm run stage:items"

@@ -1,0 +1,64 @@
+.split {
+  justify-content: flex-end;
+}
+
+.form-grid,
+.settings-grid,
+.modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-wide {
+  grid-column: 1 / -1;
+}
+
+.settings-action-panel,
+.settings-status-panel {
+  align-content: start;
+}
+
+.settings-status-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.settings-status-list > div {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-control);
+  background: rgba(11, 22, 34, 0.55);
+  padding: 9px 10px;
+}
+
+.settings-status-list span,
+.settings-status-list strong {
+  display: block;
+}
+
+.settings-status-list strong {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.filter-bar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 230px) minmax(140px, 180px) minmax(140px, 180px) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+
+.filter-clear {
+  min-width: 78px;
+}
+
+.similar-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+

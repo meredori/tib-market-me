@@ -11,6 +11,7 @@ schema.json
 *screenshot*.png
 playwright-report/
 test-results/
+ui-app/test-artifacts/visual/current/
 *.db
 *.sqlite
 *.sqlite3

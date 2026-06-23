@@ -1,0 +1,161 @@
+.loot-inbox-toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.loot-work-queue {
+  margin: var(--space-5) 0;
+}
+
+.loot-metric-strip {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.loot-inbox-table {
+  min-width: 1120px;
+}
+
+.loot-inbox-table th:nth-child(2),
+.loot-inbox-table td:nth-child(2) {
+  min-width: 260px;
+}
+
+.loot-hunt-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.inline-link {
+  min-height: auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #9ec5ff;
+  font-size: 0.76rem;
+}
+
+.inline-link:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.loot-hunt-summary {
+  display: block;
+  max-width: 240px;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loot-state-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.loot-state-actions .ghost-action {
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: 0.76rem;
+}
+
+.loot-action-sell_now {
+  border-color: rgba(74, 163, 104, 0.45);
+  color: #7fd19c;
+  background: rgba(74, 163, 104, 0.1);
+}
+
+.loot-action-npc_vendor {
+  border-color: rgba(45, 212, 191, 0.45);
+  color: #73e2d6;
+  background: rgba(45, 212, 191, 0.1);
+}
+
+.loot-action-hold,
+.loot-action-watch {
+  border-color: rgba(96, 165, 250, 0.45);
+  color: #9ec5ff;
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.loot-action-review_price,
+.loot-action-unknown_price {
+  border-color: rgba(245, 165, 16, 0.45);
+  color: #f7c56a;
+  background: rgba(245, 165, 16, 0.08);
+}
+
+.warning-chip,
+.warning-pill {
+  border-color: rgba(245, 165, 16, 0.45);
+  color: #f7c56a;
+  background: rgba(245, 165, 16, 0.08);
+}
+
+.warning-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(245, 165, 16, 0.45);
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.78rem;
+}
+
+.snapshot-copy {
+  margin: 0;
+}
+
+.chart-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.legend-dot.profit {
+  background: var(--green);
+}
+
+.legend-dot.xp {
+  background: var(--blue);
+}
+
+.sparkline {
+  width: 100%;
+  height: 250px;
+}
+
+.sparkline polyline {
+  fill: none;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.sparkline .profit-line {
+  stroke: var(--green);
+}
+
+.sparkline .xp-line {
+  stroke: var(--blue);
+}
+

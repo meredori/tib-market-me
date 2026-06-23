@@ -1,0 +1,152 @@
+.panel,
+.analysis-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: linear-gradient(180deg, rgba(21, 32, 45, 0.96), rgba(12, 23, 34, 0.96));
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+  padding: 14px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-head.compact {
+  margin-bottom: 10px;
+}
+
+.section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.section-head h2,
+.drawer-head h2,
+.panel-title {
+  margin: 0;
+  font-size: var(--font-heading);
+  font-weight: 650;
+}
+
+.primary-action {
+  border-color: #2f66d9;
+  background: #2563eb;
+  color: white;
+}
+
+.ghost-action,
+.icon-btn {
+  background: transparent;
+}
+
+.ghost-action {
+  color: #9ec5ff;
+}
+
+.icon-btn {
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
+}
+
+.icon-btn.danger,
+.danger-btn {
+  border-color: rgba(255, 79, 79, 0.55);
+  color: #ff7878;
+}
+
+.danger-btn {
+  background: transparent;
+}
+
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.metric-grid {
+  grid-template-columns: repeat(var(--metric-columns, 6), minmax(0, 1fr));
+}
+
+.metric-card {
+  min-height: 72px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0d1b29;
+  padding: 12px;
+}
+
+.metric-card span,
+.detail-strip span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.metric-card strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink);
+  font-size: var(--font-metric);
+}
+
+.metric-card.positive strong,
+.success {
+  color: var(--green);
+}
+
+.metric-card.xp strong {
+  color: var(--purple);
+}
+
+.metric-card.loot strong,
+.warning {
+  color: var(--amber);
+}
+
+.metric-card.danger strong,
+.error {
+  color: var(--red);
+}
+
+.metric-card.blue strong {
+  color: var(--blue);
+}
+
+.metric-card.teal strong {
+  color: var(--cyan);
+}
+
+.segmented-tabs {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.segmented-tabs button {
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.segmented-tabs button.active {
+  color: white;
+  background: #142640;
+  box-shadow: inset 0 -2px 0 var(--blue);
+}
+

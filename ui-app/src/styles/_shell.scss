@@ -1,0 +1,166 @@
+.app-shell {
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.side-nav {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+  background: #0a1520;
+  padding: 14px 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  margin-bottom: 14px;
+}
+
+.brand strong,
+.brand span {
+  display: block;
+}
+
+.brand strong {
+  font-size: 1.05rem;
+}
+
+.brand span,
+.muted {
+  color: var(--muted);
+}
+
+.nav-stack {
+  display: grid;
+  gap: 5px;
+}
+
+.mobile-active-section {
+  display: none;
+}
+
+.nav-group {
+  display: grid;
+  gap: 4px;
+}
+
+.nav-group-toggle {
+  justify-content: space-between;
+  width: 100%;
+  min-height: 34px;
+  border-color: transparent;
+  background: transparent;
+  color: #9fb3c9;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.nav-group-toggle:hover,
+.nav-group.active > .nav-group-toggle {
+  background: #102a43;
+  color: #e8f2ff;
+}
+
+.nav-group-chevron {
+  flex: 0 0 auto;
+  transition: transform 140ms ease;
+}
+
+.nav-group.collapsed .nav-group-chevron {
+  transform: rotate(-90deg);
+}
+
+.nav-group-items {
+  display: grid;
+  gap: 4px;
+  padding-left: 9px;
+}
+
+.nav-item {
+  justify-content: flex-start;
+  width: 100%;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.nav-item.active,
+.nav-item:hover {
+  background: #143765;
+  color: #e8f2ff;
+}
+
+.side-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  font-size: 0.8rem;
+}
+
+.side-status strong,
+.side-status span {
+  display: block;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.main-surface {
+  min-width: 0;
+  padding: 12px 18px 24px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.topbar-group,
+.topbar-actions,
+.button-row,
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.compact-field {
+  width: 180px;
+}
+
+.compact-field select {
+  margin-top: 4px;
+  height: 36px;
+}
+
+.public-hunt-review-detail {
+  border-top: 1px solid rgba(120, 168, 220, 0.18);
+  border-bottom: 1px solid rgba(120, 168, 220, 0.18);
+  padding: 14px 0;
+}
+
+.page-stack {
+  display: grid;
+  gap: 12px;
+}
+

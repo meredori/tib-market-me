@@ -1,0 +1,143 @@
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(360px, 1fr);
+  gap: 12px;
+}
+
+.decision-console {
+  gap: 10px;
+}
+
+.decision-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.decision-card {
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: 4px;
+  width: 100%;
+  min-height: 112px;
+  border-color: var(--line);
+  background: #0d1b29;
+  padding: 12px;
+  text-align: left;
+}
+
+.decision-card:hover {
+  background: #12243a;
+}
+
+.decision-card strong,
+.decision-card span,
+.decision-card small {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.decision-card strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--font-value);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decision-card small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.decision-label {
+  color: var(--muted);
+  font-size: var(--font-label);
+  text-transform: uppercase;
+}
+
+.decision-value {
+  font-size: var(--font-metric);
+  font-weight: 750;
+}
+
+.decision-positive .decision-value {
+  color: var(--green);
+}
+
+.decision-xp .decision-value {
+  color: var(--purple);
+}
+
+.decision-blue .decision-value {
+  color: var(--blue);
+}
+
+.decision-teal .decision-value {
+  color: var(--cyan);
+}
+
+.decision-loot .decision-value {
+  color: var(--amber);
+}
+
+.decision-primary-grid {
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.75fr);
+}
+
+.decision-side-panel {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.decision-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.decision-facts div {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-control);
+  background: rgba(11, 22, 34, 0.55);
+  padding: 9px 10px;
+}
+
+.decision-facts span,
+.decision-facts strong {
+  display: block;
+}
+
+.decision-facts strong {
+  margin-top: 4px;
+  font-size: var(--font-value);
+}
+
+.compact-sparkline {
+  height: 120px;
+}
+
+.dashboard-total-strip {
+  margin-top: 0;
+}
+
+.compact-note {
+  margin-top: 4px;
+  font-size: var(--font-caption);
+  line-height: 1.25;
+}
+
+.decision-signal-col {
+  width: 160px;
+}
+
+.decision-signal-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+

@@ -1,0 +1,224 @@
+.market-status-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.market-workspace {
+  gap: var(--space-5);
+}
+
+.market-command-center {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.market-command-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.market-command-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.market-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.market-summary-card {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-control);
+  background: rgba(10, 24, 37, 0.72);
+  padding: var(--space-4);
+}
+
+.market-summary-card span,
+.market-summary-card small {
+  color: var(--muted);
+}
+
+.market-summary-card strong {
+  overflow-wrap: anywhere;
+  font-size: var(--font-value);
+}
+
+.market-primary-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.8fr) minmax(0, 1.2fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.market-action-panel,
+.market-lookup-panel,
+.market-watch-panel,
+.market-selling-panel {
+  min-width: 0;
+}
+
+.market-action-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.market-action-row {
+  display: grid;
+  grid-template-columns: minmax(86px, auto) minmax(180px, 1fr) minmax(130px, 0.65fr) minmax(110px, 0.7fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--line-soft);
+  padding: 9px 0;
+}
+
+.market-action-type {
+  min-width: 0;
+}
+
+.market-action-value {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.market-action-value strong,
+.market-action-value span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.market-action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.market-no-work {
+  display: grid;
+  gap: var(--space-3);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-control);
+  background: rgba(10, 24, 37, 0.52);
+  padding: var(--space-4);
+}
+
+.market-primary-toolbar {
+  margin-top: 0;
+}
+
+.market-primary-toolbar .search-field {
+  flex: 1 1 320px;
+}
+
+.market-inline-status {
+  margin-left: auto;
+}
+
+.market-snapshot-decision {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--muted);
+  font-size: var(--font-caption);
+  white-space: nowrap;
+}
+
+.market-management-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.market-diagnostics-grid {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+.market-selection-note {
+  margin: -2px 0 4px;
+}
+
+.compact-sale-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.market-raw-signal-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.compact-status-panel {
+  align-content: start;
+}
+
+.market-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.market-status-grid div {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: rgba(10, 24, 37, 0.72);
+  padding: 10px;
+}
+
+.market-status-grid span,
+.market-status-grid strong {
+  display: block;
+}
+
+.market-status-grid strong {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.warning-list,
+.market-labels,
+.market-card-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.market-card-list {
+  flex-direction: column;
+}
+
+.market-empty-signals-panel {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.market-empty-signals-panel .ui-fact-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.market-row-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(120px, 0.8fr) 34px;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 8px 0;
+}
+
+.market-row-card > strong {
+  white-space: nowrap;
+}
+
+.market-rule-row,
+.market-watch-row {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+

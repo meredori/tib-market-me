@@ -9,7 +9,8 @@ This guide is the source of truth for UI conventions, design tokens, and compone
 All new screens and component refactors must match the density, visual language, and structure demonstrated by these three. When in doubt, look at the source.
 
 > **Source files**
-> - Global tokens: `ui-app/src/style.css`
+> - SCSS entrypoint: `ui-app/src/styles/index.scss`
+> - Global tokens: `ui-app/src/styles/_tokens.scss`
 > - Loot Analysis & Hunt Verdict: `ui-app/src/components/hunts/HuntIntelligence.vue`
 > - Hunt Hero: `ui-app/src/components/views/HuntsWorkspaceView.vue`
 
@@ -17,7 +18,34 @@ All new screens and component refactors must match the density, visual language,
 
 ## 1. Design Tokens
 
-All tokens are defined in `:root` inside `style.css`. Never use raw hex values or pixel sizes in component CSS — always reference a token.
+All tokens are defined in `:root` inside `ui-app/src/styles/_tokens.scss`. Never use raw hex values or pixel sizes in component CSS — always reference a token.
+
+### 1.0 SCSS Ownership
+
+Global styles are assembled through `ui-app/src/styles/index.scss`. Keep imports in cascade order and treat this first SCSS migration as mechanically equivalent to the former `style.css`.
+
+| Area | File(s) | Owns |
+|:---|:---|:---|
+| Tokens | `_tokens.scss` | Root CSS variables for color, spacing, radius, and type |
+| Base | `_base.scss` | Element defaults, form defaults, compact table compatibility |
+| Shell | `_shell.scss` | App shell, navigation, topbar, page stack |
+| Components | `_components.scss` | Panels, actions, metric cards, segmented tabs |
+| Patterns | `_patterns.scss`, `_shared-content.scss` | Data tables, toolbars, list/fact patterns, reusable content and modal primitives |
+| Screens | `screens/*.scss` | Screen-specific global layout for dashboard, market, loot, hunts, places/settings, and tools |
+| Responsive | `_responsive.scss` | Cross-screen breakpoints that depend on global cascade order |
+
+Vue scoped styles remain in their component files when they are genuinely local to that component. Promote a scoped pattern into `styles/` only when it becomes a shared convention across screens.
+
+### 1.0.1 Visual Regression Workflow
+
+Use the repo-owned Playwright visual checks for mechanical style migrations and high-risk layout work.
+
+```bash
+npm.cmd run visual:baseline
+npm.cmd run visual:check
+```
+
+`visual:baseline` captures the current approved top-level screens into `ui-app/test-artifacts/visual/baseline`. `visual:check` compares Dashboard, Hunt Details, Hunt History, Places, Recommendations, Market, Loot Inbox, Taskboard, Bestiary, and Settings at desktop and mobile sizes. Treat failures during mechanical SCSS work as regressions to fix before continuing.
 
 ### 1.1 Color Palette
 
@@ -150,7 +178,7 @@ Never use arbitrary `font-size` values. Use the predefined scale tokens:
 
 ## 3. Reusable Component: Hunt Hero
 
-> **Source**: [HuntHero.vue](file:///c:/code/Tibia%20market/ui-app/src/components/hunts/HuntHero.vue) (CSS classes globally in `style.css`)
+> **Source**: [HuntHero.vue](file:///c:/code/Tibia%20market/ui-app/src/components/hunts/HuntHero.vue) (CSS classes globally in `ui-app/src/styles/`)
 
 The Hunt Hero is the page-level identity strip, modularized into `<HuntHero>`. It combines location identity on the left with five scannable stat cells on the right. It is a `.panel` that overrides the default panel padding to `0` and manages its own internal cell spacing.
 
@@ -175,7 +203,7 @@ The Hunt Hero is the page-level identity strip, modularized into `<HuntHero>`. I
 - `formatValue`: `Function` (required) — Utility to format generic numbers.
 - `formatSigned`: `Function` (required) — Utility to format signed numbers (profit/loss).
 
-### Global CSS Rules in `style.css` used by `<HuntHero>`
+### Global CSS Rules in `ui-app/src/styles/` used by `<HuntHero>`
 
 ```css
 .hunt-detail-hero {
