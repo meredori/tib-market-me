@@ -18,7 +18,10 @@ type HistoryRow = {
   location_name: string | null;
   character_name: string | null;
   character_level: number | null;
+  known_character_level?: number | null;
   public_hunting_place_id: number | null;
+  hunting_place_min_level: number | null;
+  hunting_place_max_level: number | null;
   hunting_place_match_mode: string | null;
   processed_json?: string | null;
 };
@@ -189,8 +192,8 @@ function selectedPlaceId(preview: Record<string, unknown>, saved?: Record<string
   const savedMatch = asRecord(saved?.hunting_place_match);
   const location = asRecord(preview.location);
   const locationMatch = asRecord(location?.hunting_place_match);
-  return asNumberOrNull(savedMatch?.selected_hunting_place_id)
-    ?? asNumberOrNull(locationMatch?.selected_hunting_place_id)
+  return optionalNumberOrNull(savedMatch?.selected_hunting_place_id)
+    ?? optionalNumberOrNull(locationMatch?.selected_hunting_place_id)
     ?? null;
 }
 
@@ -204,11 +207,14 @@ function selectedPlaceName(preview: Record<string, unknown>, saved?: Record<stri
 
 function readHistory(db: Database.Database): HistoryRow[] {
   return safeAll<HistoryRow>(db, `
-    SELECT id, label, duration_minutes, total_xp, raw_total_xp, total_loot_gold, total_supply_cost,
-           uploaded_at, started_at, ended_at, location_name, character_name, public_hunting_place_id,
-           character_level, hunting_place_match_mode, processed_json
-    FROM hunt_uploads
-    ORDER BY COALESCE(ended_at, started_at, uploaded_at) DESC, id DESC
+    SELECT hunt.id, hunt.label, hunt.duration_minutes, hunt.total_xp, hunt.raw_total_xp, hunt.total_loot_gold, hunt.total_supply_cost,
+           hunt.uploaded_at, hunt.started_at, hunt.ended_at, hunt.location_name, hunt.character_name, hunt.public_hunting_place_id,
+           hunt.character_level, character.level AS known_character_level, hunt.hunting_place_match_mode, hunt.processed_json,
+           place.min_level AS hunting_place_min_level, place.max_level AS hunting_place_max_level
+    FROM hunt_uploads hunt
+    LEFT JOIN public_hunting_places place ON place.id = hunt.public_hunting_place_id
+    LEFT JOIN tibia_characters character ON character.normalized_name = lower(trim(hunt.character_name))
+    ORDER BY COALESCE(hunt.ended_at, hunt.started_at, hunt.uploaded_at) DESC, hunt.id DESC
     LIMIT 250
   `).map((row) => ({
     ...row,
@@ -218,9 +224,18 @@ function readHistory(db: Database.Database): HistoryRow[] {
     raw_total_xp: Math.max(0, asNumber(row.raw_total_xp, row.total_xp)),
     total_loot_gold: Math.max(0, asNumber(row.total_loot_gold, 0)),
     total_supply_cost: Math.max(0, asNumber(row.total_supply_cost, 0)),
-    character_level: asNumberOrNull(row.character_level),
-    public_hunting_place_id: asNumberOrNull(row.public_hunting_place_id)
+    character_level: optionalNumberOrNull(row.character_level) ?? optionalNumberOrNull(row.known_character_level),
+    public_hunting_place_id: optionalNumberOrNull(row.public_hunting_place_id),
+    hunting_place_min_level: optionalNumberOrNull(row.hunting_place_min_level),
+    hunting_place_max_level: optionalNumberOrNull(row.hunting_place_max_level)
   }));
+}
+
+function optionalNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  return asNumberOrNull(value);
 }
 
 function readCreatures(db: Database.Database, names: string[]): Map<string, CreatureRow> {
@@ -376,6 +391,58 @@ function signatureOverlap(a: Map<string, number>, b: Map<string, number>): numbe
   return Number(overlap.toFixed(4));
 }
 
+function sharedMonsterLabel(a: Map<string, number>, b: Map<string, number>): string | null {
+  const shared = Array.from(a.entries())
+    .map(([name, pct]) => ({ name, score: Math.min(pct, b.get(name) ?? 0) }))
+    .filter((item) => item.score > 0)
+    .sort((x, y) => y.score - x.score)
+    .slice(0, 2)
+    .map((item) => item.name);
+  if (!shared.length) {
+    return null;
+  }
+  return shared.length === 1 ? shared[0] : `${shared[0]} & ${shared[1]}`;
+}
+
+function similarHuntMatchSummary(input: {
+  level: number | null;
+  sameSpot: boolean;
+  sameLevelRange: boolean;
+  spotLevelRange: boolean;
+  sharedMonsters: string | null;
+}): string {
+  const levelLabel = input.level ? `Level ${input.level} hunt` : "Level unknown hunt";
+  if (input.sameSpot) {
+    return `${levelLabel}, same location`;
+  }
+  if (input.sharedMonsters) {
+    return `${levelLabel}, ${input.sharedMonsters}`;
+  }
+  if (input.sameLevelRange) {
+    return `${levelLabel}, similar level`;
+  }
+  if (input.spotLevelRange) {
+    return "Hunt spot level match";
+  }
+  return levelLabel;
+}
+
+function hasComparableSavedLevels(currentLevel: number | null, huntLevel: number | null): boolean {
+  return currentLevel !== null && huntLevel !== null && sameTibiaLevelWindow(currentLevel, huntLevel);
+}
+
+function matchesHuntingSpotLevelRange(currentLevel: number | null, row: HistoryRow): boolean {
+  if (currentLevel === null || row.character_level !== null) {
+    return false;
+  }
+  const min = row.hunting_place_min_level;
+  const max = row.hunting_place_max_level;
+  if (min === null && max === null) {
+    return false;
+  }
+  return (min === null || currentLevel >= min) && (max === null || currentLevel <= max);
+}
+
 function comparisonSummary(label: string, rows: ReturnType<typeof historyMetric>[], current: { profit_per_hour: number; loot_per_hour: number; xp_per_hour: number; supplies_per_hour: number; kills_per_hour: number; profit_margin_pct: number | null }) {
   const profit = median(rows.map((row) => row.profit_per_hour));
   const loot = median(rows.map((row) => row.loot_per_hour));
@@ -401,17 +468,12 @@ function comparisonSummary(label: string, rows: ReturnType<typeof historyMetric>
   };
 }
 
-function topComparisons(
-  preview: Record<string, unknown>,
+function currentComparisonRow(
   saved: Record<string, unknown> | null,
-  history: HistoryRow[],
-  current: { profit_per_hour: number; loot_per_hour: number; xp_per_hour: number; supplies_per_hour: number; kills_per_hour: number; profit_margin_pct: number | null },
-  placeId: number | null
-) {
-  const savedId = asNumberOrNull(saved?.id);
-  const currentLevel = asNumberOrNull(saved?.character_level);
-  const currentRow: ReturnType<typeof historyMetric> = {
-    id: savedId ?? 0,
+  current: { profit_per_hour: number; loot_per_hour: number; xp_per_hour: number; supplies_per_hour: number; kills_per_hour: number; profit_margin_pct: number | null }
+): ReturnType<typeof historyMetric> {
+  return {
+    id: optionalNumberOrNull(saved?.id) ?? 0,
     label: asText(saved?.label) || "Current hunt",
     location_name: asText(saved?.location_name) || null,
     character_name: asText(saved?.character_name) || null,
@@ -423,10 +485,22 @@ function topComparisons(
     kills_per_hour: current.kills_per_hour,
     profit_margin_pct: current.profit_margin_pct,
     supply_ratio: null,
-    character_level: currentLevel,
+    character_level: optionalNumberOrNull(saved?.character_level),
     duration_minutes: 0,
     date: null
   };
+}
+
+function topComparisons(
+  preview: Record<string, unknown>,
+  saved: Record<string, unknown> | null,
+  history: HistoryRow[],
+  current: { profit_per_hour: number; loot_per_hour: number; xp_per_hour: number; supplies_per_hour: number; kills_per_hour: number; profit_margin_pct: number | null },
+  placeId: number | null
+) {
+  const savedId = optionalNumberOrNull(saved?.id);
+  const currentLevel = optionalNumberOrNull(saved?.character_level);
+  const currentRow = currentComparisonRow(saved, current);
   const historicalRows = history.filter((row) => row.id !== savedId);
   const canonical = history.filter((row) => row.id !== savedId && asText(row.hunting_place_match_mode) !== "mixed_route");
   const samePlace = [currentRow, ...(placeId ? canonical.filter((row) => row.public_hunting_place_id === placeId).map(historyMetric) : [])];
@@ -442,7 +516,7 @@ function topComparisons(
   const similarWithCurrent = [currentRow, ...similar];
   const similarLevelRange = [
     currentRow,
-    ...historicalRows.map(historyMetric).filter((row) => sameTibiaLevelWindow(currentLevel, row.character_level))
+    ...historicalRows.map(historyMetric).filter((row) => hasComparableSavedLevels(currentLevel, row.character_level))
   ];
   const levelWindow = tibiaLevelWindow(currentLevel);
 
@@ -457,20 +531,24 @@ function topSimilarHunts(input: {
   preview: Record<string, unknown>;
   saved: Record<string, unknown> | null;
   history: HistoryRow[];
+  current: { profit_per_hour: number; xp_per_hour: number };
   currentLevel: number | null;
   placeId: number | null;
 }): Array<Record<string, unknown>> {
-  const savedId = asNumberOrNull(input.saved?.id);
+  const savedId = optionalNumberOrNull(input.saved?.id);
   const monsters = Array.isArray(input.preview.monsters) ? input.preview.monsters as Array<Record<string, unknown>> : [];
   const currentSignature = monsterSignature(monsters);
   const historicalRows = input.history.filter((row) => row.id !== savedId);
   const metrics = historicalRows.map((row) => {
     const metricRow = historyMetric(row);
     const sameSpot = Boolean(input.placeId && asText(row.hunting_place_match_mode) !== "mixed_route" && row.public_hunting_place_id === input.placeId);
-    const monsterOverlap = signatureOverlap(currentSignature, parsedMonsterSignature(row));
-    const sameLevelRange = sameTibiaLevelWindow(input.currentLevel, metricRow.character_level);
-    return { row, metric: metricRow, sameSpot, monsterOverlap, sameLevelRange };
-  }).filter((entry) => entry.sameSpot || entry.monsterOverlap >= 0.35 || entry.sameLevelRange);
+    const rowSignature = parsedMonsterSignature(row);
+    const monsterOverlap = signatureOverlap(currentSignature, rowSignature);
+    const sameLevelRange = hasComparableSavedLevels(input.currentLevel, metricRow.character_level);
+    const spotLevelRange = matchesHuntingSpotLevelRange(input.currentLevel, row);
+    const sharedMonsters = monsterOverlap >= 0.35 ? sharedMonsterLabel(currentSignature, rowSignature) : null;
+    return { row, metric: metricRow, sameSpot, monsterOverlap, sameLevelRange, spotLevelRange, sharedMonsters };
+  }).filter((entry) => entry.sameSpot || entry.monsterOverlap >= 0.35 || entry.sameLevelRange || entry.spotLevelRange);
 
   const maxProfit = Math.max(1, ...metrics.map((entry) => Math.max(0, entry.metric.profit_per_hour)));
   const maxXp = Math.max(1, ...metrics.map((entry) => Math.max(0, entry.metric.xp_per_hour)));
@@ -481,29 +559,34 @@ function topSimilarHunts(input: {
       const similarityScore =
         (entry.sameSpot ? 55 : 0)
         + (entry.monsterOverlap * 30)
-        + (entry.sameLevelRange ? 15 : 0);
+        + (entry.sameLevelRange ? 15 : 0)
+        + (entry.spotLevelRange ? 4 : 0);
       const performanceScore =
         (Math.max(0, entry.metric.profit_per_hour) / maxProfit) * 18
         + (Math.max(0, entry.metric.xp_per_hour) / maxXp) * 10
         - (Math.max(0, entry.metric.supplies_per_hour) / maxSupplies) * 4;
-      const reasons = [
-        entry.sameSpot ? "same spot" : null,
-        entry.monsterOverlap >= 0.35 ? `${Math.round(entry.monsterOverlap * 100)}% monster mix` : null,
-        entry.sameLevelRange ? "level range" : null
-      ].filter(Boolean);
       return {
         id: entry.metric.id,
         label: entry.metric.label,
         location_name: entry.metric.location_name,
         character_name: entry.metric.character_name,
+        character_level: entry.metric.character_level,
         profit_per_hour: entry.metric.profit_per_hour,
         xp_per_hour: entry.metric.xp_per_hour,
+        profit_delta_per_hour: entry.metric.profit_per_hour - input.current.profit_per_hour,
+        xp_delta_per_hour: entry.metric.xp_per_hour - input.current.xp_per_hour,
         supplies_per_hour: entry.metric.supplies_per_hour,
         kills_per_hour: entry.metric.kills_per_hour,
         date: entry.metric.date,
         similarity_score: Number(similarityScore.toFixed(1)),
         score: Number((similarityScore + performanceScore).toFixed(1)),
-        match_reasons: reasons
+        match_summary: similarHuntMatchSummary({
+          level: entry.metric.character_level,
+          sameSpot: entry.sameSpot,
+          sameLevelRange: entry.sameLevelRange,
+          spotLevelRange: entry.spotLevelRange,
+          sharedMonsters: entry.sharedMonsters
+        })
       };
     })
     .sort((a, b) => Number(b.score) - Number(a.score))
@@ -742,12 +825,18 @@ export function buildHuntIntelligence(
   const killsPerHour = perHour(totalKills, durationMinutes);
   const current = { profit_per_hour: profitPerHour, loot_per_hour: lootPerHour, xp_per_hour: xpPerHour, supplies_per_hour: suppliesPerHour, kills_per_hour: killsPerHour, profit_margin_pct: profitMargin };
   const comparisons = topComparisons(preview, savedHunt, history, current, placeId);
-  const currentLevel = asNumberOrNull(savedHunt?.character_level);
-  const similarHunts = topSimilarHunts({ preview, saved: savedHunt, history, currentLevel, placeId });
-  const allComparison = comparisons[0];
-  const similarLevelComparison = comparisons.find((item) => item.label === "Similar level range") ?? allComparison;
+  const currentLevel = optionalNumberOrNull(savedHunt?.character_level);
+  const similarHunts = topSimilarHunts({ preview, saved: savedHunt, history, current, currentLevel, placeId });
+  const savedIdForHistory = optionalNumberOrNull(savedHunt?.id);
+  const personalHistoryComparison = comparisonSummary(
+    "Personal history",
+    [currentComparisonRow(savedHunt, current), ...history.filter((row) => row.id !== savedIdForHistory).map(historyMetric)],
+    current
+  );
+  const allComparison = personalHistoryComparison;
+  const similarLevelCandidate = comparisons.find((item) => item.label === "Similar level range");
+  const similarLevelComparison = similarLevelCandidate && similarLevelCandidate.hunt_count > 1 ? similarLevelCandidate : personalHistoryComparison;
   const samePlaceComparison = comparisons.find((item) => item.label === "Same hunting spot") ?? similarLevelComparison;
-  const savedIdForHistory = asNumberOrNull(savedHunt?.id);
   const historyAvailable = history.some((row) => row.id !== savedIdForHistory);
   const monsterNames = monsters.map((monster) => asText(monster.name));
   const creatureByName = readCreatures(db, monsterNames);

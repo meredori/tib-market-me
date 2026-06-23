@@ -16,6 +16,7 @@ import { matchHuntToHuntingPlaces } from "./huntingPlaceMatcher";
 import { buildHuntIntelligence } from "./intelligence";
 import { resetItemDetailFetchForTests, setItemDetailFetchForTests } from "./itemDetailCache";
 import type { ItemDetailCacheRow, LootLookupRow } from "./types";
+import { resetCharacterFetchForTests, setCharacterFetchForTests } from "../tibiadata/characters";
 
 type Statement = {
   get?: (...args: unknown[]) => unknown;
@@ -253,6 +254,7 @@ function place(
 
 afterEach(() => {
   resetItemDetailFetchForTests();
+  resetCharacterFetchForTests();
 });
 
 describe("hunt analyser preview", () => {
@@ -432,13 +434,6 @@ describe("hunt analyser preview", () => {
       "Similar monster mix",
       "Similar level range"
     ]);
-    expect((preview.hunt_intelligence as Record<string, any>).similar_hunts[0]).toEqual(expect.objectContaining({
-      id: 1,
-      label: "Older",
-      profit_per_hour: expect.any(Number),
-      xp_per_hour: expect.any(Number),
-      score: expect.any(Number)
-    }));
   });
 
   it("classifies strong XP, expensive, and safe slow hunts", async () => {
@@ -460,7 +455,7 @@ describe("hunt analyser preview", () => {
       loot: { "rare gem": lootRow("rare gem", 100_000) },
       history: [
         { id: 7, label: "Current saved hunt", duration_minutes: 30, total_xp: 100_000, raw_total_xp: 100_000, total_loot_gold: 100_000, total_supply_cost: 5_000, uploaded_at: "2026-06-14T00:00:00.000Z", public_hunting_place_id: 22 },
-        { id: 8, label: "Older same spot", duration_minutes: 30, total_xp: 90_000, raw_total_xp: 90_000, total_loot_gold: 70_000, total_supply_cost: 5_000, uploaded_at: "2026-06-10T00:00:00.000Z", public_hunting_place_id: 22 }
+        { id: 8, label: "Older same spot", duration_minutes: 30, total_xp: 90_000, raw_total_xp: 90_000, total_loot_gold: 70_000, total_supply_cost: 5_000, uploaded_at: "2026-06-10T00:00:00.000Z", public_hunting_place_id: 22, character_level: 120 }
       ]
     });
     const preview = await parseHuntPreview(db, { raw_text: customHunt({ lootLines: "  1x rare gem" }) });
@@ -474,7 +469,66 @@ describe("hunt analyser preview", () => {
     expect((intelligence as Record<string, any>).similar_hunts.map((item: Record<string, unknown>) => item.id)).not.toContain(7);
     expect((intelligence as Record<string, any>).similar_hunts[0]).toEqual(expect.objectContaining({
       id: 8,
-      label: "Older same spot"
+      label: "Older same spot",
+      character_level: 120,
+      match_summary: "Level 120 hunt, same location"
+    }));
+  });
+
+  it("does not treat missing character levels as similar level hunts", async () => {
+    const db = previewDb({
+      history: [
+        { id: 9, label: "Unknown level hunt", duration_minutes: 30, total_xp: 90_000, raw_total_xp: 90_000, total_loot_gold: 70_000, total_supply_cost: 5_000, uploaded_at: "2026-06-10T00:00:00.000Z", character_level: null }
+      ]
+    });
+    const preview = await parseHuntPreview(db, { raw_text: customHunt({ lootLines: "  70000x gold coin" }) });
+    const intelligence = buildHuntIntelligence(db, preview, {
+      id: 7,
+      label: "Current saved hunt",
+      character_level: 120
+    });
+
+    const similarLevel = (intelligence as Record<string, any>).comparisons.find((item: Record<string, unknown>) => item.label === "Similar level range");
+    expect(similarLevel.hunt_count).toBe(1);
+    expect((intelligence as Record<string, any>).similar_hunts.map((item: Record<string, unknown>) => item.id)).not.toContain(9);
+  });
+
+  it("uses cached character level when saved hunt level is missing", async () => {
+    const db = previewDb({
+      history: [
+        { id: 11, label: "Cached character hunt", duration_minutes: 30, total_xp: 90_000, raw_total_xp: 90_000, total_loot_gold: 70_000, total_supply_cost: 5_000, uploaded_at: "2026-06-10T00:00:00.000Z", character_name: "Knight One", character_level: null, known_character_level: 50 }
+      ]
+    });
+    const preview = await parseHuntPreview(db, { raw_text: customHunt({ lootLines: "  70000x gold coin" }) });
+    const intelligence = buildHuntIntelligence(db, preview, {
+      id: 7,
+      label: "Current saved hunt",
+      character_level: 52
+    });
+
+    expect((intelligence as Record<string, any>).similar_hunts[0]).toEqual(expect.objectContaining({
+      id: 11,
+      character_level: 50,
+      match_summary: "Level 50 hunt, similar level"
+    }));
+  });
+
+  it("uses hunting spot level range as a low-priority similar hunt fallback", async () => {
+    const db = previewDb({
+      history: [
+        { id: 10, label: "Spot range hunt", duration_minutes: 30, total_xp: 90_000, raw_total_xp: 90_000, total_loot_gold: 70_000, total_supply_cost: 5_000, uploaded_at: "2026-06-10T00:00:00.000Z", character_level: null, public_hunting_place_id: 33, hunting_place_min_level: 100, hunting_place_max_level: 140 }
+      ]
+    });
+    const preview = await parseHuntPreview(db, { raw_text: customHunt({ lootLines: "  70000x gold coin" }) });
+    const intelligence = buildHuntIntelligence(db, preview, {
+      id: 7,
+      label: "Current saved hunt",
+      character_level: 120
+    });
+
+    expect((intelligence as Record<string, any>).similar_hunts[0]).toEqual(expect.objectContaining({
+      id: 10,
+      match_summary: "Hunt spot level match"
     }));
   });
 
@@ -991,7 +1045,7 @@ describe("hunt repository semantics", () => {
     });
   });
 
-  it("keeps create, update, and delete semantics stable", () => {
+  it("keeps create, update, and delete semantics stable", async () => {
     const inserted = {
       id: 7,
       label: "Dragons - 2026-06-10",
@@ -1023,9 +1077,202 @@ describe("hunt repository semantics", () => {
       return {};
     });
 
-    expect(createHuntUpload(db, { raw_text: sampleHunt("  1x gold coin") })).toMatchObject({ id: 7 });
-    expect(updateHuntUpload(db, 7, { raw_text: sampleHunt("  2x gold coin") })).toMatchObject({ id: 7 });
+    await expect(createHuntUpload(db, { raw_text: sampleHunt("  1x gold coin") })).resolves.toMatchObject({ id: 7 });
+    await expect(updateHuntUpload(db, 7, { raw_text: sampleHunt("  2x gold coin") })).resolves.toMatchObject({ id: 7 });
     expect(deleteHuntUpload(db, 7)).toBe(true);
+  });
+
+  it("stores fresh cached character level on hunt create", async () => {
+    const insertArgs: unknown[][] = [];
+    const freshFetchedAt = new Date().toISOString();
+    const db = createMockDb((sql) => {
+      if (sql.includes("FROM tibia_characters")) {
+        return {
+          get: vi.fn(() => ({
+            name: "Knight One",
+            vocation: "Elite Knight",
+            level: 220,
+            world: "Bona",
+            fetched_at: freshFetchedAt,
+            former_names_json: "[]",
+            former_worlds_json: "[]"
+          }))
+        };
+      }
+      if (sql.includes("INSERT INTO hunt_uploads")) {
+        return {
+          run: vi.fn((...args: unknown[]) => {
+            insertArgs.push(args);
+            return { changes: 1, lastInsertRowid: 7 };
+          })
+        };
+      }
+      if (sql.includes("FROM hunt_uploads") && sql.includes("WHERE id = ?")) {
+        return { get: vi.fn(() => ({ id: 7, duration_minutes: 30, total_xp: 1, raw_total_xp: 1, total_loot_gold: 0, total_supply_cost: 0 })) };
+      }
+      if (sql.includes("INSERT INTO hunt_locations")) {
+        return { run: vi.fn(() => ({ changes: 1 })) };
+      }
+      return {};
+    });
+    const fetchMock = vi.fn();
+    setCharacterFetchForTests(fetchMock as unknown as typeof fetch);
+
+    await createHuntUpload(db, { raw_text: sampleHunt("  1x gold coin"), character_name: "Knight One" });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(insertArgs[0][17]).toBe("Knight One");
+    expect(insertArgs[0][18]).toBe("Elite Knight");
+    expect(insertArgs[0][19]).toBe(220);
+    expect(insertArgs[0][20]).toBe("Bona");
+    expect(insertArgs[0][21]).toBe(freshFetchedAt);
+  });
+
+  it("refreshes stale cached character data before saving a hunt", async () => {
+    const insertArgs: unknown[][] = [];
+    const staleFetchedAt = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    const refreshedFetchedAt = new Date().toISOString();
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        character: {
+          character: {
+            name: "Knight One",
+            vocation: "Elite Knight",
+            level: 221,
+            world: "Bona"
+          }
+        },
+        information: {
+          timestamp: refreshedFetchedAt
+        }
+      })
+    }));
+    setCharacterFetchForTests(fetchMock as unknown as typeof fetch);
+
+    let didRefresh = false;
+    const db = createMockDb((sql) => {
+      if (sql.includes("FROM tibia_characters")) {
+        return {
+          get: vi.fn(() => didRefresh
+            ? {
+                name: "Knight One",
+                vocation: "Elite Knight",
+                level: 221,
+                world: "Bona",
+                fetched_at: refreshedFetchedAt,
+                former_names_json: "[]",
+                former_worlds_json: "[]"
+              }
+            : {
+                name: "Knight One",
+                vocation: "Elite Knight",
+                level: 220,
+                world: "Bona",
+                fetched_at: staleFetchedAt,
+                former_names_json: "[]",
+                former_worlds_json: "[]"
+              })
+        };
+      }
+      if (sql.includes("INSERT INTO tibia_characters")) {
+        return {
+          run: vi.fn(() => {
+            didRefresh = true;
+            return { changes: 1 };
+          })
+        };
+      }
+      if (sql.includes("INSERT INTO hunt_uploads")) {
+        return {
+          run: vi.fn((...args: unknown[]) => {
+            insertArgs.push(args);
+            return { changes: 1, lastInsertRowid: 8 };
+          })
+        };
+      }
+      if (sql.includes("FROM hunt_uploads") && sql.includes("WHERE id = ?")) {
+        return { get: vi.fn(() => ({ id: 8, duration_minutes: 30, total_xp: 1, raw_total_xp: 1, total_loot_gold: 0, total_supply_cost: 0 })) };
+      }
+      if (sql.includes("INSERT INTO hunt_locations")) {
+        return { run: vi.fn(() => ({ changes: 1 })) };
+      }
+      return {};
+    });
+
+    await createHuntUpload(db, { raw_text: sampleHunt("  1x gold coin"), character_name: "Knight One" });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://api.tibiadata.com/v4/character/Knight%20One");
+    expect(insertArgs[0][19]).toBe(221);
+    expect(insertArgs[0][21]).toBe(refreshedFetchedAt);
+  });
+
+  it("stores character level when editing a hunt that had a missing level", async () => {
+    const updateArgs: unknown[][] = [];
+    const freshFetchedAt = new Date().toISOString();
+    const db = createMockDb((sql) => {
+      if (sql.includes("FROM tibia_characters")) {
+        return {
+          get: vi.fn(() => ({
+            name: "Knight One",
+            vocation: "Elite Knight",
+            level: 220,
+            world: "Bona",
+            fetched_at: freshFetchedAt,
+            former_names_json: "[]",
+            former_worlds_json: "[]"
+          }))
+        };
+      }
+      if (sql.includes("UPDATE hunt_uploads")) {
+        return {
+          run: vi.fn((...args: unknown[]) => {
+            updateArgs.push(args);
+            return { changes: 1 };
+          })
+        };
+      }
+      if (sql.includes("FROM hunt_uploads") && sql.includes("WHERE id = ?")) {
+        return {
+          get: vi.fn(() => ({
+            id: 7,
+            label: "Edited hunt",
+            duration_minutes: 30,
+            total_xp: 1,
+            raw_total_xp: 1,
+            total_loot_gold: 0,
+            total_supply_cost: 0,
+            character_name: "Knight One",
+            character_level: 220,
+            character_lookup_at: freshFetchedAt
+          }))
+        };
+      }
+      if (sql.includes("INSERT INTO hunt_locations")) {
+        return { run: vi.fn(() => ({ changes: 1 })) };
+      }
+      return {};
+    });
+    const fetchMock = vi.fn();
+    setCharacterFetchForTests(fetchMock as unknown as typeof fetch);
+
+    const updated = await updateHuntUpload(db, 7, {
+      raw_text: sampleHunt("  1x gold coin"),
+      character_name: "Knight One",
+      character_level: null
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(updateArgs[0][17]).toBe("Knight One");
+    expect(updateArgs[0][18]).toBe("Elite Knight");
+    expect(updateArgs[0][19]).toBe(220);
+    expect(updateArgs[0][20]).toBe("Bona");
+    expect(updateArgs[0][21]).toBe(freshFetchedAt);
+    expect(updated).toMatchObject({
+      id: 7,
+      character_name: "Knight One",
+      character_level: 220
+    });
   });
 
   it("matches import identities by raw hash and parsed hunt signature", () => {

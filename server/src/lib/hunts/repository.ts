@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import type Database from "better-sqlite3";
 import { config } from "../../config";
-import { getKnownCharacter } from "../tibiadata/characters";
+import { getKnownCharacter, lookupTibiaCharacter, type TibiaCharacterSummary } from "../tibiadata/characters";
 import {
   extractHuntTextsFromLogFile,
   huntSessionSignatureFromRaw,
@@ -28,6 +28,8 @@ import {
 } from "./utils";
 
 export type BuildPreview = (payload: unknown) => Promise<Record<string, unknown>>;
+
+const CHARACTER_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export function computeBoostFactor(rawTotalXp: number, totalXp: number): number | null {
   if (rawTotalXp <= 0 || totalXp <= 0) {
@@ -60,6 +62,35 @@ function cleanDisplayText(value: unknown): string {
     .replace(/\s{2,}/g, " ")
     .replace(/[,\s]+$/g, "")
     .trim();
+}
+
+function isFreshIso(value: string | null | undefined, ttlMs: number, nowMs = Date.now()): boolean {
+  if (!value) {
+    return false;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && nowMs - parsed <= ttlMs;
+}
+
+function positiveIntOrNull(value: unknown): number | null {
+  const parsed = asNumberOrNull(value);
+  return parsed && parsed > 0 ? Math.trunc(parsed) : null;
+}
+
+async function resolveHuntCharacter(
+  db: Database.Database,
+  characterName: string | null
+): Promise<TibiaCharacterSummary | null> {
+  if (!characterName) {
+    return null;
+  }
+
+  const knownCharacter = getKnownCharacter(db, characterName);
+  if (knownCharacter && isFreshIso(knownCharacter.fetched_at, CHARACTER_CACHE_TTL_MS)) {
+    return knownCharacter;
+  }
+
+  return lookupTibiaCharacter(db, characterName);
 }
 
 function signatureSimilarity(
@@ -333,7 +364,7 @@ export function deleteHuntLogImportFile(db: Database.Database, payload: unknown)
   return { ok: true, deleted_file: file.path, import_key: importKey };
 }
 
-function buildHuntInput(db: Database.Database, payload: unknown): HuntInput {
+async function buildHuntInput(db: Database.Database, payload: unknown): Promise<HuntInput> {
   const row = asRecord(payload) ?? {};
   const rawText = asText(row.raw_text).replace(/<\/??hunt>/gi, "").trim();
   const inputAnalyserText = asText(row.input_analyser_text).replace(/<\/??input>/gi, "").trim();
@@ -363,7 +394,7 @@ function buildHuntInput(db: Database.Database, payload: unknown): HuntInput {
   const characterName = asText(row.character_name).trim() || null;
   const characterVocation = asText(row.character_vocation).trim();
   const characterWorld = asText(row.character_world).trim();
-  const knownCharacter = characterName ? getKnownCharacter(db, characterName) : null;
+  const knownCharacter = await resolveHuntCharacter(db, characterName);
 
   return {
     label: asText(row.label).trim() || parsedText?.label || "Untitled Hunt",
@@ -377,7 +408,7 @@ function buildHuntInput(db: Database.Database, payload: unknown): HuntInput {
     location_name: asText(row.location_name).trim() || null,
     character_name: knownCharacter?.name ?? characterName,
     character_vocation: characterVocation || (knownCharacter?.vocation ?? null),
-    character_level: asNumberOrNull(row.character_level) ?? knownCharacter?.level ?? null,
+    character_level: positiveIntOrNull(row.character_level) ?? knownCharacter?.level ?? null,
     character_world: characterWorld || (knownCharacter?.world ?? null),
     character_lookup_at: toIsoOrNull(row.character_lookup_at) ?? knownCharacter?.fetched_at ?? null,
     public_hunting_place_id: manualHuntingPlaceId,
@@ -433,8 +464,8 @@ function applyHuntingPlaceMatch(db: Database.Database, input: HuntInput): HuntIn
   return input;
 }
 
-export function createHuntUpload(db: Database.Database, payload: unknown): Record<string, unknown> {
-  const input = applyHuntingPlaceMatch(db, buildHuntInput(db, payload));
+export async function createHuntUpload(db: Database.Database, payload: unknown): Promise<Record<string, unknown>> {
+  const input = applyHuntingPlaceMatch(db, await buildHuntInput(db, payload));
   const row = asRecord(payload) ?? {};
 
   if (asText(row.source) === "log_import") {
@@ -532,16 +563,16 @@ export function createHuntUpload(db: Database.Database, payload: unknown): Recor
   return getHuntUploadRow(db, Number(inserted.lastInsertRowid)) ?? normalizeHuntRow({});
 }
 
-export function updateHuntUpload(
+export async function updateHuntUpload(
   db: Database.Database,
   huntId: number,
   payload: unknown
-): Record<string, unknown> | null {
+): Promise<Record<string, unknown> | null> {
   if (!Number.isFinite(huntId) || huntId <= 0) {
     throw new Error("Invalid hunt id");
   }
 
-  const input = applyHuntingPlaceMatch(db, buildHuntInput(db, payload));
+  const input = applyHuntingPlaceMatch(db, await buildHuntInput(db, payload));
   const updated = db
     .prepare(
       `

@@ -164,6 +164,15 @@ function signedDelta(value, goodWhenLower = false, suffix = '%') {
   return { text: `${numeric > 0 ? '+' : ''}${numeric.toFixed(1).replace(/\.0$/, '')}${suffix}`, tone: good ? 'good' : bad ? 'bad' : 'muted' }
 }
 
+function signedAmount(value, unit = '') {
+  if (value === null || value === undefined) return { text: 'n/a', tone: 'muted' }
+  const numeric = Number(value || 0)
+  return {
+    text: `${numeric > 0 ? '+' : numeric < 0 ? '-' : ''}${props.formatValue(Math.abs(numeric))}${unit ? ` ${unit}` : ''}`,
+    tone: numeric > 0 ? 'good' : numeric < 0 ? 'bad' : 'muted',
+  }
+}
+
 
 
 function freshnessLabel(freshness) {
@@ -424,13 +433,21 @@ function openLootItem(item) {
             class="similar-hunt-row"
             @click="emit('open-hunt', hunt)"
           >
-            <span>
+            <span class="similar-hunt-name">
               <strong>{{ hunt.location_name || hunt.label }}</strong>
-              <small>{{ (hunt.match_reasons || []).join(' · ') || 'similar saved hunt' }}</small>
+              <small>{{ hunt.match_summary || 'similar saved hunt' }}</small>
             </span>
-            <b>{{ formatValue(hunt.profit_per_hour) }} gp/hr</b>
-            <b>{{ formatValue(hunt.xp_per_hour) }} XP/hr</b>
-            <small>{{ hunt.date ? hunt.date.slice(0, 10) : 'saved hunt' }}</small>
+            <span class="similar-hunt-delta">
+              <small>Profit vs current</small>
+              <b :class="signedAmount(hunt.profit_delta_per_hour, 'gp/hr').tone">{{ signedAmount(hunt.profit_delta_per_hour, 'gp/hr').text }}</b>
+              <em>{{ formatValue(hunt.profit_per_hour) }} gp/hr saved</em>
+            </span>
+            <span class="similar-hunt-delta">
+              <small>XP vs current</small>
+              <b :class="signedAmount(hunt.xp_delta_per_hour, 'XP/hr').tone">{{ signedAmount(hunt.xp_delta_per_hour, 'XP/hr').text }}</b>
+              <em>{{ formatValue(hunt.xp_per_hour) }} XP/hr saved</em>
+            </span>
+            <small class="similar-hunt-date">{{ hunt.date ? hunt.date.slice(0, 10) : 'saved hunt' }}</small>
           </button>
           <div v-if="!similarHunts.length" class="similar-hunt-empty">
             No other saved hunts match this spot, monster mix, or level range yet.
@@ -874,8 +891,8 @@ function openLootItem(item) {
 
 .similar-hunt-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1fr) minmax(92px, auto) minmax(92px, auto) auto;
-  gap: 10px;
+  grid-template-columns: minmax(170px, 1.15fr) minmax(140px, 0.7fr) minmax(140px, 0.7fr) auto;
+  gap: 12px;
   align-items: center;
   width: 100%;
   border: 1px solid var(--line-soft);
@@ -889,7 +906,8 @@ function openLootItem(item) {
   background: rgba(8, 18, 30, 0.48);
 }
 
-.similar-hunt-row span {
+.similar-hunt-name,
+.similar-hunt-delta {
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -903,15 +921,33 @@ function openLootItem(item) {
   white-space: nowrap;
 }
 
-.similar-hunt-row small {
+.similar-hunt-row small,
+.similar-hunt-row em {
   color: var(--muted);
   font-size: var(--font-caption);
+  font-style: normal;
 }
 
 .similar-hunt-row b {
-  color: var(--ink);
   font-size: var(--font-small);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.similar-hunt-row b.good {
+  color: var(--green);
+}
+
+.similar-hunt-row b.bad {
+  color: var(--red);
+}
+
+.similar-hunt-row b.muted {
+  color: var(--muted);
+}
+
+.similar-hunt-date {
+  justify-self: end;
   white-space: nowrap;
 }
 

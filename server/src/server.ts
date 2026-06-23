@@ -625,7 +625,7 @@ export function buildServer(db: Database.Database) {
 
   app.post("/api/hunts", async (request, reply) => {
     try {
-      const created = createHuntUpload(db, parseHuntPayload(request.body));
+      const created = await createHuntUpload(db, parseHuntPayload(request.body));
       return { ok: true, item: created };
     } catch (error) {
       reply.code(400);
@@ -636,7 +636,7 @@ export function buildServer(db: Database.Database) {
   app.put("/api/hunts/:id", async (request, reply) => {
     try {
       const huntId = parsePositiveId((request.params as Record<string, string>).id, "hunt id");
-      const updated = updateHuntUpload(db, huntId, parseHuntPayload(request.body));
+      const updated = await updateHuntUpload(db, huntId, parseHuntPayload(request.body));
       if (!updated) {
         reply.code(404);
         return { ok: false, error: "Hunt not found" };
