@@ -59,7 +59,36 @@ const preferredComparison = computed(() => {
 const comparisonLabel = computed(() => preferredComparison.value ? 'same hunt location' : 'same hunt location')
 const totalLootValue = computed(() => Number(lootAnalysis.value.total_loot_value || parsed.value.adjusted_loot_gold || parsed.value.total_loot_gold || 0))
 const monsterRows = computed(() => monsterAnalysis.value.top_monsters || [])
-const visibleMonsterRows = computed(() => showAllMonsters.value ? monsterRows.value : monsterRows.value.slice(0, 5))
+const visibleMonsterRows = computed(() => {
+  if (showAllMonsters.value) {
+    return monsterRows.value
+  }
+  if (monsterRows.value.length <= 4) {
+    return monsterRows.value
+  }
+  const top4 = monsterRows.value.slice(0, 4)
+  const others = monsterRows.value.slice(4)
+
+  const otherCount = others.reduce((sum, m) => sum + Number(m.count || 0), 0)
+  const otherKillPct = others.reduce((sum, m) => sum + Number(m.kill_pct || 0), 0)
+  const otherXp = others.some(m => m.estimated_xp !== null) ? others.reduce((sum, m) => sum + Number(m.estimated_xp || 0), 0) : null
+  const otherXpPct = others.some(m => m.xp_pct !== null) ? others.reduce((sum, m) => sum + Number(m.xp_pct || 0), 0) : null
+  const otherLoot = others.reduce((sum, m) => sum + Number(m.estimated_loot || 0), 0)
+  const otherLootPct = others.reduce((sum, m) => sum + Number(m.loot_pct || 0), 0)
+
+  const otherRow = {
+    name: 'Other',
+    id: null,
+    count: otherCount,
+    kill_pct: otherKillPct,
+    estimated_xp: otherXp,
+    xp_pct: otherXpPct,
+    estimated_loot: otherLoot,
+    loot_pct: otherLootPct
+  }
+
+  return [...top4, otherRow]
+})
 const totalKills = computed(() => Number(monsterAnalysis.value.total_kills || props.preview.monsters?.reduce?.((sum, row) => sum + Number(row.count || 0), 0) || 0))
 const comparisonRows = computed(() => comparisons.value)
 const hasRecordedCombat = computed(() => combatAnalysis.value.damage_recorded || combatAnalysis.value.healing_recorded)
@@ -388,7 +417,7 @@ function openLootItem(item) {
           </table>
         </div>
 
-        <button v-if="monsterRows.length > 5" class="ghost-action compact-toggle" @click="showAllMonsters = !showAllMonsters">
+        <button v-if="monsterRows.length > 4" class="ghost-action compact-toggle" @click="showAllMonsters = !showAllMonsters">
           {{ showAllMonsters ? 'Show fewer monsters' : `View all ${monsterRows.length} monsters` }}
         </button>
 

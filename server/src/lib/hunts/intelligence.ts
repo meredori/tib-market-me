@@ -1257,7 +1257,7 @@ export function buildHuntIntelligence(
       kills_per_hour: killsPerHour,
       estimated_xp_from_creatures: estimatedMonsterXpTotal || null,
       xp_metadata_coverage_pct: percent(creatureRows.filter((row) => row.experience !== null).length, Math.max(1, creatureRows.length)),
-      top_monsters: creatureRowsWithMetrics.slice(0, 8),
+      top_monsters: creatureRowsWithMetrics,
       total_estimated_loot: Math.round(totalEstimatedLoot),
       summary: (() => {
         let maxDelta = 0;
