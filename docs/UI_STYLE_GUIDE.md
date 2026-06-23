@@ -31,10 +31,10 @@ Global styles are assembled through `ui-app/src/styles/index.scss`. Keep imports
 | Shell | `_shell.scss` | App shell, navigation, topbar, page stack |
 | Components | `_components.scss` | Panels, actions, metric cards, segmented tabs |
 | Patterns | `_patterns.scss`, `_shared-content.scss` | Data tables, toolbars, list/fact patterns, reusable content and modal primitives |
-| Screens | `screens/*.scss` | Screen-specific global layout for dashboard, market, loot, hunts, places/settings, and tools |
+| Screens | `screens/*.scss` | Screen-specific global layout for dashboard, market, loot, hunts, places, recommendations, settings, and tools |
 | Responsive | `_responsive.scss` | Cross-screen breakpoints that depend on global cascade order |
 
-Vue scoped styles remain in their component files when they are genuinely local to that component. Promote a scoped pattern into `styles/` only when it becomes a shared convention across screens.
+Keep visual CSS in `ui-app/src/styles/`, not in Vue `<style>` blocks or inline `style` bindings. Use component props, attributes, or semantic classes for dynamic data values, then style those states in SCSS.
 
 ### 1.0.1 Visual Regression Workflow
 

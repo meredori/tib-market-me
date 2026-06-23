@@ -189,6 +189,12 @@ function pct(value) {
   return value === null || value === undefined ? 'n/a' : `${Number(value).toFixed(1).replace(/\.0$/, '')}%`
 }
 
+function clampedPct(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return 0
+  return Math.max(0, Math.min(100, numeric))
+}
+
 function formatMaybeNumber(value, unit = '') {
   if (value === null || value === undefined || value === 'n/a') return 'n/a'
   if (unit === '%') return Number(value).toFixed(1).replace(/\.0$/, '')
@@ -415,7 +421,7 @@ function openLootItem(item) {
                       {{ titleCaseLabel(monster.name) }}
                     </button>
                     <div class="monster-progress-track">
-                      <span class="bar-fill" :style="{ width: `${Math.min(100, Number(monster.kill_pct || 0))}%` }"></span>
+                      <progress class="monster-progress-bar" max="100" :value="clampedPct(monster.kill_pct)" aria-hidden="true"></progress>
                     </div>
                   </div>
                 </td>

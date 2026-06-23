@@ -40,9 +40,10 @@ function keyFor(item, index, rowKey) {
   return item?.id ?? item?.item_id ?? item?.normalized_name ?? item?.normalized_creature_name ?? index
 }
 
-function tableStyle(minWidth) {
-  if (!minWidth) return undefined
-  return { minWidth: typeof minWidth === 'number' ? `${minWidth}px` : minWidth }
+function tableClass(minWidth) {
+  if (!minWidth) return ''
+  const normalized = String(minWidth).trim().replace(/px$/i, '')
+  return /^\d+$/.test(normalized) ? `data-table-min-${normalized}` : ''
 }
 
 function previousPage() {
@@ -56,14 +57,13 @@ function nextPage() {
 
 <template>
   <div class="table-wrap data-table-wrap">
-    <table class="data-table" :style="tableStyle(minWidth)">
+    <table class="data-table" :class="tableClass(minWidth)">
       <thead>
         <tr>
           <th
             v-for="column in columns"
             :key="column.key || column.label"
             :class="column.class"
-            :style="column.style"
           >
             {{ column.label }}
           </th>

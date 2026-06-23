@@ -1,1 +1,183 @@
-/* Taskboard and Bestiary currently keep their screen-specific CSS in scoped Vue styles. */
+/* Weekly taskboard */
+.weekly-taskboard {
+.taskboard-metrics {
+  margin-top: 14px;
+}
+
+.offer-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.offer-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.offer-form input,
+.offer-form textarea {
+  width: 100%;
+}
+
+.segmented-control {
+  grid-column: 1 / -1;
+}
+
+.segmented-control {
+  display: flex;
+  gap: 6px;
+}
+
+.segmented-control button {
+  min-height: 34px;
+}
+
+.segmented-control button.active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(39, 130, 246, 0.12);
+}
+
+.offer-list {
+  display: grid;
+  gap: 12px;
+}
+
+.offer-row {
+  background: rgba(13, 27, 41, 0.72);
+}
+
+.offer-head {
+  align-items: start;
+}
+
+.offer-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.offer-head p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.recommendation-band {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.access-badge {
+  width: fit-content;
+  margin-top: 4px;
+}
+
+.taskboard-place-chip {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.access-available {
+  border-color: rgba(45, 212, 191, 0.45);
+}
+
+.access-blocked {
+  border-color: rgba(248, 113, 113, 0.55);
+}
+
+.access-unknown {
+  border-color: rgba(250, 204, 21, 0.45);
+}
+
+.guidance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.guidance-grid > div {
+  display: grid;
+  gap: 5px;
+}
+
+.place-table-wrap {
+  overflow-x: auto;
+}
+
+.data-table tr.observed {
+  background: rgba(61, 179, 136, 0.08);
+}
+
+.data-table small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+}
+
+.place-name {
+  font-weight: 650;
+}
+
+.entity-strip,
+.combo-list,
+.offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.combo-list {
+  align-items: center;
+}
+
+.error-text {
+  color: var(--danger);
+  margin: 10px 0 0;
+}
+}
+
+/* Bestiary checklist */
+.bestiary-view {
+.bestiary-metrics {
+  margin-top: 12px;
+}
+
+.data-table th,
+.data-table td {
+  vertical-align: middle;
+}
+
+.spawn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spawn-link small {
+  color: var(--muted);
+}
+
+.row-action {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.completed-table {
+  opacity: 0.86;
+}
+
+@media (max-width: 820px) {
+  .bestiary-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+}

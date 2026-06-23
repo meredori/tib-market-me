@@ -17,11 +17,3 @@ defineProps({
     aria-hidden="true"
   />
 </template>
-
-<style scoped>
-.tabler-icon {
-  display: inline-block;
-  vertical-align: middle;
-  flex-shrink: 0;
-}
-</style>

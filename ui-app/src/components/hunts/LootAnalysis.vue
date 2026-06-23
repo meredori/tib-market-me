@@ -76,21 +76,42 @@ const hasCollapsedLootItems = computed(() =>
 
 const notableDrops = computed(() => props.lootAnalysis?.notable_drops || [])
 
-const lootChartStyle = computed(() => {
+const lootChartSegments = computed(() => {
+  const radius = 50
+  const circumference = 2 * Math.PI * radius
   let cursor = 0
-  const parts = valueSegments.value.slice(0, 5).map((item, index) => {
-    const share = Math.max(0, Number(item.contribution_pct || 0))
-    const start = cursor
+  const segments = valueSegments.value.slice(0, 5).map((item, index) => {
+    const share = clampedPct(item.contribution_pct)
+    const dashLength = (share / 100) * circumference
+    const segment = {
+      key: item.name || index,
+      class: segmentClass(item, index),
+      dasharray: `${dashLength} ${circumference - dashLength}`,
+      dashoffset: -((cursor / 100) * circumference),
+    }
     cursor += share
-    return `${segmentColor(item, index)} ${start}% ${Math.min(100, cursor)}%`
+    return segment
   })
-  return { background: `conic-gradient(${parts.length ? parts.join(', ') : '#243346 0 100%'})` }
+
+  return segments.length
+    ? segments
+    : [{
+        key: 'empty',
+        class: 'segment-muted',
+        dasharray: `${circumference} 0`,
+        dashoffset: 0,
+      }]
 })
 
-function segmentColor(item, index = 0) {
-  const colors = ['#f5a510', '#7c3aed', '#ef4444', '#2dd4bf', '#8fa1b6']
+function segmentClass(item, index = 0) {
   const colorIndex = Number.isFinite(Number(item?.color_index)) ? Number(item.color_index) : index
-  return colors[Math.max(0, Math.min(colors.length - 1, colorIndex))]
+  return `segment-${Math.max(0, Math.min(4, colorIndex))}`
+}
+
+function clampedPct(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return 0
+  return Math.max(0, Math.min(100, numeric))
 }
 
 function pct(value) {
@@ -165,7 +186,7 @@ function rarityClass(value) {
             </span>
             <strong>{{ formatValue(item.value ?? item.total_value) }} gp</strong>
             <small>{{ pct(item.contribution_pct) }}</small>
-            <span class="bar-track"><i :style="{ width: `${Math.min(100, Number(item.contribution_pct || 0))}%`, background: segmentColor(item, index) }"></i></span>
+            <progress class="bar-track" :class="segmentClass(item, index)" max="100" :value="clampedPct(item.contribution_pct)" aria-hidden="true"></progress>
           </button>
         </div>
         <button v-if="hasCollapsedLootItems" class="ghost-action view-all-loot" @click="showAllLootItems = true">
@@ -178,14 +199,27 @@ function rarityClass(value) {
       <div class="loot-breakdown-card">
         <span class="loot-chart-title">Loot value breakdown</span>
         <div class="donut-wrap">
-          <div class="loot-donut" :style="lootChartStyle">
+          <div class="loot-donut">
+            <svg class="loot-donut-svg" viewBox="0 0 126 126" aria-hidden="true">
+              <circle
+                v-for="segment in lootChartSegments"
+                :key="segment.key"
+                class="loot-donut-segment"
+                :class="segment.class"
+                cx="63"
+                cy="63"
+                r="50"
+                :stroke-dasharray="segment.dasharray"
+                :stroke-dashoffset="segment.dashoffset"
+              />
+            </svg>
             <span>{{ formatValue(totalLootValue) }}</span>
             <small>gp</small>
           </div>
         </div>
         <div class="loot-legend">
           <div v-for="(segment, index) in valueSegments" :key="segment.name" class="legend-row">
-            <i :style="{ background: segmentColor(segment, index) }"></i>
+            <i :class="segmentClass(segment, index)"></i>
             <strong>{{ titleCaseLabel(segment.name) }}</strong>
             <span>{{ pct(segment.contribution_pct) }}</span>
           </div>
@@ -235,7 +269,7 @@ function rarityClass(value) {
               </span>
               <strong>{{ formatValue(item.value) }} gp</strong>
               <small>{{ pct(item.contribution_pct) }}</small>
-              <span class="bar-track"><i :style="{ width: `${Math.min(100, Number(item.contribution_pct || 0))}%`, background: segmentColor(item, index) }"></i></span>
+              <progress class="bar-track" :class="segmentClass(item, index)" max="100" :value="clampedPct(item.contribution_pct)" aria-hidden="true"></progress>
             </button>
           </div>
         </div>

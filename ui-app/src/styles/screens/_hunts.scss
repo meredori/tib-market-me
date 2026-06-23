@@ -880,6 +880,19 @@ tr.selected {
   position: relative;
 }
 
+.loot-donut-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.loot-donut-segment {
+  fill: none;
+  stroke-width: 24px;
+}
+
 .loot-donut::after {
   content: "";
   position: absolute;
@@ -929,6 +942,32 @@ tr.selected {
   width: 10px;
   height: 10px;
   border-radius: 3px;
+}
+
+.segment-0 {
+  background: var(--amber);
+  stroke: var(--amber);
+}
+
+.segment-1 {
+  background: #7c3aed;
+  stroke: #7c3aed;
+}
+
+.segment-2 {
+  background: #ef4444;
+  stroke: #ef4444;
+}
+
+.segment-3 {
+  background: var(--cyan);
+  stroke: var(--cyan);
+}
+
+.segment-4,
+.segment-muted {
+  background: var(--muted);
+  stroke: var(--muted);
 }
 
 .legend-row strong {
@@ -1033,17 +1072,53 @@ tr.selected {
 
 .bar-track {
   display: block;
+  width: 100%;
   height: 7px;
   overflow: hidden;
+  border: 0;
   border-radius: 999px;
+  background: rgba(120, 146, 176, 0.18);
+  appearance: none;
+}
+
+.bar-track::-webkit-progress-bar {
+  border-radius: inherit;
   background: rgba(120, 146, 176, 0.18);
 }
 
-.bar-track i {
-  display: block;
-  height: 100%;
+.bar-track::-webkit-progress-value {
   border-radius: inherit;
   background: linear-gradient(90deg, var(--amber), #7c3aed);
+}
+
+.bar-track::-moz-progress-bar {
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--amber), #7c3aed);
+}
+
+.bar-track.segment-0::-webkit-progress-value,
+.bar-track.segment-0::-moz-progress-bar {
+  background: var(--amber);
+}
+
+.bar-track.segment-1::-webkit-progress-value,
+.bar-track.segment-1::-moz-progress-bar {
+  background: #7c3aed;
+}
+
+.bar-track.segment-2::-webkit-progress-value,
+.bar-track.segment-2::-moz-progress-bar {
+  background: #ef4444;
+}
+
+.bar-track.segment-3::-webkit-progress-value,
+.bar-track.segment-3::-moz-progress-bar {
+  background: var(--cyan);
+}
+
+.bar-track.segment-4::-webkit-progress-value,
+.bar-track.segment-4::-moz-progress-bar {
+  background: var(--muted);
 }
 
 .loot-breakdown-list {
@@ -1733,9 +1808,27 @@ tr.selected {
   width: 100%;
 }
 
-.monster-progress-track .bar-fill {
+.monster-progress-bar {
   display: block;
+  width: 100%;
   height: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  appearance: none;
+}
+
+.monster-progress-bar::-webkit-progress-bar {
+  border-radius: inherit;
+  background: transparent;
+}
+
+.monster-progress-bar::-webkit-progress-value {
+  background: linear-gradient(90deg, var(--amber), #7c3aed);
+  border-radius: inherit;
+}
+
+.monster-progress-bar::-moz-progress-bar {
   background: linear-gradient(90deg, var(--amber), #7c3aed);
   border-radius: inherit;
 }
